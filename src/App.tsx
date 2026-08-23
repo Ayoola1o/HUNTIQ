@@ -18,11 +18,14 @@ import { CompaniesPage } from './components/companies/CompaniesPage';
 import { ContactsPage } from './components/contacts/ContactsPage';
 import { MarketIntelligencePage } from './components/market/MarketIntelligencePage';
 import { ResearchPage } from './components/research/ResearchPage';
+import { SavedSearchesPage } from './components/saved/SavedSearchesPage';
+import { PipelinePage } from './components/pipeline/PipelinePage';
+import { CampaignsPage } from './components/campaigns/CampaignsPage';
 import type { OnboardingData } from './types/onboarding';
 import { initialOnboardingData } from './types/onboarding';
 
 export function App() {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'copilot' | 'opportunities' | 'signals' | 'find-prospects' | 'companies' | 'contacts' | 'market-intel' | 'research' | 'onboarding'>('research');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'copilot' | 'opportunities' | 'signals' | 'find-prospects' | 'companies' | 'contacts' | 'market-intel' | 'research' | 'saved-searches' | 'pipeline' | 'campaigns' | 'onboarding'>('pipeline');
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<OnboardingData>(initialOnboardingData);
 
@@ -56,11 +59,50 @@ export function App() {
     else if (nav === 'contacts') setCurrentView('contacts');
     else if (nav === 'market-intel' || nav === 'market' || nav === 'market_intel') setCurrentView('market-intel');
     else if (nav === 'research') setCurrentView('research');
+    else if (nav === 'saved-searches' || nav === 'saved_searches' || nav === 'saved') setCurrentView('saved-searches');
+    else if (nav === 'pipeline') setCurrentView('pipeline');
+    else if (nav === 'campaigns') setCurrentView('campaigns');
     else if (nav === 'onboarding') {
       setCurrentStep(1);
       setCurrentView('onboarding');
     }
   };
+
+  if (currentView === 'pipeline') {
+    return (
+      <PipelinePage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'campaigns') {
+    return (
+      <CampaignsPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'saved-searches') {
+    return (
+      <SavedSearchesPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
 
   if (currentView === 'research') {
     return (
