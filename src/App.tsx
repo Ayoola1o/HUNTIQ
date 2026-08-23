@@ -21,11 +21,14 @@ import { ResearchPage } from './components/research/ResearchPage';
 import { SavedSearchesPage } from './components/saved/SavedSearchesPage';
 import { PipelinePage } from './components/pipeline/PipelinePage';
 import { CampaignsPage } from './components/campaigns/CampaignsPage';
+import { OutreachPage } from './components/outreach/OutreachPage';
+import { TasksPage } from './components/tasks/TasksPage';
+import { MeetingsPage } from './components/meetings/MeetingsPage';
 import type { OnboardingData } from './types/onboarding';
 import { initialOnboardingData } from './types/onboarding';
 
 export function App() {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'copilot' | 'opportunities' | 'signals' | 'find-prospects' | 'companies' | 'contacts' | 'market-intel' | 'research' | 'saved-searches' | 'pipeline' | 'campaigns' | 'onboarding'>('pipeline');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'copilot' | 'opportunities' | 'signals' | 'find-prospects' | 'companies' | 'contacts' | 'market-intel' | 'research' | 'saved-searches' | 'pipeline' | 'campaigns' | 'outreach' | 'tasks' | 'meetings' | 'onboarding'>('pipeline');
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<OnboardingData>(initialOnboardingData);
 
@@ -62,6 +65,9 @@ export function App() {
     else if (nav === 'saved-searches' || nav === 'saved_searches' || nav === 'saved') setCurrentView('saved-searches');
     else if (nav === 'pipeline') setCurrentView('pipeline');
     else if (nav === 'campaigns') setCurrentView('campaigns');
+    else if (nav === 'outreach') setCurrentView('outreach');
+    else if (nav === 'tasks') setCurrentView('tasks');
+    else if (nav === 'meetings') setCurrentView('meetings');
     else if (nav === 'onboarding') {
       setCurrentStep(1);
       setCurrentView('onboarding');
@@ -83,6 +89,42 @@ export function App() {
   if (currentView === 'campaigns') {
     return (
       <CampaignsPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'outreach') {
+    return (
+      <OutreachPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'tasks') {
+    return (
+      <TasksPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'meetings') {
+    return (
+      <MeetingsPage
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
