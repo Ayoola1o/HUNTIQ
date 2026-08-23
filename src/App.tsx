@@ -24,11 +24,14 @@ import { CampaignsPage } from './components/campaigns/CampaignsPage';
 import { OutreachPage } from './components/outreach/OutreachPage';
 import { TasksPage } from './components/tasks/TasksPage';
 import { MeetingsPage } from './components/meetings/MeetingsPage';
+import { ReportsPage } from './components/reports/ReportsPage';
+import { IntegrationsPage } from './components/integrations/IntegrationsPage';
+import { SettingsPage } from './components/settings/SettingsPage';
 import type { OnboardingData } from './types/onboarding';
 import { initialOnboardingData } from './types/onboarding';
 
 export function App() {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'copilot' | 'opportunities' | 'signals' | 'find-prospects' | 'companies' | 'contacts' | 'market-intel' | 'research' | 'saved-searches' | 'pipeline' | 'campaigns' | 'outreach' | 'tasks' | 'meetings' | 'onboarding'>('pipeline');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'copilot' | 'opportunities' | 'signals' | 'find-prospects' | 'companies' | 'contacts' | 'market-intel' | 'research' | 'saved-searches' | 'pipeline' | 'campaigns' | 'outreach' | 'tasks' | 'meetings' | 'reports' | 'integrations' | 'settings' | 'onboarding'>('settings');
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<OnboardingData>(initialOnboardingData);
 
@@ -68,11 +71,50 @@ export function App() {
     else if (nav === 'outreach') setCurrentView('outreach');
     else if (nav === 'tasks') setCurrentView('tasks');
     else if (nav === 'meetings') setCurrentView('meetings');
+    else if (nav === 'reports' || nav === 'report') setCurrentView('reports');
+    else if (nav === 'integrations' || nav === 'integration') setCurrentView('integrations');
+    else if (nav === 'settings' || nav === 'setting') setCurrentView('settings');
     else if (nav === 'onboarding') {
       setCurrentStep(1);
       setCurrentView('onboarding');
     }
   };
+
+  if (currentView === 'settings') {
+    return (
+      <SettingsPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'integrations') {
+    return (
+      <IntegrationsPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'reports') {
+    return (
+      <ReportsPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
 
   if (currentView === 'pipeline') {
     return (
