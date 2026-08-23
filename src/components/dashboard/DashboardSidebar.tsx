@@ -49,10 +49,10 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     {
       label: 'HUNT',
       items: [
-        { id: 'find_prospects', label: 'Find Prospects', icon: <Search size={16} /> },
+        { id: 'find-prospects', label: 'Find Prospects', icon: <Search size={16} /> },
         { id: 'companies', label: 'Companies', icon: <Building2 size={16} /> },
         { id: 'contacts', label: 'Contacts', icon: <Users size={16} /> },
-        { id: 'saved_searches', label: 'Saved Searches', icon: <Bookmark size={16} /> },
+        { id: 'saved-searches', label: 'Saved Searches', icon: <Bookmark size={16} /> },
         { id: 'research', label: 'Research', icon: <Compass size={16} /> },
       ]
     },
@@ -69,7 +69,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     {
       label: 'INTELLIGENCE',
       items: [
-        { id: 'market_intel', label: 'Market Intelligence', icon: <Activity size={16} /> },
+        { id: 'market-intel', label: 'Market Intelligence', icon: <Activity size={16} /> },
         { id: 'reports', label: 'Reports', icon: <BarChart3 size={16} /> },
         { id: 'alerts', label: 'Alerts', icon: <Bell size={16} /> },
       ]
@@ -177,7 +177,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {sec.items.map((item) => {
-                  const isActive = activeNav === item.id;
+                  const isActive = activeNav === item.id || (item.id === 'find-prospects' && activeNav === 'find_prospects');
                   return (
                     <div
                       key={item.id}

@@ -13,11 +13,16 @@ import { DashboardPage } from './components/dashboard/DashboardPage';
 import { CopilotPage } from './components/copilot/CopilotPage';
 import { OpportunitiesPage } from './components/opportunities/OpportunitiesPage';
 import { SignalsPage } from './components/signals/SignalsPage';
+import { FindProspectsPage } from './components/prospects/FindProspectsPage';
+import { CompaniesPage } from './components/companies/CompaniesPage';
+import { ContactsPage } from './components/contacts/ContactsPage';
+import { MarketIntelligencePage } from './components/market/MarketIntelligencePage';
+import { ResearchPage } from './components/research/ResearchPage';
 import type { OnboardingData } from './types/onboarding';
 import { initialOnboardingData } from './types/onboarding';
 
 export function App() {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'copilot' | 'opportunities' | 'signals' | 'onboarding'>('signals');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'copilot' | 'opportunities' | 'signals' | 'find-prospects' | 'companies' | 'contacts' | 'market-intel' | 'research' | 'onboarding'>('research');
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<OnboardingData>(initialOnboardingData);
 
@@ -46,11 +51,76 @@ export function App() {
     else if (nav === 'copilot') setCurrentView('copilot');
     else if (nav === 'opportunities') setCurrentView('opportunities');
     else if (nav === 'signals') setCurrentView('signals');
+    else if (nav === 'find-prospects' || nav === 'find_prospects' || nav === 'prospects') setCurrentView('find-prospects');
+    else if (nav === 'companies') setCurrentView('companies');
+    else if (nav === 'contacts') setCurrentView('contacts');
+    else if (nav === 'market-intel' || nav === 'market' || nav === 'market_intel') setCurrentView('market-intel');
+    else if (nav === 'research') setCurrentView('research');
     else if (nav === 'onboarding') {
       setCurrentStep(1);
       setCurrentView('onboarding');
     }
   };
+
+  if (currentView === 'research') {
+    return (
+      <ResearchPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'market-intel') {
+    return (
+      <MarketIntelligencePage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'contacts') {
+    return (
+      <ContactsPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'companies') {
+    return (
+      <CompaniesPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'find-prospects') {
+    return (
+      <FindProspectsPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          setCurrentView('onboarding');
+        }}
+      />
+    );
+  }
 
   if (currentView === 'signals') {
     return (
