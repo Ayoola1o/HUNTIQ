@@ -31,6 +31,7 @@ export type AppView =
   | 'reports' 
   | 'integrations' 
   | 'settings' 
+  | 'profile' 
   | 'onboarding';
 
 interface HuntiqContextType {
@@ -234,6 +235,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     else if (clean === 'reports' || clean === 'report') setCurrentView('reports');
     else if (clean === 'integrations' || clean === 'integration') setCurrentView('integrations');
     else if (clean === 'settings' || clean === 'setting' || clean === 'team') setCurrentView('settings');
+    else if (clean === 'profile' || clean === 'user-profile' || clean === 'account') setCurrentView('profile');
     else if (clean === 'onboarding') setCurrentView('onboarding');
   }, []);
 

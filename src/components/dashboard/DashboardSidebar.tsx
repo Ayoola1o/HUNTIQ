@@ -409,6 +409,70 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             </div>
             {(!isCollapsed || isMobileScreen) && <ChevronDown size={14} color="#64748b" />}
           </div>
+
+          {/* User Popup Dropdown Menu */}
+          {isUserMenuOpen && (
+            <div style={{
+              position: 'absolute',
+              bottom: '54px',
+              left: 0,
+              right: 0,
+              backgroundColor: '#121827',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '10px',
+              padding: '6px',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+              zIndex: 999,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2px'
+            }}>
+              <button
+                onClick={() => {
+                  handleItemClick('profile');
+                  setIsUserMenuOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 10px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#ffffff',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+              >
+                <span>View Profile</span>
+              </button>
+              <button
+                onClick={() => {
+                  handleItemClick('settings');
+                  setIsUserMenuOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 10px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#94a3b8',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+              >
+                <span>Workspace Settings</span>
+              </button>
+            </div>
+          )}
         </div>
       </aside>
     </>

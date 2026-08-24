@@ -27,6 +27,7 @@ import { MeetingsPage } from './components/meetings/MeetingsPage';
 import { ReportsPage } from './components/reports/ReportsPage';
 import { IntegrationsPage } from './components/integrations/IntegrationsPage';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { ProfilePage } from './components/profile/ProfilePage';
 import { HuntiqProvider, useHuntiq } from './context/HuntiqContext';
 import type { OnboardingData } from './types/onboarding';
 import { initialOnboardingData } from './types/onboarding';
@@ -59,6 +60,18 @@ function AppContent() {
   const handleNavigate = (nav: string) => {
     navigateTo(nav);
   };
+
+  if (currentView === 'profile') {
+    return (
+      <ProfilePage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          navigateTo('onboarding');
+        }}
+      />
+    );
+  }
 
   if (currentView === 'settings') {
     return (
