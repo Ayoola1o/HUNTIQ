@@ -99,6 +99,10 @@ export class ProspectorEngine {
     return this.companies;
   }
 
+  public getCompanyById(id: string): CompanyItem | undefined {
+    return this.companies.find(c => c.id === id);
+  }
+
   public getCompanyByName(name: string): CompanyItem | undefined {
     return this.companies.find(c => c.name.toLowerCase() === name.toLowerCase());
   }
