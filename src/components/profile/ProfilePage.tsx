@@ -26,6 +26,11 @@ import {
   Check 
 } from 'lucide-react';
 
+import { NotificationsTab } from './tabs/NotificationsTab';
+import { SessionsTab } from './tabs/SessionsTab';
+import { ApiKeysTab } from './tabs/ApiKeysTab';
+import { EmailSettingsTab } from './tabs/EmailSettingsTab';
+
 interface ProfilePageProps {
   onNavigate: (nav: string) => void;
   onGoToOnboarding?: () => void;
@@ -387,29 +392,75 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             onNavigateToSettings={() => onNavigate('settings')}
           />
 
-          {/* Middle Column (Stacked Cards) */}
+          {/* Middle Column (Dynamic Views based on Active Tab) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <PersonalInformationCard
-              data={profileData}
-              onChange={(updates) => setProfileData(prev => ({ ...prev, ...updates }))}
-              onChangePhotoClick={() => setIsAvatarModalOpen(true)}
-            />
+            {activeSection === 'profile' && (
+              <>
+                <PersonalInformationCard
+                  data={profileData}
+                  onChange={(updates) => setProfileData(prev => ({ ...prev, ...updates }))}
+                  onChangePhotoClick={() => setIsAvatarModalOpen(true)}
+                />
 
-            <PreferencesCard
-              data={preferencesData}
-              onChange={(updates) => setPreferencesData(prev => ({ ...prev, ...updates }))}
-            />
+                <PreferencesCard
+                  data={preferencesData}
+                  onChange={(updates) => setPreferencesData(prev => ({ ...prev, ...updates }))}
+                />
 
-            <SecurityCard
-              security={securityData}
-              onChangePasswordClick={() => setIsPasswordModalOpen(true)}
-              onManage2faClick={() => setIs2faModalOpen(true)}
-            />
+                <SecurityCard
+                  security={securityData}
+                  onChangePasswordClick={() => setIsPasswordModalOpen(true)}
+                  onManage2faClick={() => setIs2faModalOpen(true)}
+                />
 
-            <RecentActivityCard
-              activities={activities}
-              onViewAllClick={() => onNavigate('settings')}
-            />
+                <RecentActivityCard
+                  activities={activities}
+                  onViewAllClick={() => onNavigate('settings')}
+                />
+              </>
+            )}
+
+            {activeSection === 'preferences' && (
+              <PreferencesCard
+                data={preferencesData}
+                onChange={(updates) => setPreferencesData(prev => ({ ...prev, ...updates }))}
+              />
+            )}
+
+            {activeSection === 'notifications' && (
+              <NotificationsTab
+                onSaveToast={() => {
+                  setSaveSuccess(true);
+                  setTimeout(() => setSaveSuccess(false), 2500);
+                }}
+              />
+            )}
+
+            {activeSection === 'security' && (
+              <>
+                <SecurityCard
+                  security={securityData}
+                  onChangePasswordClick={() => setIsPasswordModalOpen(true)}
+                  onManage2faClick={() => setIs2faModalOpen(true)}
+                />
+                <RecentActivityCard
+                  activities={activities}
+                  onViewAllClick={() => onNavigate('settings')}
+                />
+              </>
+            )}
+
+            {activeSection === 'sessions' && (
+              <SessionsTab />
+            )}
+
+            {activeSection === 'api-keys' && (
+              <ApiKeysTab />
+            )}
+
+            {activeSection === 'email-settings' && (
+              <EmailSettingsTab />
+            )}
           </div>
 
           {/* Right Column (Preview, Summary, Connected Accounts) */}
