@@ -6,6 +6,8 @@ import {
   Bot 
 } from 'lucide-react';
 
+import { copilotEngine } from '../../engine';
+
 interface AiCopilotModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -23,7 +25,7 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'bot'; text: string; action?: { label: string; company: string } }>>([
     {
       sender: 'bot',
-      text: "Hello Ayoola! I'm your HUNTIQ Sales Copilot. I can query our continuous market radar, score prospects, draft bespoke outreach, and highlight today's high-intent trigger events."
+      text: "Hello Ayoola! I'm your HUNTIQ Autonomous Intelligence Engine. I can discover ICP-matching accounts, calculate live Opportunity Scores, investigate companies 360°, draft multi-channel outreach, and detect buying signals."
     }
   ]);
   const [isTyping, setIsTyping] = useState(false);
@@ -40,25 +42,19 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
     setIsTyping(true);
 
     setTimeout(() => {
-      let botReply = '';
+      const result = copilotEngine.executePrompt(q);
       let action: { label: string; company: string } | undefined = undefined;
 
-      if (q.toLowerCase().includes('who') || q.toLowerCase().includes('contact') || q.toLowerCase().includes('today')) {
-        botReply = "Based on today's 31.2% signal surge, you should prioritize **Acme Technologies** (Opportunity Score: 94/100). They just announced 38 new job openings and appointed a new COO. Best point of contact is **Jane Smith** (Head of People).";
-        action = { label: 'Investigate Acme Technologies →', company: 'Acme Technologies' };
-      } else if (q.toLowerCase().includes('lagos') || q.toLowerCase().includes('expanding')) {
-        botReply = "I found **14 high-intent companies** in Lagos currently scaling. Top 3 with imminent buying intent: 1) **Acme Technologies** (94/100), 2) **FinServe Ltd** (88/100), 3) **Vertex Solutions** (78/100).";
-        action = { label: 'View FinServe Brief →', company: 'FinServe Ltd' };
-      } else if (q.toLowerCase().includes('acme')) {
-        botReply = "Acme Technologies has 3 major trigger events: 1) Hiring spike in HR & Engineering (+24% in 30d), 2) Expansion to a second regional office in Abuja, 3) Recent executive leadership hire. Recommended angle: Executive scaling & management alignment.";
-        action = { label: 'Open Acme 360° Dossier →', company: 'Acme Technologies' };
-      } else {
-        botReply = `Understood! I've scanned the live pipeline for "${q}". We have 47 newly detected opportunities and 184 high-intent prospects matching your Ideal Customer Profile.`;
+      if (result.companies && result.companies.length > 0) {
+        const top = result.companies[0];
+        action = { label: `Investigate ${top.name} (${top.opportunityScore}/100) →`, company: top.name };
+      } else if (result.researchData) {
+        action = { label: `View ${result.researchData.company.name} Full Dossier →`, company: result.researchData.company.name };
       }
 
-      setMessages((prev) => [...prev, { sender: 'bot', text: botReply, action }]);
+      setMessages((prev) => [...prev, { sender: 'bot', text: result.message, action }]);
       setIsTyping(false);
-    }, 600);
+    }, 450);
   };
 
   const quickPrompts = [
