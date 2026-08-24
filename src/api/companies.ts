@@ -23,3 +23,21 @@ export async function fetchCompanyById(id: string): Promise<CompanyItem | null> 
     return prospectorEngine.getCompanyById(id) || null;
   }
 }
+
+export async function resolveCompany(params: {
+  name?: string;
+  domain?: string;
+  website?: string;
+  sourceUrl?: string;
+  boardToken?: string;
+  industry?: string;
+  city?: string;
+  country?: string;
+}): Promise<any> {
+  return await apiClient.post('/api/companies/resolve', params);
+}
+
+export async function mergeCompanies(sourceCompanyId: string, targetCompanyId: string): Promise<any> {
+  return await apiClient.post('/api/companies/merge', { sourceCompanyId, targetCompanyId });
+}
+

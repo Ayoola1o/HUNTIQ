@@ -18,3 +18,12 @@ export async function fetchSignals(type?: string, company?: string): Promise<Sig
     return list;
   }
 }
+
+export async function generateCompanySignals(companyId: string): Promise<any> {
+  return await apiClient.post('/api/signals/generate', { companyId });
+}
+
+export async function fetchSignalsWithEvidence(companyId: string): Promise<any[]> {
+  return await apiClient.get(`/api/signals/${companyId}`);
+}
+

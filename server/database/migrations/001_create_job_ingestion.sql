@@ -8,6 +8,10 @@ create table if not exists workspaces (
   updated_at timestamptz not null default now()
 );
 
+insert into workspaces (id, name, slug)
+values ('00000000-0000-0000-0000-000000000001', 'Default Workspace', 'default')
+on conflict (slug) do nothing;
+
 create table if not exists companies (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
@@ -88,4 +92,3 @@ create index if not exists idx_jobs_source_id on jobs(source_id);
 create index if not exists idx_jobs_posted_at on jobs(posted_at);
 create index if not exists idx_jobs_status on jobs(status);
 create index if not exists idx_jobs_last_seen_at on jobs(last_seen_at);
-

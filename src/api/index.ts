@@ -6,3 +6,6 @@ export * from './signals';
 export * from './research';
 export * from './pipeline';
 export * from './copilot';
+export * from './jobs';
+export * from './contacts';
+export * from './leads';
