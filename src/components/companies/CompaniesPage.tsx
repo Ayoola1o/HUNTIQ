@@ -21,6 +21,8 @@ import {
   Plus
 } from 'lucide-react';
 
+import { useHuntiq } from '../../context/HuntiqContext';
+
 interface CompaniesPageProps {
   onNavigate: (nav: string) => void;
   onGoToOnboarding?: () => void;
@@ -30,6 +32,7 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
+  const { companies: dynamicCompanies } = useHuntiq();
   const [activeTab, setActiveTab] = useState('all');
   const [activeKpiFilter, setActiveKpiFilter] = useState('total');
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>('comp-1');
@@ -41,8 +44,9 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
   const [listModalCompany, setListModalCompany] = useState<CompanyItem | null>(null);
   const [scoreBreakdownTarget, setScoreBreakdownTarget] = useState<OpportunityItem | null>(null);
 
-  // Mock dataset matching companies page.png
-  const [companies, setCompanies] = useState<CompanyItem[]>([
+  // Live dataset from Huntiq engine with fallback
+  const [companies, setCompanies] = useState<CompanyItem[]>(() => 
+    dynamicCompanies && dynamicCompanies.length > 0 ? dynamicCompanies : [
     {
       id: 'comp-1',
       name: 'Acme Technologies',

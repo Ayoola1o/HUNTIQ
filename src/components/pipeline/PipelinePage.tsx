@@ -14,6 +14,8 @@ import {
   List 
 } from 'lucide-react';
 
+import { useHuntiq } from '../../context/HuntiqContext';
+
 interface PipelinePageProps {
   onNavigate: (nav: string) => void;
   onGoToOnboarding?: () => void;
@@ -23,6 +25,7 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
+  const { pipelineDeals } = useHuntiq();
   const [selectedDeal, setSelectedDeal] = useState<PipelineDealItem | null>(null);
   const [isNewDealModalOpen, setIsNewDealModalOpen] = useState(false);
   const [initialStageForNew, setInitialStageForNew] = useState<PipelineStage>('contacted');
@@ -32,8 +35,9 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeKpiFilter, setActiveKpiFilter] = useState('active_deals');
 
-  // Initial Mock Deals Data
-  const [deals, setDeals] = useState<PipelineDealItem[]>([
+  // Live Deals Data from Central Store with fallback
+  const [deals, setDeals] = useState<PipelineDealItem[]>(() => 
+    pipelineDeals && pipelineDeals.length > 0 ? pipelineDeals : [
     {
       id: 'deal-1',
       companyName: 'Acme Technologies',

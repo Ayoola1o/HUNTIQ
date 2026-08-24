@@ -14,12 +14,13 @@ import {
   Trash2, 
   ChevronDown, 
   Menu, 
-  Brain,
-  Zap,
-  Microscope,
-  CheckCircle,
-  Copy
+  Brain, 
+  Zap, 
+  Microscope, 
+  CheckCircle, 
+  Copy 
 } from 'lucide-react';
+import { copilotEngine } from '../../engine';
 
 interface CopilotPageProps {
   onNavigate: (nav: string) => void;
@@ -140,104 +141,134 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
     setIsLoading(true);
 
     setTimeout(() => {
+      const result = copilotEngine.executePrompt(inputText);
       let botMsg: Message;
-      const lower = inputText.toLowerCase();
 
-      if (lower.includes('find') || lower.includes('search') || lower.includes('lagos')) {
+      if (result.intent === 'SEARCH') {
         botMsg = {
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: `I've prepared an autonomous prospecting action matching your request:`,
+          text: result.message,
           actionCard: {
             id: `act-${Date.now()}`,
             type: 'search',
             status: 'proposed',
-            title: 'Prospect Search: Tech Companies in Lagos (Hiring Surge)',
+            title: `Prospect Search: ${result.companies?.length || 4} Matched Accounts`,
             parameters: {
-              industry: 'Technology & Software',
-              location: 'Lagos, Nigeria',
+              industry: 'Target ICP Sectors',
+              location: 'West Africa & Global Hubs',
               size: '50 – 500 employees',
-              signals: ['Hiring Spikes (>15 jobs)', 'Expansion']
+              signals: ['Hiring Surge', 'Expansion & Regional Licensing']
             }
-          }
+          },
+          opportunities: result.companies?.map((c, idx) => ({
+            id: c.id,
+            rank: idx + 1,
+            name: c.name,
+            score: c.opportunityScore,
+            badge: c.opportunityScore >= 90 ? 'HOT' : 'HIGH',
+            industry: c.industry,
+            location: c.location,
+            size: `${c.employees} employees`,
+            whyNow: c.activeSignals?.[0]?.title || 'Active expansion triggers detected.',
+            evidence: c.activeSignals?.map(s => s.title) || ['Hiring spike', 'Funding momentum'],
+            bestContact: {
+              name: 'Head of Operations',
+              role: 'Decision Maker',
+              confidence: '94%'
+            }
+          }))
         };
-      } else if (lower.includes('acme') && (lower.includes('research') || lower.includes('dossier'))) {
+      } else if (result.intent === 'RESEARCH' && result.researchData) {
+        const d = result.researchData;
         botMsg = {
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: `I have compiled a 360° company intelligence brief for **Acme Technologies**. Key takeaways:`,
+          text: result.message,
           opportunities: [
             {
-              id: 'opp-acme',
+              id: d.company.id,
               rank: 1,
-              name: 'Acme Technologies',
-              score: 94,
+              name: d.company.name,
+              score: d.company.opportunityScore,
               badge: 'HOT',
-              industry: 'Enterprise Software',
-              location: 'Lagos & Abuja, Nigeria',
-              size: '250–500 employees',
-              whyNow: '38 new open requisitions, regional branch opening in Abuja, and new C-Suite appointment.',
-              evidence: ['38 Job Postings', 'Abuja Expansion', 'New COO Appointed'],
+              industry: d.company.industry,
+              location: d.company.location,
+              size: `${d.company.employees} employees`,
+              whyNow: d.executiveSummary,
+              evidence: d.painPoints.slice(0, 3),
               bestContact: {
-                name: 'Jane Smith',
-                role: 'Head of People & Culture',
-                confidence: '94%'
+                name: d.decisionMakers[0]?.name || 'Jane Smith',
+                role: d.decisionMakers[0]?.role || 'Head of People',
+                confidence: `${d.decisionMakers[0]?.confidence || 94}%`
               }
             }
           ]
         };
-      } else if (lower.includes('outreach') || lower.includes('email') || lower.includes('draft')) {
+      } else if (result.intent === 'OUTREACH' && result.outreachData) {
         botMsg = {
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: `I've crafted a personalized, consultative email for **Jane Smith** (Head of People at Acme Technologies) referencing their recent 38-person hiring spike:`,
+          text: result.message,
           outreachDraft: {
-            target: 'Jane Smith (Head of People)',
-            company: 'Acme Technologies',
-            subject: "Supporting Acme's headcount scaling & leadership onboarding",
-            body: `Hi Jane,
-
-I noticed Acme Technologies recently posted 38 new openings and appointed a new COO to spearhead regional expansion. Congratulations on the phenomenal momentum!
-
-When engineering and operations scale past 250 employees, leadership friction and onboarding bottlenecks can quickly slow down delivery velocity.
-
-At Peak Consulting, we help fast-growing tech companies establish agile management frameworks and structured onboarding that reduce ramp time by 40%.
-
-Would you be open to a brief 15-minute introductory conversation this Thursday at 2:00 PM?
-
-Best regards,
-Ayoola Ade
-Peak Consulting`
+            target: 'Babafemi Lawson (Head of People & Ops)',
+            company: 'Paystack',
+            subject: result.outreachData.email.subject,
+            body: result.outreachData.email.body
           }
         };
-      } else if (lower.includes('move') || lower.includes('crm') || lower.includes('pipeline')) {
+      } else if (result.intent === 'CRM_ACTION') {
         botMsg = {
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: `I can update your CRM pipeline for **Acme Technologies**:`,
+          text: result.message,
           crmConfirmation: {
-            company: 'Acme Technologies',
-            stage: 'Proposal (Value: $25,000)',
-            dealValue: '$25,000',
-            isConfirmed: false
+            company: 'Paystack',
+            stage: 'Qualified Pipeline',
+            dealValue: '$18,000 ARR',
+            isConfirmed: true
           }
+        };
+      } else if (result.intent === 'PRIORITIZE' && result.companies) {
+        botMsg = {
+          id: `m-bot-${Date.now()}`,
+          sender: 'bot',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: result.message,
+          opportunities: result.companies.map((c, idx) => ({
+            id: c.id,
+            rank: idx + 1,
+            name: c.name,
+            score: c.opportunityScore,
+            badge: c.opportunityScore >= 90 ? 'HOT' : 'HIGH',
+            industry: c.industry,
+            location: c.location,
+            size: `${c.employees} employees`,
+            whyNow: c.activeSignals?.[0]?.title || 'Recent high-intent trigger detected.',
+            evidence: c.activeSignals?.map(s => s.title) || ['Hiring spike', 'Expansion'],
+            bestContact: {
+              name: 'Executive Contact',
+              role: 'Head of Department',
+              confidence: '92%'
+            }
+          }))
         };
       } else {
         botMsg = {
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: `I've analyzed your request: "${inputText}". Across your active workspace, 1,429 buying signals are currently monitored with 284 high-fit prospects in your target sectors.`
+          text: result.message
         };
       }
 
       setMessages((prev) => [...prev, botMsg]);
       setIsLoading(false);
-    }, 700);
+    }, 600);
   };
 
   const handleExecuteAction = (actionId: string) => {

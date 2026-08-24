@@ -58,6 +58,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     {
       label: 'COMMAND',
       items: [
+        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
         { id: 'copilot', label: 'AI Copilot', icon: <Sparkles size={16} />, badge: 'New' },
         { id: 'opportunities', label: 'Opportunities', icon: <Target size={16} /> },
         { id: 'signals', label: 'Signals', icon: <Zap size={16} /> },
@@ -174,7 +175,10 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             marginBottom: '20px',
             paddingLeft: isCollapsed && !isMobileScreen ? '0' : '6px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div 
+              onClick={() => handleItemClick('dashboard')}
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+            >
               <div style={{
                 width: '32px',
                 height: '32px',

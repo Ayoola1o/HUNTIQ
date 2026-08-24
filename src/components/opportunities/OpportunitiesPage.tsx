@@ -19,6 +19,8 @@ import {
   SlidersHorizontal 
 } from 'lucide-react';
 
+import { useHuntiq } from '../../context/HuntiqContext';
+
 interface OpportunitiesPageProps {
   onNavigate: (nav: string) => void;
   onGoToOnboarding?: () => void;
@@ -28,9 +30,10 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
+  const { opportunities: dynamicOpportunities } = useHuntiq();
   const [activeTab, setActiveTab] = useState('all');
   const [activeKpiFilter, setActiveKpiFilter] = useState('all');
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>('opp-1');
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>('opp-c1');
 
   // Modals state
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -39,9 +42,9 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
   const [inspectingScoreOpp, setInspectingScoreOpp] = useState<OpportunityItem | null>(null);
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
 
-  // Initial mock dataset matching opp page.png
-  const [opportunities, setOpportunities] = useState<OpportunityItem[]>([
-    {
+  // Live dataset from Huntiq engine with fallback
+  const [opportunities, setOpportunities] = useState<OpportunityItem[]>(() => 
+    dynamicOpportunities && dynamicOpportunities.length > 0 ? dynamicOpportunities : [{
       id: 'opp-1',
       companyName: 'Acme Technologies',
       avatarLetter: 'A',

@@ -27,11 +27,12 @@ import { MeetingsPage } from './components/meetings/MeetingsPage';
 import { ReportsPage } from './components/reports/ReportsPage';
 import { IntegrationsPage } from './components/integrations/IntegrationsPage';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { HuntiqProvider, useHuntiq } from './context/HuntiqContext';
 import type { OnboardingData } from './types/onboarding';
 import { initialOnboardingData } from './types/onboarding';
 
-export function App() {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'copilot' | 'opportunities' | 'signals' | 'find-prospects' | 'companies' | 'contacts' | 'market-intel' | 'research' | 'saved-searches' | 'pipeline' | 'campaigns' | 'outreach' | 'tasks' | 'meetings' | 'reports' | 'integrations' | 'settings' | 'onboarding'>('settings');
+function AppContent() {
+  const { currentView, navigateTo } = useHuntiq();
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<OnboardingData>(initialOnboardingData);
 
@@ -52,32 +53,11 @@ export function App() {
   };
 
   const handleStartHunting = () => {
-    setCurrentView('dashboard');
+    navigateTo('dashboard');
   };
 
   const handleNavigate = (nav: string) => {
-    if (nav === 'dashboard') setCurrentView('dashboard');
-    else if (nav === 'copilot') setCurrentView('copilot');
-    else if (nav === 'opportunities') setCurrentView('opportunities');
-    else if (nav === 'signals') setCurrentView('signals');
-    else if (nav === 'find-prospects' || nav === 'find_prospects' || nav === 'prospects') setCurrentView('find-prospects');
-    else if (nav === 'companies') setCurrentView('companies');
-    else if (nav === 'contacts') setCurrentView('contacts');
-    else if (nav === 'market-intel' || nav === 'market' || nav === 'market_intel') setCurrentView('market-intel');
-    else if (nav === 'research') setCurrentView('research');
-    else if (nav === 'saved-searches' || nav === 'saved_searches' || nav === 'saved') setCurrentView('saved-searches');
-    else if (nav === 'pipeline') setCurrentView('pipeline');
-    else if (nav === 'campaigns') setCurrentView('campaigns');
-    else if (nav === 'outreach') setCurrentView('outreach');
-    else if (nav === 'tasks') setCurrentView('tasks');
-    else if (nav === 'meetings') setCurrentView('meetings');
-    else if (nav === 'reports' || nav === 'report') setCurrentView('reports');
-    else if (nav === 'integrations' || nav === 'integration') setCurrentView('integrations');
-    else if (nav === 'settings' || nav === 'setting') setCurrentView('settings');
-    else if (nav === 'onboarding') {
-      setCurrentStep(1);
-      setCurrentView('onboarding');
-    }
+    navigateTo(nav);
   };
 
   if (currentView === 'settings') {
@@ -86,7 +66,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -98,7 +78,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -110,7 +90,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -122,7 +102,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -134,7 +114,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -146,7 +126,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -158,7 +138,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -170,7 +150,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -182,7 +162,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -194,7 +174,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -206,7 +186,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -218,7 +198,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -230,7 +210,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -242,7 +222,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -254,7 +234,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -266,7 +246,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -278,7 +258,7 @@ export function App() {
         onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -287,9 +267,10 @@ export function App() {
   if (currentView === 'dashboard') {
     return (
       <DashboardPage
+        onNavigate={handleNavigate}
         onGoToOnboarding={() => {
           setCurrentStep(1);
-          setCurrentView('onboarding');
+          navigateTo('onboarding');
         }}
       />
     );
@@ -322,7 +303,7 @@ export function App() {
         <TopBar
           currentStep={currentStep}
           onSelectStep={handleSelectStep}
-          onClose={() => setCurrentView('dashboard')}
+          onClose={() => navigateTo('dashboard')}
         />
 
         {/* Scrollable Center Body: Form + Summary */}
@@ -411,6 +392,14 @@ export function App() {
         />
       </div>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <HuntiqProvider initialView="dashboard">
+      <AppContent />
+    </HuntiqProvider>
   );
 }
 

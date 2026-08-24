@@ -12,10 +12,11 @@ import { AiCopilotModal } from './AiCopilotModal';
 import { CompanyResearchModal } from './CompanyResearchModal';
 
 interface DashboardPageProps {
+  onNavigate?: (nav: string) => void;
   onGoToOnboarding?: () => void;
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ onGoToOnboarding }) => {
+export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onGoToOnboarding }) => {
   const [activeNav, setActiveNav] = useState('dashboard');
   const [dateRange, setDateRange] = useState('May 16, 2025');
   const [selectedTeam, setSelectedTeam] = useState('All Teams');
@@ -36,6 +37,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onGoToOnboarding }
     setActiveNav(nav);
     if (nav === 'copilot') {
       setIsCopilotOpen(true);
+    }
+    if (onNavigate) {
+      onNavigate(nav);
     }
   };
 
