@@ -166,13 +166,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </header>
 
         {/* 2-Level Settings Body */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', flexWrap: 'nowrap' }}>
           <SettingsNav
             activeSection={activeSection}
             onSelectSection={(sec) => setActiveSection(sec)}
           />
 
-          <div style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
+          <div style={{ flex: 1, padding: '24px 20px', overflowY: 'auto' }}>
             {activeSection === 'workspace' && (
               <WorkspaceSettingsPanel
                 config={workspaceConfig}

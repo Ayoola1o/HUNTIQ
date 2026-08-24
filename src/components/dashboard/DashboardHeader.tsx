@@ -54,14 +54,14 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
   return (
     <header style={{
-      padding: '20px 32px 14px',
+      padding: '16px 24px 14px',
       backgroundColor: '#f4f6fa',
       display: 'flex',
       flexDirection: 'column',
       gap: '14px',
     }}>
       {/* Top Main Row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         {/* Left Greeting */}
         <div>
           <h1 style={{

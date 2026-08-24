@@ -86,11 +86,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onGoToOnboarding }
           <KpiCards onCardClick={() => {}} />
 
           {/* Middle 2-Column Section */}
-          <div style={{
+          <div className="grid-2-1 responsive-container" style={{
             display: 'grid',
-            gridTemplateColumns: '2fr 1fr',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
             gap: '18px',
-            padding: '0 32px'
+            padding: '0 24px'
           }}>
             {/* Left: What Needs Your Attention */}
             <AttentionFeed
@@ -106,11 +106,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onGoToOnboarding }
           </div>
 
           {/* Bottom 3-Column Intelligence & Activity Section */}
-          <div style={{
+          <div className="grid-3-cols responsive-container" style={{
             display: 'grid',
-            gridTemplateColumns: '1.2fr 1fr 1fr',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             gap: '18px',
-            padding: '0 32px'
+            padding: '0 24px'
           }}>
             <SignalsOverTimeChart />
             <SignalsByTypeCard />
