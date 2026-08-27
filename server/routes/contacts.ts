@@ -4,6 +4,7 @@ import type { ApiResponse } from '../types/api';
 import { db } from '../db/memoryStore';
 import { enrichmentService } from '../services/enrichmentService';
 import { contactService } from '../services/contactService';
+import { ContactEnrichmentEngine } from '../engine';
 import type { AuthenticatedRequest } from '../middleware/auth';
 
 export const contactsRouter = Router();
@@ -80,6 +81,46 @@ contactsRouter.post('/contacts/enrich', async (req: AuthenticatedRequest, res: R
       meta: { timestamp: new Date().toISOString() }
     });
   }
+});
+
+/**
+ * POST /api/contacts/verify-email
+ * Deliverability verification for a single email address
+ */
+contactsRouter.post('/contacts/verify-email', (req: AuthenticatedRequest, res: Response) => {
+  const { email } = req.body || {};
+
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_EMAIL', message: 'Valid email string is required.' },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+
+  const result = ContactEnrichmentEngine.verifyEmail(email);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    meta: { timestamp: new Date().toISOString() }
+  });
+});
+
+/**
+ * GET /api/contacts/pattern/:domain
+ * Discover organizational email conventions for a target company domain
+ */
+contactsRouter.get('/contacts/pattern/:domain', (req: AuthenticatedRequest, res: Response) => {
+  const { domain } = req.params;
+
+  const result = ContactEnrichmentEngine.discoverDomainPattern(domain);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    meta: { timestamp: new Date().toISOString() }
+  });
 });
 
 /**

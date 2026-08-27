@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import type { ApiResponse } from '../types/api';
 import { db } from '../db/memoryStore';
 import { serverScoringEngine } from '../engine/scoringEngine';
+import { AutomaticLeadEngine } from '../engine/leads/automaticLeadEngine';
 import { leadService } from '../services/leadService';
 import type { AuthenticatedRequest } from '../middleware/auth';
 
@@ -90,4 +91,84 @@ leadsRouter.post('/leads/evaluate', async (req: AuthenticatedRequest, res: Respo
   };
 
   res.status(200).json(response);
+});
+
+/**
+ * POST /api/leads/auto-qualify
+ * Runs autonomous qualification across all workspace accounts
+ */
+leadsRouter.post('/leads/auto-qualify', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-main';
+
+  try {
+    const result = await AutomaticLeadEngine.runAutoQualification(workspaceId);
+
+    res.status(200).json({
+      success: true,
+      data: result,
+      meta: { timestamp: new Date().toISOString() }
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'AUTO_QUALIFY_ERROR', message: err.message },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+});
+
+/**
+ * POST /api/leads/:id/promote
+ * Promotes a lead directly to the active CRM pipeline
+ */
+leadsRouter.post('/leads/:id/promote', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const { id } = req.params;
+  const { customDealValue } = req.body || {};
+
+  try {
+    const deal = await AutomaticLeadEngine.promoteLeadToPipeline(id, workspaceId, customDealValue);
+
+    res.status(200).json({
+      success: true,
+      data: deal,
+      meta: { timestamp: new Date().toISOString() }
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'PROMOTE_ERROR', message: err.message },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+});
+
+/**
+ * PATCH /api/leads/:id/status
+ * Updates lead status
+ */
+leadsRouter.patch('/leads/:id/status', (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const { id } = req.params;
+  const { status } = req.body || {};
+
+  const lead = db.leads.find(l => l.id === id && l.workspaceId === workspaceId);
+  if (!lead) {
+    return res.status(404).json({
+      success: false,
+      error: { code: 'LEAD_NOT_FOUND', message: `Lead '${id}' not found.` },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+
+  if (status) {
+    lead.status = status;
+    lead.updatedAt = new Date().toISOString();
+  }
+
+  res.status(200).json({
+    success: true,
+    data: lead,
+    meta: { timestamp: new Date().toISOString() }
+  });
 });

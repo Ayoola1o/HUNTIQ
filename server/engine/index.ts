@@ -116,3 +116,5 @@ export * from './detectors/signalDetector';
 export * from './detectors/hiringSignalEngine';
 export * from './leadGenerator';
 export * from './resolution/companyResolver';
+export * from './scoring/opportunityScoringEngine';
+export * from './enrichment/contactEnrichmentEngine';

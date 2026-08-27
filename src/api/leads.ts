@@ -26,3 +26,12 @@ export async function fetchLeads(status?: string): Promise<DbLead[]> {
 export async function evaluateCompanyOpportunity(companyId: string): Promise<OpportunityEvaluationResult> {
   return await apiClient.post<OpportunityEvaluationResult>('/api/leads/evaluate', { companyId });
 }
+
+export async function autoQualifyLeads(): Promise<any> {
+  return await apiClient.post('/api/leads/auto-qualify');
+}
+
+export async function promoteLeadToPipeline(leadId: string, customDealValue?: number): Promise<any> {
+  return await apiClient.post(`/api/leads/${leadId}/promote`, { customDealValue });
+}
+

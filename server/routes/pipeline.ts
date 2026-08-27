@@ -6,7 +6,7 @@ import type { PipelineDealItem } from '../../src/types/pipeline';
 export const pipelineRouter = Router();
 
 // In-memory mock database store for development
-let pipelineDealsDb: PipelineDealItem[] = [
+export let pipelineDealsDb: PipelineDealItem[] = [
   {
     id: 'deal-1',
     companyName: 'Acme Technologies',

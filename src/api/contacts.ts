@@ -33,3 +33,12 @@ export async function enrichCompanyContacts(companyId: string): Promise<Enrichme
 export async function createContact(contact: Partial<DbContact>): Promise<DbContact> {
   return await apiClient.post<DbContact>('/api/contacts', contact);
 }
+
+export async function verifyEmail(email: string): Promise<any> {
+  return await apiClient.post('/api/contacts/verify-email', { email });
+}
+
+export async function fetchDomainPattern(domain: string): Promise<any> {
+  return await apiClient.get(`/api/contacts/pattern/${domain}`);
+}
+
