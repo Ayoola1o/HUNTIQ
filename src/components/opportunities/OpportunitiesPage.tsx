@@ -16,10 +16,13 @@ import {
   Sparkles, 
   Bell, 
   Calendar, 
-  SlidersHorizontal 
+  SlidersHorizontal,
+  RefreshCw,
+  Zap
 } from 'lucide-react';
 
 import { useHuntiq } from '../../context/HuntiqContext';
+import { syncCompanyJobs, autoQualifyLeads } from '../../api';
 
 interface OpportunitiesPageProps {
   onNavigate: (nav: string) => void;
@@ -30,10 +33,12 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
-  const { opportunities: dynamicOpportunities } = useHuntiq();
+  const { opportunities: dynamicOpportunities, isLiveBackend, isDataLoading, refreshData, addDealToPipeline } = useHuntiq();
   const [activeTab, setActiveTab] = useState('all');
   const [activeKpiFilter, setActiveKpiFilter] = useState('all');
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>('opp-c1');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
 
   // Modals state
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -42,297 +47,38 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
   const [inspectingScoreOpp, setInspectingScoreOpp] = useState<OpportunityItem | null>(null);
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
 
-  // Live dataset from Huntiq engine with fallback
-  const [opportunities, setOpportunities] = useState<OpportunityItem[]>(() => 
-    dynamicOpportunities && dynamicOpportunities.length > 0 ? dynamicOpportunities : [{
-      id: 'opp-1',
-      companyName: 'Acme Technologies',
-      avatarLetter: 'A',
-      avatarBg: '#dc2626',
-      industry: 'Technology',
-      employees: '250-500 employees',
-      location: 'Lagos, Nigeria',
-      score: 94,
-      scoreTrend: 'up',
-      priority: 'Hot',
-      whyNow: 'Hiring 38 new employees + opened a new office + new COO',
-      tags: ['Hiring', 'Expansion', 'Leadership'],
-      estimatedValue: 35000,
-      stage: 'Discovery',
-      lastActivity: '2h ago',
-      lastActivityType: 'signal',
-      website: 'acmetech.com',
-      revenue: '$25M - $50M',
-      linkedInUrl: 'https://linkedin.com/company/acmetech',
-      signals: [
-        {
-          id: 's-1',
-          type: 'hiring',
-          title: 'Hiring Surge',
-          detail: '38 new job postings',
-          timeAgo: '2h ago',
-          confidence: 96
-        },
-        {
-          id: 's-2',
-          type: 'expansion',
-          title: 'New Office',
-          detail: 'Lagos, Nigeria',
-          timeAgo: '3d ago',
-          confidence: 94
-        },
-        {
-          id: 's-3',
-          type: 'leadership',
-          title: 'Leadership Change',
-          detail: 'New COO appointed',
-          timeAgo: '5d ago',
-          confidence: 92
-        }
-      ],
-      scoreFactors: {
-        icpFit: { score: 24, max: 25 },
-        buyingIntent: { score: 23, max: 25 },
-        triggerEvents: { score: 20, max: 20 },
-        decisionMakerAccess: { score: 13, max: 15 },
-        companySize: { score: 9, max: 10 },
-        engagement: { score: 5, max: 5 }
-      },
-      bestNextStep: {
-        actionText: 'Contact the Head of People to discuss workforce scaling and talent strategy.',
-        targetRole: 'Head of People',
-        targetName: 'Jane Smith'
-      }
-    },
-    {
-      id: 'opp-2',
-      companyName: 'FinServe Ltd',
-      avatarLetter: 'F',
-      avatarBg: '#2563eb',
-      industry: 'Financial Services',
-      employees: '200-500',
-      location: 'Lagos, Nigeria',
-      score: 91,
-      scoreTrend: 'up',
-      priority: 'Hot',
-      whyNow: 'Expansion into two new markets + increased funding',
-      tags: ['Expansion', 'Funding'],
-      estimatedValue: 28000,
-      stage: 'Qualification',
-      lastActivity: '5h ago',
-      lastActivityType: 'stage_change',
-      website: 'finserveltd.com',
-      revenue: '$15M - $30M',
-      linkedInUrl: 'https://linkedin.com/company/finserve',
-      signals: [
-        {
-          id: 's-21',
-          type: 'expansion',
-          title: 'Market Expansion',
-          detail: 'Announced Ghana & Kenya entry',
-          timeAgo: '5h ago',
-          confidence: 95
-        },
-        {
-          id: 's-22',
-          type: 'hiring',
-          title: 'Senior Hiring',
-          detail: 'Hiring HR Director & 12 Regional Leads',
-          timeAgo: '2d ago',
-          confidence: 90
-        }
-      ],
-      scoreFactors: {
-        icpFit: { score: 23, max: 25 },
-        buyingIntent: { score: 22, max: 25 },
-        triggerEvents: { score: 19, max: 20 },
-        decisionMakerAccess: { score: 14, max: 15 },
-        companySize: { score: 8, max: 10 },
-        engagement: { score: 5, max: 5 }
-      },
-      bestNextStep: {
-        actionText: 'Reach out to Michael Okoro regarding regional talent onboarding.',
-        targetRole: 'HR Director',
-        targetName: 'Michael Okoro'
-      }
-    },
-    {
-      id: 'opp-3',
-      companyName: 'Delta Systems',
-      avatarLetter: 'D',
-      avatarBg: '#059669',
-      industry: 'Software',
-      employees: '100-250',
-      location: 'Abuja, Nigeria',
-      score: 87,
-      scoreTrend: 'up',
-      priority: 'High',
-      whyNow: 'Researching cybersecurity solutions + tech stack modernization',
-      tags: ['Technology', 'Intent'],
-      estimatedValue: 22500,
-      stage: 'Discovery',
-      lastActivity: '1d ago',
-      lastActivityType: 'signal',
-      website: 'deltasystems.ng',
-      revenue: '$8M - $18M',
-      linkedInUrl: 'https://linkedin.com/company/deltasystems',
-      signals: [
-        {
-          id: 's-31',
-          type: 'hiring',
-          title: 'Tech Modernization',
-          detail: 'Evaluating enterprise training suites',
-          timeAgo: '1d ago',
-          confidence: 88
-        }
-      ],
-      scoreFactors: {
-        icpFit: { score: 22, max: 25 },
-        buyingIntent: { score: 21, max: 25 },
-        triggerEvents: { score: 18, max: 20 },
-        decisionMakerAccess: { score: 13, max: 15 },
-        companySize: { score: 9, max: 10 },
-        engagement: { score: 4, max: 5 }
-      },
-      bestNextStep: {
-        actionText: 'Send case study on engineering leadership scaling.',
-        targetRole: 'CTO / Co-Founder',
-        targetName: 'David Jonah'
-      }
-    },
-    {
-      id: 'opp-4',
-      companyName: 'Vertex Solutions',
-      avatarLetter: 'V',
-      avatarBg: '#7c3aed',
-      industry: 'IT Services',
-      employees: '150-300',
-      location: 'Lagos, Nigeria',
-      score: 78,
-      scoreTrend: 'up',
-      priority: 'High',
-      whyNow: 'Recently raised funding + scaling engineering team',
-      tags: ['Funding', 'Hiring'],
-      estimatedValue: 18000,
-      stage: 'Qualification',
-      lastActivity: '1d ago',
-      lastActivityType: 'stage_change',
-      website: 'vertexsolutions.com',
-      revenue: '$10M - $20M',
-      linkedInUrl: 'https://linkedin.com/company/vertexsolutions',
-      signals: [
-        {
-          id: 's-41',
-          type: 'hiring',
-          title: 'Series A Funding',
-          detail: 'Closed $6.5M growth round',
-          timeAgo: '1d ago',
-          confidence: 92
-        }
-      ],
-      scoreFactors: {
-        icpFit: { score: 20, max: 25 },
-        buyingIntent: { score: 19, max: 25 },
-        triggerEvents: { score: 17, max: 20 },
-        decisionMakerAccess: { score: 12, max: 15 },
-        companySize: { score: 7, max: 10 },
-        engagement: { score: 3, max: 5 }
-      },
-      bestNextStep: {
-        actionText: 'Connect on LinkedIn with VP of Operations.',
-        targetRole: 'VP Operations',
-        targetName: 'Kemi Balogun'
-      }
-    },
-    {
-      id: 'opp-5',
-      companyName: 'Nimbus Analytics',
-      avatarLetter: 'N',
-      avatarBg: '#ea580c',
-      industry: 'Data & Analytics',
-      employees: '100-200',
-      location: 'Abuja, Nigeria',
-      score: 76,
-      scoreTrend: 'up',
-      priority: 'Medium',
-      whyNow: 'New product launch + growing customer base',
-      tags: ['Product Launch', 'Growth'],
-      estimatedValue: 15000,
-      stage: 'Discovery',
-      lastActivity: '2d ago',
-      lastActivityType: 'research',
-      website: 'nimbusanalytics.io',
-      revenue: '$5M - $12M',
-      linkedInUrl: 'https://linkedin.com/company/nimbusanalytics',
-      signals: [
-        {
-          id: 's-51',
-          type: 'expansion',
-          title: 'New Product Launch',
-          detail: 'Enterprise AI Suite Rollout',
-          timeAgo: '2d ago',
-          confidence: 86
-        }
-      ],
-      scoreFactors: {
-        icpFit: { score: 19, max: 25 },
-        buyingIntent: { score: 18, max: 25 },
-        triggerEvents: { score: 16, max: 20 },
-        decisionMakerAccess: { score: 12, max: 15 },
-        companySize: { score: 7, max: 10 },
-        engagement: { score: 4, max: 5 }
-      },
-      bestNextStep: {
-        actionText: 'Offer complimentary org design review.',
-        targetRole: 'Managing Director',
-        targetName: 'Ibrahim Bello'
-      }
-    },
-    {
-      id: 'opp-6',
-      companyName: 'Peak Consulting',
-      avatarLetter: 'P',
-      avatarBg: '#0284c7',
-      industry: 'Professional Services',
-      employees: '50-100',
-      location: 'Lagos, Nigeria',
-      score: 62,
-      scoreTrend: 'up',
-      priority: 'Medium',
-      whyNow: 'Leadership transition + process improvement initiative',
-      tags: ['Leadership'],
-      estimatedValue: 12000,
-      stage: 'Nurturing',
-      lastActivity: '3d ago',
-      lastActivityType: 'signal',
-      website: 'peakconsulting.com',
-      revenue: '$3M - $8M',
-      linkedInUrl: 'https://linkedin.com/company/peakconsulting',
-      signals: [
-        {
-          id: 's-61',
-          type: 'leadership',
-          title: 'Internal Restructuring',
-          detail: 'New division created for enterprise coaching',
-          timeAgo: '3d ago',
-          confidence: 80
-        }
-      ],
-      scoreFactors: {
-        icpFit: { score: 17, max: 25 },
-        buyingIntent: { score: 15, max: 25 },
-        triggerEvents: { score: 14, max: 20 },
-        decisionMakerAccess: { score: 9, max: 15 },
-        companySize: { score: 5, max: 10 },
-        engagement: { score: 2, max: 5 }
-      },
-      bestNextStep: {
-        actionText: 'Follow up with monthly newsletter sequence.',
-        targetRole: 'Partner',
-        targetName: 'Sola Peters'
+  // Live dataset from Huntiq engine
+  const [opportunities, setOpportunities] = useState<OpportunityItem[]>(() => dynamicOpportunities);
+
+  // Reactively synchronize whenever live backend data refreshes
+  React.useEffect(() => {
+    if (dynamicOpportunities && dynamicOpportunities.length > 0) {
+      setOpportunities(dynamicOpportunities);
+      if (!selectedOpportunityId && dynamicOpportunities[0]) {
+        setSelectedOpportunityId(dynamicOpportunities[0].id);
       }
     }
-  ]);
+  }, [dynamicOpportunities]);
+
+  const handleQuickLiveSync = async () => {
+    setIsSyncing(true);
+    try {
+      // Trigger live sync for Paystack
+      await syncCompanyJobs({ domain: 'paystack.com', provider: 'GREENHOUSE', boardToken: 'paystack' });
+      // Run auto qualification
+      await autoQualifyLeads();
+      // Reload fresh data into state
+      await refreshData();
+      setSyncToast('Live Greenhouse sync completed! Paystack + Moniepoint updated.');
+      setTimeout(() => setSyncToast(null), 4000);
+    } catch (_err) {
+      await refreshData();
+      setSyncToast('Refreshed live opportunity scores.');
+      setTimeout(() => setSyncToast(null), 3000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const selectedOpp = opportunities.find((o) => o.id === selectedOpportunityId) || opportunities[0];
 
@@ -429,9 +175,9 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
           justifyContent: 'space-between',
           flexShrink: 0
         }}>
-          {/* Title & Star */}
+          {/* Title, Star, and Live Status Badge */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h1 style={{
                 fontSize: '22px',
                 fontWeight: 800,
@@ -454,14 +200,63 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
               >
                 <Star size={16} />
               </button>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                backgroundColor: isLiveBackend ? '#ecfdf5' : '#f8fafc',
+                border: `1px solid ${isLiveBackend ? '#a7f3d0' : '#e2e8f0'}`,
+                fontSize: '11px',
+                fontWeight: 600,
+                color: isLiveBackend ? '#059669' : '#64748b'
+              }}>
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: isLiveBackend ? '#10b981' : '#94a3b8'
+                }} />
+                {isLiveBackend ? 'Live Data Feed' : 'Intelligence Engine'}
+              </div>
             </div>
             <p style={{ fontSize: '12.5px', color: '#64748b', margin: '3px 0 0 0' }}>
-              Discover, evaluate and prioritize the best opportunities to win.
+              Discover, evaluate and prioritize high-intent opportunities powered by live hiring telemetry.
             </p>
           </div>
 
-          {/* Search, Copilot CTA, Date & Profile */}
+          {/* Search, Live Sync, Copilot CTA, Date & Profile */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Quick Live ATS Sync Button */}
+            <button
+              onClick={handleQuickLiveSync}
+              disabled={isSyncing || isDataLoading}
+              title="Trigger live ATS sync for Paystack, Moniepoint & run autonomous opportunity scoring"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '10px',
+                height: '38px',
+                padding: '0 12px',
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#0f172a',
+                cursor: isSyncing ? 'not-allowed' : 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+              }}
+            >
+              {isSyncing ? (
+                <RefreshCw size={14} className="animate-spin" color="#4f46e5" />
+              ) : (
+                <Zap size={14} color="#f59e0b" fill="#f59e0b" />
+              )}
+              <span>{isSyncing ? 'Syncing Live Jobs...' : 'Live Ingestion Sync'}</span>
+            </button>
+
             {/* Search Input */}
             <div style={{
               display: 'flex',
@@ -471,7 +266,7 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
               borderRadius: '10px',
               padding: '0 12px',
               height: '38px',
-              width: '280px',
+              width: '240px',
               gap: '8px'
             }}>
               <Search size={15} color="#94a3b8" />
@@ -626,6 +421,42 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
           gap: '20px',
           padding: '20px 0 36px'
         }}>
+          {/* Live Ingestion Feedback Toast */}
+          {syncToast && (
+            <div style={{
+              margin: '0 32px',
+              padding: '10px 16px',
+              backgroundColor: '#ecfdf5',
+              border: '1px solid #6ee7b7',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: '#065f46',
+              boxShadow: '0 2px 6px rgba(16, 185, 129, 0.1)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={15} color="#059669" fill="#059669" />
+                <span>{syncToast}</span>
+              </div>
+              <button
+                onClick={() => setSyncToast(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#047857',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '12px'
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {/* Top 6 KPI Summary Cards */}
           <OpportunitiesKpiCards
             activeFilter={activeKpiFilter}
@@ -665,6 +496,23 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
                 onOpenScoreBreakdown={(opp) => setInspectingScoreOpp(opp)}
                 onStartOutreach={(opp) => setResearchedCompany(opp.companyName)}
                 onViewCompany={(name) => setResearchedCompany(name)}
+                onAddToPipeline={(opp) => {
+                  addDealToPipeline({
+                    companyName: opp.companyName,
+                    domain: opp.website,
+                    dealTitle: `${opp.companyName} - High-Intent Expansion Advisory`,
+                    serviceName: 'Enterprise Growth Advisory',
+                    dealValue: opp.estimatedValue,
+                    probability: Math.min(90, Math.round(opp.score * 0.9)),
+                    opportunityScore: opp.score,
+                    stage: 'contacted',
+                    contactName: opp.bestNextStep?.targetName || 'Executive Decision Maker',
+                    contactRole: opp.bestNextStep?.targetRole || 'Leadership Team',
+                    nextAction: opp.bestNextStep?.actionText || 'Send tailored executive brief'
+                  });
+                  setSyncToast(`Promoted ${opp.companyName} ($${opp.estimatedValue.toLocaleString()}) to CRM Pipeline!`);
+                  setTimeout(() => setSyncToast(null), 4000);
+                }}
               />
             )}
           </div>

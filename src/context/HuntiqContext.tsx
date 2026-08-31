@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
 import type { CompanyItem } from '../types/company';
 import type { SignalItem } from '../types/signal';
 import type { OpportunityItem } from '../types/opportunity';
@@ -11,6 +11,14 @@ import {
   scoringEngine, 
   copilotEngine 
 } from '../engine';
+import {
+  checkApiHealth,
+  fetchCompanies as apiFetchCompanies,
+  fetchSignals as apiFetchSignals,
+  fetchPipelineDeals as apiFetchPipelineDeals,
+  createPipelineDeal,
+  updatePipelineDeal
+} from '../api';
 
 export type AppView = 
   | 'dashboard' 
@@ -44,6 +52,9 @@ interface HuntiqContextType {
   signals: SignalItem[];
   opportunities: OpportunityItem[];
   pipelineDeals: PipelineDealItem[];
+  isLiveBackend: boolean;
+  isDataLoading: boolean;
+  refreshData: () => Promise<void>;
   
   // Modals & Active Inspect
   isCopilotOpen: boolean;
@@ -71,10 +82,12 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   initialView = 'dashboard'
 }) => {
   const [currentView, setCurrentView] = useState<AppView>(initialView);
+  const [isLiveBackend, setIsLiveBackend] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(false);
   
   // Data State
   const [companies, setCompanies] = useState<CompanyItem[]>(() => prospectorEngine.getAllCompanies());
-  const [signals] = useState<SignalItem[]>(() => signalEngine.getAllSignals());
+  const [signals, setSignals] = useState<SignalItem[]>(() => signalEngine.getAllSignals());
   
   const [pipelineDeals, setPipelineDeals] = useState<PipelineDealItem[]>([
     {
@@ -265,8 +278,43 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     });
   }, []);
 
+  // Data Hydration & Live Sync
+  const refreshData = useCallback(async () => {
+    setIsDataLoading(true);
+    try {
+      const health = await checkApiHealth();
+      if (health.status === 'ok' && health.environment !== 'browser-local') {
+        setIsLiveBackend(true);
+      }
+
+      const [liveCompanies, liveSignals, liveDeals] = await Promise.allSettled([
+        apiFetchCompanies(),
+        apiFetchSignals(),
+        apiFetchPipelineDeals()
+      ]);
+
+      if (liveCompanies.status === 'fulfilled' && liveCompanies.value && liveCompanies.value.length > 0) {
+        setCompanies(liveCompanies.value);
+      }
+      if (liveSignals.status === 'fulfilled' && liveSignals.value && liveSignals.value.length > 0) {
+        setSignals(liveSignals.value);
+      }
+      if (liveDeals.status === 'fulfilled' && liveDeals.value && liveDeals.value.length > 0) {
+        setPipelineDeals(liveDeals.value);
+      }
+    } catch (_err) {
+      // Graceful local engine fallback
+    } finally {
+      setIsDataLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
+
   // Deal Management
-  const addDealToPipeline = useCallback((deal: Partial<PipelineDealItem>) => {
+  const addDealToPipeline = useCallback(async (deal: Partial<PipelineDealItem>) => {
     const newDeal: PipelineDealItem = {
       id: `deal-${Date.now()}`,
       companyName: deal.companyName || 'New Target Account',
@@ -290,13 +338,26 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
       priority: 'High',
       activities: []
     };
+
     setPipelineDeals((prev) => [newDeal, ...prev]);
+
+    try {
+      await createPipelineDeal(newDeal);
+    } catch (_err) {
+      // Optimistic update retained
+    }
   }, []);
 
-  const updateDealStage = useCallback((dealId: string, newStage: PipelineStage) => {
+  const updateDealStage = useCallback(async (dealId: string, newStage: PipelineStage) => {
     setPipelineDeals((prev) =>
       prev.map((d) => (d.id === dealId ? { ...d, stage: newStage, stageEnteredAt: 'Just now' } : d))
     );
+
+    try {
+      await updatePipelineDeal(dealId, { stage: newStage });
+    } catch (_err) {
+      // Optimistic update retained
+    }
   }, []);
 
   const toggleSaveCompany = useCallback((companyId: string) => {
@@ -316,6 +377,9 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     signals,
     opportunities,
     pipelineDeals,
+    isLiveBackend,
+    isDataLoading,
+    refreshData,
     isCopilotOpen,
     openCopilot,
     closeCopilot,
@@ -336,6 +400,9 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     signals,
     opportunities,
     pipelineDeals,
+    isLiveBackend,
+    isDataLoading,
+    refreshData,
     isCopilotOpen,
     openCopilot,
     closeCopilot,

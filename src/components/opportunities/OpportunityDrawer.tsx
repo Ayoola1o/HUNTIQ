@@ -20,6 +20,7 @@ interface OpportunityDrawerProps {
   onOpenScoreBreakdown: (opp: OpportunityItem) => void;
   onStartOutreach: (opp: OpportunityItem) => void;
   onViewCompany: (companyName: string) => void;
+  onAddToPipeline?: (opp: OpportunityItem) => void;
 }
 
 export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
@@ -27,7 +28,8 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
   onClose,
   onOpenScoreBreakdown,
   onStartOutreach,
-  onViewCompany
+  onViewCompany,
+  onAddToPipeline
 }) => {
   if (!opp) return null;
 
@@ -250,46 +252,71 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
             {opp.bestNextStep.actionText}
           </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => onStartOutreach(opp)}
-              style={{
-                flex: 1,
-                backgroundColor: '#4f46e5',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                fontSize: '12px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                boxShadow: '0 2px 6px rgba(79, 70, 229, 0.3)'
-              }}
-            >
-              <Send size={12} />
-              <span>Start Outreach</span>
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => onStartOutreach(opp)}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#4f46e5',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '8px 12px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(79, 70, 229, 0.3)'
+                }}
+              >
+                <Send size={12} />
+                <span>Start Outreach</span>
+              </button>
 
-            <button
-              onClick={() => onViewCompany(opp.companyName)}
-              style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#334155',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              View Company
-            </button>
+              <button
+                onClick={() => onViewCompany(opp.companyName)}
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '8px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#334155',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                View Company
+              </button>
+            </div>
+
+            {onAddToPipeline && (
+              <button
+                onClick={() => onAddToPipeline(opp)}
+                style={{
+                  backgroundColor: '#0f172a',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '8px 12px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                }}
+              >
+                <span>Push to CRM Pipeline (${opp.estimatedValue.toLocaleString()})</span>
+              </button>
+            )}
           </div>
         </div>
 

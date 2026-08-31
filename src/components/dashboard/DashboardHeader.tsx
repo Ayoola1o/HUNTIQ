@@ -7,6 +7,7 @@ import {
   Users, 
   ChevronDown 
 } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface DashboardHeaderProps {
   onOpenCopilot: () => void;
@@ -25,6 +26,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onChangeTeam,
   onSearch
 }) => {
+  const { isLiveBackend } = useHuntiq();
   const [searchQuery, setSearchQuery] = useState('');
   const [isDateOpen, setIsDateOpen] = useState(false);
   const [isTeamOpen, setIsTeamOpen] = useState(false);
@@ -64,16 +66,38 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         {/* Left Greeting */}
         <div>
-          <h1 style={{
-            fontSize: '24px',
-            fontWeight: 800,
-            color: '#0f172a',
-            margin: '0 0 3px 0',
-            letterSpacing: '-0.02em',
-            fontFamily: 'var(--font-primary)'
-          }}>
-            {getGreeting()}, Ayoola 👋
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 style={{
+              fontSize: '24px',
+              fontWeight: 800,
+              color: '#0f172a',
+              margin: '0 0 3px 0',
+              letterSpacing: '-0.02em',
+              fontFamily: 'var(--font-primary)'
+            }}>
+              {getGreeting()}, Ayoola 👋
+            </h1>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              backgroundColor: isLiveBackend ? '#ecfdf5' : '#f8fafc',
+              border: `1px solid ${isLiveBackend ? '#a7f3d0' : '#e2e8f0'}`,
+              fontSize: '11px',
+              fontWeight: 600,
+              color: isLiveBackend ? '#059669' : '#64748b'
+            }}>
+              <span style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: isLiveBackend ? '#10b981' : '#94a3b8'
+              }} />
+              {isLiveBackend ? 'Live Data Feed Active' : 'Intelligence Engine Active'}
+            </div>
+          </div>
           <p style={{
             fontSize: '13.5px',
             color: '#64748b',
