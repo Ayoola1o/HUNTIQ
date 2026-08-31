@@ -5,6 +5,7 @@ import { QuickStartTemplates } from './QuickStartTemplates';
 import { AdvancedFilterForm } from './AdvancedFilterForm';
 import { SearchSummaryPanel } from './SearchSummaryPanel';
 import { SaveSearchModal } from './SaveSearchModal';
+import { MapProspectingRadar } from './MapProspectingRadar';
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import { CompanyResearchModal } from '../dashboard/CompanyResearchModal';
 import type { SearchCriteria, QuickTemplate, SearchEstimation } from '../../types/prospectHunter';
@@ -25,7 +26,7 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
-  const [activeTab, setActiveTab] = useState<'ai' | 'advanced'>('ai');
+  const [activeTab, setActiveTab] = useState<'ai' | 'advanced' | 'geo-radar'>('ai');
 
   // Search criteria state matching Find Prospects page.png
   const [criteria, setCriteria] = useState<SearchCriteria>({
@@ -373,7 +374,7 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
           flexDirection: 'column',
           gap: '20px'
         }}>
-          {/* Top Tab Selector: AI Prospect Search vs Advanced Search */}
+          {/* Top Tab Selector: AI Prospect Search vs Advanced Search vs Live Geo Radar */}
           <div style={{
             display: 'inline-flex',
             backgroundColor: '#eef2f6',
@@ -416,43 +417,71 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
             >
               Advanced Search
             </button>
+
+            <button
+              onClick={() => setActiveTab('geo-radar')}
+              style={{
+                padding: '7px 18px',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: activeTab === 'geo-radar' ? '#ffffff' : 'transparent',
+                color: activeTab === 'geo-radar' ? '#4f46e5' : '#64748b',
+                fontWeight: activeTab === 'geo-radar' ? 700 : 500,
+                fontSize: '13px',
+                cursor: 'pointer',
+                boxShadow: activeTab === 'geo-radar' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.15s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <span>🗺️ Live Geo Radar & Map Scraper</span>
+              <span style={{ fontSize: '10px', backgroundColor: '#ecfdf5', color: '#059669', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
+                Live
+              </span>
+            </button>
           </div>
 
-          {/* 2-Column Main Form + Summary Grid */}
-          <div style={{
-            display: 'flex',
-            gap: '20px',
-            alignItems: 'flex-start'
-          }}>
-            {/* Left Column: AI Box + Templates + Filters */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
-              {/* AI Natural Language Search Box */}
-              <AiSearchInput
-                value={criteria.naturalQuery}
-                onChange={(val) => handleCriteriaChange({ naturalQuery: val })}
-                onSubmit={handleExecuteSearch}
-                onImprove={handleImproveWithAi}
-              />
+          {activeTab === 'geo-radar' ? (
+            <MapProspectingRadar onNavigateToOpportunities={() => onNavigate('opportunities')} />
+          ) : (
+            /* 2-Column Main Form + Summary Grid */
+            <div style={{
+              display: 'flex',
+              gap: '20px',
+              alignItems: 'flex-start'
+            }}>
+              {/* Left Column: AI Box + Templates + Filters */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
+                {/* AI Natural Language Search Box */}
+                <AiSearchInput
+                  value={criteria.naturalQuery}
+                  onChange={(val) => handleCriteriaChange({ naturalQuery: val })}
+                  onSubmit={handleExecuteSearch}
+                  onImprove={handleImproveWithAi}
+                />
 
-              {/* Quick Start 5 Templates */}
-              <QuickStartTemplates onSelectTemplate={handleSelectTemplate} />
+                {/* Quick Start 5 Templates */}
+                <QuickStartTemplates onSelectTemplate={handleSelectTemplate} />
 
-              {/* Advanced Filters Section */}
-              <AdvancedFilterForm
+                {/* Advanced Filters Section */}
+                <AdvancedFilterForm
+                  criteria={criteria}
+                  onChangeCriteria={handleCriteriaChange}
+                  onSubmit={handleExecuteSearch}
+                  onReset={handleResetFilters}
+                  onClearAll={handleClearAll}
+                />
+              </div>
+
+              {/* Right Column: Search Summary & Live Expectations */}
+              <SearchSummaryPanel
                 criteria={criteria}
-                onChangeCriteria={handleCriteriaChange}
-                onSubmit={handleExecuteSearch}
-                onReset={handleResetFilters}
-                onClearAll={handleClearAll}
+                estimation={estimation}
               />
             </div>
-
-            {/* Right Column: Search Summary & Live Expectations */}
-            <SearchSummaryPanel
-              criteria={criteria}
-              estimation={estimation}
-            />
-          </div>
+          )}
         </main>
       </div>
 

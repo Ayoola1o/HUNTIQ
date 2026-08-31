@@ -27,10 +27,14 @@ export interface CompanyItem {
   description: string;
   founded: string;
   headquarters: string;
+  phone?: string;
+  tags?: string[];
+  digitalAudit?: any;
   socials: {
     linkedin?: string;
     twitter?: string;
     facebook?: string;
+    website?: string;
   };
 }
 

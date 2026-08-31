@@ -238,6 +238,50 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
           </div>
         </div>
 
+        {/* Digital Gap Audit Package (if available) */}
+        {opp.digitalAudit && (
+          <div style={{
+            backgroundColor: '#fff1f2',
+            border: '1px solid #fecdd3',
+            borderRadius: '10px',
+            padding: '12px 14px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#9f1239', textTransform: 'uppercase' }}>
+                Digital Audit Diagnostic (Gap Score: {opp.digitalGapScore || opp.digitalAudit.gapScore}/100)
+              </span>
+              <span style={{ fontSize: '10px', fontWeight: 800, backgroundColor: '#f43f5e', color: '#ffffff', padding: '2px 6px', borderRadius: '4px' }}>
+                Priority: {opp.digitalAudit.fixPriority}
+              </span>
+            </div>
+
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#881337', marginBottom: '4px' }}>
+              {opp.digitalAudit.recommendedPackage.packageName}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', margin: '6px 0' }}>
+              {opp.digitalAudit.issuesDetected.slice(0, 3).map((iss) => (
+                <div key={iss.id} style={{ fontSize: '11px', color: '#9f1239' }}>
+                  • <strong>{iss.title}:</strong> {iss.description}
+                </div>
+              ))}
+            </div>
+
+            <div style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              border: '1px solid #fda4af',
+              marginTop: '6px',
+              fontSize: '10.5px',
+              color: '#475569'
+            }}>
+              <strong style={{ color: '#0f172a' }}>Recommended Package: </strong>
+              ${opp.digitalAudit.recommendedPackage.estimatedValue.min.toLocaleString()} - ${opp.digitalAudit.recommendedPackage.estimatedValue.max.toLocaleString()} USD ({opp.digitalAudit.recommendedPackage.timeline})
+            </div>
+          </div>
+        )}
+
         {/* Best Next Step */}
         <div style={{
           backgroundColor: '#f5f3ff',

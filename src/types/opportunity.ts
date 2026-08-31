@@ -1,5 +1,9 @@
+import type { DigitalAuditPackage } from './digitalAudit';
+
 export type OpportunityPriority = 'Hot' | 'High' | 'Medium' | 'Low' | 'Won' | 'Lost';
 export type OpportunityStage = 'Discovery' | 'Qualification' | 'Proposal' | 'Negotiation' | 'Nurturing' | 'Closed Won' | 'Closed Lost';
+export type OpportunitySource = 'AI_SEARCH' | 'GEO_RADAR' | 'MANUAL' | 'IMPORT';
+export type OpportunityType = 'HIGH_GROWTH' | 'DIGITAL_GAP' | 'STANDARD';
 
 export interface OpportunitySignalItem {
   id: string;
@@ -46,4 +50,8 @@ export interface OpportunityItem {
     targetRole: string;
     targetName: string;
   };
+  source?: OpportunitySource;
+  opportunityType?: OpportunityType;
+  digitalGapScore?: number;
+  digitalAudit?: DigitalAuditPackage;
 }

@@ -1,16 +1,24 @@
-import { DigitalAuditEngine } from './digitalAuditEngine';
-import type { DigitalAuditPackage } from '../types/digitalAudit';
+import { DigitalAuditEngine } from '../audit/digitalAuditEngine';
+import type { DigitalAuditPackage } from '../../types/digitalAudit';
 
-export interface GeoLocationZone {
-  id: string;
-  name: string;
-  country: string;
-  lat: number;
-  lng: number;
-  popularDistricts: string[];
+export type GeoProspectMode = 'ALL' | 'ENTERPRISE' | 'LOCAL_COMMERCIAL' | 'DIGITAL_GAP';
+
+export interface GeoLocationCoordinates {
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
 }
 
-export interface GeoScrapedBusiness {
+export interface GeoProspectFilterOptions {
+  noWebsite?: boolean;
+  unclaimedListing?: boolean;
+  genericEmail?: boolean;
+  missingBooking?: boolean;
+  noAdsOrPixel?: boolean;
+  noEmailMarketing?: boolean;
+}
+
+export interface GeoDiscoveredBusiness {
   id: string;
   placeId: string;
   name: string;
@@ -32,49 +40,39 @@ export interface GeoScrapedBusiness {
   detectedSignals: string[];
   techStack: string[];
   headcountEstimate: string;
-  scrapedAt: string;
+  discoveredAt: string;
 }
 
-export const POPULAR_ZONES: GeoLocationZone[] = [
-  {
-    id: 'lagos',
-    name: 'Lagos Metropolitan Region',
-    country: 'Nigeria',
-    lat: 6.4541,
-    lng: 3.4246,
-    popularDistricts: ['Victoria Island Financial Core', 'Lekki Phase 1 Commercial Hub', 'Ikeja Commercial / Airport District', 'Yaba Tech Corridor', 'Ikoyi Executive District']
-  },
-  {
-    id: 'nairobi',
-    name: 'Nairobi Metro Region',
-    country: 'Kenya',
-    lat: -1.2921,
-    lng: 36.8219,
-    popularDistricts: ['Upper Hill Corporate Hub', 'Westlands Tech District', 'Kilimani Innovation Zone', 'Nairobi CBD']
-  },
-  {
-    id: 'johannesburg',
-    name: 'Johannesburg Metro',
-    country: 'South Africa',
-    lat: -26.2041,
-    lng: 28.0473,
-    popularDistricts: ['Sandton Financial District', 'Rosebank Commercial District', 'Bryanston Enterprise Hub', 'Midrand Tech Zone']
-  },
-  {
-    id: 'london',
-    name: 'Greater London',
-    country: 'United Kingdom',
-    lat: 51.5074,
-    lng: -0.1278,
-    popularDistricts: ['City of London (Square Mile)', 'Silicon Roundabout / Shoreditch', 'Canary Wharf', 'Mayfair / Soho']
-  }
-];
-
-export class GeoScraperEngine {
-  private scrapedRecords: GeoScrapedBusiness[] = [
-    // 1. Enterprise Scale Tech Hub
+export class GeoProspectingEngine {
+  private baseRegistry: Array<{
+    id: string;
+    placeId: string;
+    name: string;
+    targetType: 'ENTERPRISE' | 'LOCAL_COMMERCIAL';
+    category: string;
+    address: string;
+    district: string;
+    lat: number;
+    lng: number;
+    rating: number;
+    reviewCount: number;
+    phone: string;
+    website: string;
+    domain: string;
+    isVerified: boolean;
+    opportunityScore: number;
+    decisionMakers: { name: string; role: string; email: string }[];
+    detectedSignals: string[];
+    techStack: string[];
+    headcountEstimate: string;
+    hasOnlineBooking?: boolean;
+    hasAdTrackingPixels?: boolean;
+    isActivelyRunningAds?: boolean;
+    hasEmailCaptureFlows?: boolean;
+  }> = [
+    // 1. Enterprise Tech
     {
-      id: 'geo-1',
+      id: 'geo-ent-1',
       placeId: 'ChIJ_823n9X_OxARy7_01',
       name: 'Paystack Payments Ltd',
       targetType: 'ENTERPRISE',
@@ -90,19 +88,6 @@ export class GeoScraperEngine {
       domain: 'paystack.com',
       isVerified: true,
       opportunityScore: 94,
-      digitalAudit: DigitalAuditEngine.audit({
-        id: 'geo-1',
-        name: 'Paystack Payments Ltd',
-        category: 'Financial Technology',
-        website: 'https://paystack.com',
-        rating: 4.8,
-        reviewCount: 342,
-        district: 'Ikeja GRA',
-        hasOnlineBooking: true,
-        hasAdTrackingPixels: true,
-        isActivelyRunningAds: true,
-        hasEmailCaptureFlows: true
-      }),
       decisionMakers: [
         { name: 'Shola Akinlade', role: 'Chief Executive Officer', email: 'shola@paystack.com' },
         { name: 'Amara Nwosu', role: 'Head of People Operations', email: 'amara.nwosu@paystack.com' }
@@ -110,12 +95,15 @@ export class GeoScraperEngine {
       detectedSignals: ['Opening Francophone regional hubs', 'Hiring 30+ engineering roles (+240% surge)'],
       techStack: ['React', 'AWS', 'Node.js', 'PostgreSQL', 'Meta Pixel', 'Klaviyo'],
       headcountEstimate: '300-500 employees',
-      scrapedAt: 'Just now'
+      hasOnlineBooking: true,
+      hasAdTrackingPixels: true,
+      isActivelyRunningAds: true,
+      hasEmailCaptureFlows: true
     },
 
-    // 2. Local Commercial: Critical Digital Gap (No Website, Generic Email, No Ads/Pixel)
+    // 2. Local Commercial: Critical Digital Gap (No Website, Generic @gmail, No Ads/Pixel)
     {
-      id: 'geo-2',
+      id: 'geo-loc-1',
       placeId: 'ChIJ_918b2L_OxARk9_02',
       name: 'Premier Orthopedic & Trauma Clinic',
       targetType: 'LOCAL_COMMERCIAL',
@@ -131,31 +119,21 @@ export class GeoScraperEngine {
       domain: 'gmail.com',
       isVerified: false,
       opportunityScore: 92,
-      digitalAudit: DigitalAuditEngine.audit({
-        id: 'geo-2',
-        name: 'Premier Orthopedic & Trauma Clinic',
-        category: 'Healthcare & Specialized Medical',
-        website: '',
-        rating: 3.4,
-        reviewCount: 4,
-        district: 'Lekki Phase 1',
-        hasOnlineBooking: false,
-        hasAdTrackingPixels: false,
-        isActivelyRunningAds: false,
-        hasEmailCaptureFlows: false
-      }),
       decisionMakers: [
         { name: 'Dr. Kunle Adeleke', role: 'Medical Director / Owner', email: 'premierorthoclinic.ng@gmail.com' }
       ],
-      detectedSignals: ['High local inquiry volume', 'Zero web booking portal', 'No retargeting pixel or ads', 'Unclaimed Google profile'],
+      detectedSignals: ['High local inquiry volume in Lekki', 'Zero web booking portal', 'No retargeting pixel or ads', 'Unclaimed Google profile'],
       techStack: ['None (Analog Records)'],
       headcountEstimate: '25-50 employees',
-      scrapedAt: 'Just now'
+      hasOnlineBooking: false,
+      hasAdTrackingPixels: false,
+      isActivelyRunningAds: false,
+      hasEmailCaptureFlows: false
     },
 
     // 3. Local Commercial: Outdated Insecure Site, Running Google Ads without Email Retargeting
     {
-      id: 'geo-3',
+      id: 'geo-loc-2',
       placeId: 'ChIJ_554a9M_OxARr8_03',
       name: 'Apex Haulage & Inter-State Logistics',
       targetType: 'LOCAL_COMMERCIAL',
@@ -171,31 +149,21 @@ export class GeoScraperEngine {
       domain: 'apexhaulageng.com',
       isVerified: false,
       opportunityScore: 89,
-      digitalAudit: DigitalAuditEngine.audit({
-        id: 'geo-3',
-        name: 'Apex Haulage & Inter-State Logistics',
-        category: 'Transportation & Freight Logistics',
-        website: 'http://apexhaulageng.com',
-        rating: 3.6,
-        reviewCount: 12,
-        district: 'Yaba Commercial',
-        hasOnlineBooking: false,
-        hasAdTrackingPixels: true,
-        isActivelyRunningAds: true,
-        hasEmailCaptureFlows: false
-      }),
       decisionMakers: [
         { name: 'Alhaji Bashir Umar', role: 'Managing Partner', email: 'operations@apexhaulageng.com' }
       ],
-      detectedSignals: ['Active Google Ads spend on non-secure HTTP site', 'Zero automated email follow-up', 'Missing instant booking quote calculator'],
+      detectedSignals: ['Active Google Ads spend on non-secure HTTP site', 'Zero automated email follow-up', 'Missing instant quote calculator'],
       techStack: ['WordPress 4.9', 'PHP 7.2', 'Google Ads Tag'],
       headcountEstimate: '40-80 employees',
-      scrapedAt: 'Just now'
+      hasOnlineBooking: false,
+      hasAdTrackingPixels: true,
+      isActivelyRunningAds: true,
+      hasEmailCaptureFlows: false
     },
 
     // 4. Local Commercial: Premium Law Firm with Outdated Presence & No Email Automation
     {
-      id: 'geo-4',
+      id: 'geo-loc-3',
       placeId: 'ChIJ_772e3K_OxARw1_04',
       name: 'Crown Legal Chambers & Arbitration Partners',
       targetType: 'LOCAL_COMMERCIAL',
@@ -211,31 +179,21 @@ export class GeoScraperEngine {
       domain: 'crownlegalchambers.com',
       isVerified: true,
       opportunityScore: 86,
-      digitalAudit: DigitalAuditEngine.audit({
-        id: 'geo-4',
-        name: 'Crown Legal Chambers & Arbitration Partners',
-        category: 'Legal & Corporate Advisory',
-        website: 'http://crownlegalchambers.com',
-        rating: 4.1,
-        reviewCount: 7,
-        district: 'Victoria Island',
-        hasOnlineBooking: false,
-        hasAdTrackingPixels: false,
-        isActivelyRunningAds: false,
-        hasEmailCaptureFlows: false
-      }),
       decisionMakers: [
         { name: 'Barrister Femi Coker', role: 'Senior Partner', email: 'femi.coker@crownlegalchambers.com' }
       ],
       detectedSignals: ['Unencrypted client intake portal', 'No automated email consultation scheduler', 'Zero retargeting ad campaigns'],
       techStack: ['Custom HTML', 'Apache'],
       headcountEstimate: '20-40 employees',
-      scrapedAt: 'Just now'
+      hasOnlineBooking: false,
+      hasAdTrackingPixels: false,
+      isActivelyRunningAds: false,
+      hasEmailCaptureFlows: false
     },
 
     // 5. Local Commercial: Boutique Luxury Hotel & Spa with Missing Mobile Checkout
     {
-      id: 'geo-5',
+      id: 'geo-loc-4',
       placeId: 'ChIJ_331d8V_OxARt4_05',
       name: 'Grandeur Suites & Wellness Spa',
       targetType: 'LOCAL_COMMERCIAL',
@@ -251,31 +209,21 @@ export class GeoScraperEngine {
       domain: 'grandeursuites.ng',
       isVerified: true,
       opportunityScore: 84,
-      digitalAudit: DigitalAuditEngine.audit({
-        id: 'geo-5',
-        name: 'Grandeur Suites & Wellness Spa',
-        category: 'Hospitality & Wellness',
-        website: 'https://grandeursuites.ng',
-        rating: 4.6,
-        reviewCount: 89,
-        district: 'Ikoyi',
-        hasOnlineBooking: true,
-        hasAdTrackingPixels: true,
-        isActivelyRunningAds: true,
-        hasEmailCaptureFlows: false
-      }),
       decisionMakers: [
         { name: 'Folake Adeleke', role: 'General Manager', email: 'folake@grandeursuites.ng' }
       ],
       detectedSignals: ['Running Meta/Instagram ads', 'High booking abandonment rate', 'Static email form with no automated guest retention flows'],
       techStack: ['Wix', 'Meta Pixel', 'Stripe'],
       headcountEstimate: '50-100 employees',
-      scrapedAt: 'Just now'
+      hasOnlineBooking: true,
+      hasAdTrackingPixels: true,
+      isActivelyRunningAds: true,
+      hasEmailCaptureFlows: false
     },
 
-    // 6. Enterprise Scale FinTech
+    // 6. Enterprise FinTech
     {
-      id: 'geo-6',
+      id: 'geo-ent-2',
       placeId: 'ChIJ_492a7V_OxARm2_02',
       name: 'Flutterwave Global Hub',
       targetType: 'ENTERPRISE',
@@ -291,19 +239,6 @@ export class GeoScraperEngine {
       domain: 'flutterwave.com',
       isVerified: true,
       opportunityScore: 95,
-      digitalAudit: DigitalAuditEngine.audit({
-        id: 'geo-6',
-        name: 'Flutterwave Global Hub',
-        category: 'Enterprise Payments',
-        website: 'https://flutterwave.com',
-        rating: 4.5,
-        reviewCount: 289,
-        district: 'Lekki Phase 1',
-        hasOnlineBooking: true,
-        hasAdTrackingPixels: true,
-        isActivelyRunningAds: true,
-        hasEmailCaptureFlows: true
-      }),
       decisionMakers: [
         { name: 'Gbenga Agboola', role: 'Chief Executive Officer', email: 'gbenga@flutterwave.com' },
         { name: 'Bolu Oladipo', role: 'VP of Commercial Strategy', email: 'bolu@flutterwave.com' }
@@ -311,12 +246,15 @@ export class GeoScraperEngine {
       detectedSignals: ['Enterprise hiring surge (+180%)', 'New regional offices in North America and Europe'],
       techStack: ['Next.js', 'GCP', 'Node.js', 'Salesforce', 'Meta Pixel', 'HubSpot'],
       headcountEstimate: '500-1000 employees',
-      scrapedAt: 'Just now'
+      hasOnlineBooking: true,
+      hasAdTrackingPixels: true,
+      isActivelyRunningAds: true,
+      hasEmailCaptureFlows: true
     },
 
     // 7. Local Commercial: Auto Diagnostic Center (No Website, 0 Ads, @gmail for Invoices)
     {
-      id: 'geo-7',
+      id: 'geo-loc-5',
       placeId: 'ChIJ_228c1P_OxARq6_07',
       name: 'Heritage Precision Auto Spa & Garage',
       targetType: 'LOCAL_COMMERCIAL',
@@ -332,60 +270,120 @@ export class GeoScraperEngine {
       domain: 'gmail.com',
       isVerified: false,
       opportunityScore: 91,
-      digitalAudit: DigitalAuditEngine.audit({
-        id: 'geo-7',
-        name: 'Heritage Precision Auto Spa & Garage',
-        category: 'Automotive Repairs & Fleet Maintenance',
-        website: '',
-        rating: 3.2,
-        reviewCount: 3,
-        district: 'Ikeja Oregun',
-        hasOnlineBooking: false,
-        hasAdTrackingPixels: false,
-        isActivelyRunningAds: false,
-        hasEmailCaptureFlows: false
-      }),
       decisionMakers: [
         { name: 'Engr. Tunde Bakare', role: 'Head of Engineering & Owner', email: 'heritageprecisionauto@gmail.com' }
       ],
       detectedSignals: ['High commercial fleet demand in district', 'Zero online booking portal', 'No retargeting pixel or Google search ads', 'Unclaimed Google profile'],
       techStack: ['None (Paper Job Cards)'],
       headcountEstimate: '15-30 employees',
-      scrapedAt: 'Just now'
+      hasOnlineBooking: false,
+      hasAdTrackingPixels: false,
+      isActivelyRunningAds: false,
+      hasEmailCaptureFlows: false
     }
   ];
 
-  public scrapeZone(
-    _zoneId: string = 'lagos',
-    district: string = 'All Districts',
-    _radiusKm: number = 15,
-    category: string = 'All Industries',
-    targetMode: 'ALL' | 'ENTERPRISE' | 'LOCAL_COMMERCIAL' | 'DIGITAL_GAP' = 'ALL'
-  ): GeoScrapedBusiness[] {
-    let list = this.scrapedRecords;
+  /**
+   * Discovers and enriches businesses in a geographic region with full Digital Audit Packages.
+   */
+  public discover(params: {
+    zoneId?: string;
+    district?: string;
+    radiusKm?: number;
+    category?: string;
+    mode?: GeoProspectMode;
+    filters?: GeoProspectFilterOptions;
+  }): GeoDiscoveredBusiness[] {
+    const mode = params.mode || 'ALL';
+    let records = this.baseRegistry;
 
-    if (district && district !== 'All Districts') {
-      list = list.filter(b => b.district.toLowerCase().includes(district.toLowerCase()) || district.toLowerCase().includes(b.district.toLowerCase()));
+    // Filter by district
+    if (params.district && params.district !== 'All Districts') {
+      records = records.filter(
+        b => b.district.toLowerCase().includes(params.district!.toLowerCase()) || 
+             params.district!.toLowerCase().includes(b.district.toLowerCase())
+      );
     }
 
-    if (category && category !== 'All Industries') {
-      list = list.filter(b => b.category.toLowerCase().includes(category.toLowerCase()));
+    // Filter by category
+    if (params.category && params.category !== 'All Industries') {
+      records = records.filter(b => b.category.toLowerCase().includes(params.category!.toLowerCase()));
     }
 
-    if (targetMode === 'ENTERPRISE') {
-      list = list.filter(b => b.targetType === 'ENTERPRISE');
-    } else if (targetMode === 'LOCAL_COMMERCIAL') {
-      list = list.filter(b => b.targetType === 'LOCAL_COMMERCIAL');
-    } else if (targetMode === 'DIGITAL_GAP') {
-      list = list.filter(b => 
+    // Filter by mode
+    if (mode === 'ENTERPRISE') {
+      records = records.filter(b => b.targetType === 'ENTERPRISE');
+    } else if (mode === 'LOCAL_COMMERCIAL') {
+      records = records.filter(b => b.targetType === 'LOCAL_COMMERCIAL');
+    }
+
+    // Run deep digital audit for every business
+    const enriched: GeoDiscoveredBusiness[] = records.map((b) => {
+      const auditPackage = DigitalAuditEngine.audit({
+        id: b.id,
+        name: b.name,
+        category: b.category,
+        website: b.website,
+        phone: b.phone,
+        rating: b.rating,
+        reviewCount: b.reviewCount,
+        address: b.address,
+        district: b.district,
+        hasOnlineBooking: b.hasOnlineBooking,
+        hasAdTrackingPixels: b.hasAdTrackingPixels,
+        isActivelyRunningAds: b.isActivelyRunningAds,
+        hasEmailCaptureFlows: b.hasEmailCaptureFlows
+      });
+
+      return {
+        id: b.id,
+        placeId: b.placeId,
+        name: b.name,
+        targetType: b.targetType,
+        category: b.category,
+        address: b.address,
+        district: b.district,
+        lat: b.lat,
+        lng: b.lng,
+        rating: b.rating,
+        reviewCount: b.reviewCount,
+        phone: b.phone,
+        website: b.website,
+        domain: b.domain,
+        isVerified: b.isVerified,
+        opportunityScore: b.opportunityScore,
+        digitalAudit: auditPackage,
+        decisionMakers: b.decisionMakers,
+        detectedSignals: b.detectedSignals,
+        techStack: b.techStack,
+        headcountEstimate: b.headcountEstimate,
+        discoveredAt: new Date().toISOString()
+      };
+    });
+
+    // Apply digital gap filters if specified
+    if (mode === 'DIGITAL_GAP') {
+      return enriched.filter(b => 
         b.digitalAudit.fixPriority === 'CRITICAL' || 
         b.digitalAudit.fixPriority === 'HIGH' ||
         b.digitalAudit.gapScore >= 50
       );
     }
 
-    return list;
+    if (params.filters) {
+      return enriched.filter(b => {
+        if (params.filters?.noWebsite && b.digitalAudit.digitalMaturity.website > 0) return false;
+        if (params.filters?.unclaimedListing && b.digitalAudit.digitalMaturity.localPresence >= 10) return false;
+        if (params.filters?.genericEmail && b.digitalAudit.digitalMaturity.emailCredibility >= 8) return false;
+        if (params.filters?.missingBooking && b.digitalAudit.digitalMaturity.conversionTools >= 15) return false;
+        if (params.filters?.noAdsOrPixel && b.digitalAudit.digitalMaturity.adsAndTracking > 5) return false;
+        if (params.filters?.noEmailMarketing && b.digitalAudit.digitalMaturity.emailMarketing > 5) return false;
+        return true;
+      });
+    }
+
+    return enriched;
   }
 }
 
-export const geoScraperEngine = new GeoScraperEngine();
+export const geoProspectingEngine = new GeoProspectingEngine();

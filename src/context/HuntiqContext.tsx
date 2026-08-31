@@ -73,6 +73,7 @@ interface HuntiqContextType {
   updateDealStage: (dealId: string, stage: PipelineStage) => void;
   toggleSaveCompany: (companyId: string) => void;
   executeCopilotCommand: (prompt: string) => CopilotExecutionResult;
+  captureGeoBusinesses: (businesses: any[]) => void;
 }
 
 const HuntiqContext = createContext<HuntiqContextType | undefined>(undefined);
@@ -176,20 +177,23 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   const opportunities = useMemo(() => {
     return companies.map((c) => {
       const evaluation = scoringEngine.evaluateOpportunity(c, signals);
+      const isDigitalGap = c.tags?.includes('Digital Gap') || !!c.digitalAudit;
+      const estimatedValue = c.digitalAudit?.recommendedPackage?.estimatedValue?.max || (evaluation.totalScore * 450);
+
       const opp: OpportunityItem = {
         id: `opp-${c.id}`,
         companyName: c.name,
         avatarLetter: c.name.charAt(0),
-        avatarBg: '#eff6ff',
+        avatarBg: isDigitalGap && c.digitalAudit?.opportunityUrgency === 'CRITICAL' ? '#fee2e2' : '#eff6ff',
         industry: c.industry,
         employees: c.employees,
         location: c.location,
         score: evaluation.totalScore,
         scoreTrend: 'up',
         priority: evaluation.tier === 'High Intent' ? 'Hot' : 'High',
-        whyNow: evaluation.whyNowSummary,
-        tags: c.activeSignals?.map(s => s.type) || ['High Intent'],
-        estimatedValue: evaluation.totalScore * 450,
+        whyNow: c.digitalAudit?.issuesDetected?.map((i: any) => i.title).join(' • ') || evaluation.whyNowSummary,
+        tags: c.tags || (c.activeSignals?.map(s => s.type) || ['High Intent']),
+        estimatedValue,
         stage: 'Discovery',
         lastActivity: '2 hours ago',
         lastActivityType: 'signal',
@@ -199,7 +203,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
         signals: [
           {
             id: `sig-opp-${c.id}`,
-            type: 'expansion',
+            type: isDigitalGap ? 'digital_gap' : 'expansion',
             title: c.activeSignals?.[0]?.title || 'Recent Regional Expansion',
             detail: c.activeSignals?.[0]?.description || 'Hiring spike and new office locations',
             timeAgo: '2h ago',
@@ -215,10 +219,14 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
           engagement: { score: 70, max: 100 }
         },
         bestNextStep: {
-          actionText: evaluation.recommendedAction,
-          targetRole: 'Head of Operations',
+          actionText: c.digitalAudit?.recommendedPackage?.packageName || evaluation.recommendedAction,
+          targetRole: isDigitalGap ? 'Managing Director / Owner' : 'Head of Operations',
           targetName: 'Decision Maker'
-        }
+        },
+        source: isDigitalGap ? 'GEO_RADAR' : 'AI_SEARCH',
+        opportunityType: isDigitalGap ? 'DIGITAL_GAP' : 'HIGH_GROWTH',
+        digitalGapScore: c.digitalAudit?.gapScore || (isDigitalGap ? 100 - evaluation.totalScore : undefined),
+        digitalAudit: c.digitalAudit
       };
       return opp;
     });
@@ -370,6 +378,47 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     return copilotEngine.executePrompt(prompt);
   }, []);
 
+  const captureGeoBusinesses = useCallback((scrapedList: any[]) => {
+    const newCompanies: CompanyItem[] = scrapedList.map((b) => ({
+      id: `comp-geo-${b.id}`,
+      name: b.name,
+      domain: b.domain || 'company.com',
+      industry: b.category,
+      employees: b.headcountEstimate || '25-50',
+      revenue: '$1M - $10M',
+      location: `${b.district}, ${b.address}`,
+      opportunityScore: b.opportunityScore || 85,
+      opportunityLevel: (b.opportunityScore >= 90 ? 'Very High' : b.opportunityScore >= 80 ? 'High' : 'Medium') as 'Very High' | 'High' | 'Medium',
+      scoreColor: b.opportunityScore >= 90 ? '#10b981' : '#6366f1',
+      scoreTrend: [70, 75, 80, b.opportunityScore || 85],
+      isSaved: true,
+      signalsCount: b.detectedSignals?.length || 2,
+      activeSignals: b.detectedSignals?.map((sig: string) => ({
+        type: 'digital_gap',
+        title: sig,
+        description: sig,
+        time: 'Just now',
+        iconType: 'Zap'
+      })) || [],
+      lastActivity: 'Just now',
+      description: `${b.name} operating in ${b.district}. Scraped via HUNTIQ Geo Radar.`,
+      founded: '2019',
+      headquarters: b.district,
+      phone: b.phone,
+      tags: b.targetType === 'LOCAL_COMMERCIAL' ? ['Digital Gap', 'Local SME'] : ['Enterprise Tech'],
+      digitalAudit: b.digitalAudit,
+      socials: {
+        website: b.website
+      }
+    }));
+
+    setCompanies((prev) => {
+      const existingNames = new Set(prev.map(c => c.name.toLowerCase()));
+      const filtered = newCompanies.filter(c => !existingNames.has(c.name.toLowerCase()));
+      return [...filtered, ...prev];
+    });
+  }, []);
+
   const value = useMemo(() => ({
     currentView,
     navigateTo,
@@ -392,7 +441,8 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     addDealToPipeline,
     updateDealStage,
     toggleSaveCompany,
-    executeCopilotCommand
+    executeCopilotCommand,
+    captureGeoBusinesses
   }), [
     currentView,
     navigateTo,
@@ -415,7 +465,8 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     addDealToPipeline,
     updateDealStage,
     toggleSaveCompany,
-    executeCopilotCommand
+    executeCopilotCommand,
+    captureGeoBusinesses
   ]);
 
   return (
