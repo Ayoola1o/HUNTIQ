@@ -8,6 +8,7 @@ import { OpportunityFiltersModal } from '../opportunities/OpportunityFiltersModa
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import { CompanyResearchModal } from '../dashboard/CompanyResearchModal';
 import type { SignalItem } from '../../types/signal';
+import { useHuntiq } from '../../context/HuntiqContext';
 import { 
   Radio, 
   Search, 
@@ -26,199 +27,46 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
+  const { signals, companies } = useHuntiq();
   const [activeTypeFilter, setActiveTypeFilter] = useState('all');
   const [activeKpiFilter, setActiveKpiFilter] = useState('total');
-  const [selectedSignalId, setSelectedSignalId] = useState<string | null>('sig-1');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
 
   // Modals state
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
 
-  // Mock signals dataset matching signal page.png
-  const [signals] = useState<SignalItem[]>([
-    {
-      id: 'sig-1',
-      title: 'Hiring Surge',
-      subtitle: '38 new job postings',
-      companyName: 'Acme Technologies',
-      location: 'Lagos, Nigeria',
-      type: 'hiring',
-      impactLevel: 'High',
-      impactScore: 92,
-      detectedTime: '2h ago',
-      detectedTimestamp: 'May 16, 2025 • 2:34 PM',
-      whyItMatters: 'Rapid hiring across multiple departments indicates growth and need for new solutions.',
-      whatHappened: 'Acme Technologies posted 38 new job openings across 7 departments in the last 7 days.',
-      source: 'LinkedIn Jobs',
-      sourceType: 'linkedin',
-      confidence: 'High (92%)',
-      firstDetected: 'May 16, 2025',
-      lastUpdated: 'May 16, 2025 • 2:34 PM',
-      affectedDepartments: [
-        { name: 'Engineering', count: 14 },
-        { name: 'Product', count: 8 },
-        { name: 'Sales', count: 6 },
-        { name: 'Marketing', count: 5 },
-        { name: 'Operations', count: 5 }
-      ],
-      recommendedAction: 'Contact the Head of People or COO to discuss how we can support their growth and hiring goals.',
-      targetRole: 'Head of People'
-    },
-    {
-      id: 'sig-2',
-      title: 'New Office Opened',
-      subtitle: 'Lagos Headquarters',
-      companyName: 'Acme Technologies',
-      location: 'Lagos, Nigeria',
-      type: 'expansion',
-      impactLevel: 'High',
-      impactScore: 88,
-      detectedTime: '3h ago',
-      detectedTimestamp: 'May 16, 2025 • 1:15 PM',
-      whyItMatters: 'Opened a second office in Lagos to support West Africa operations.',
-      whatHappened: 'Acme Technologies completed corporate registration for a new enterprise engineering hub.',
-      source: 'Company Press Release',
-      sourceType: 'globe',
-      confidence: 'Very High (96%)',
-      firstDetected: 'May 16, 2025',
-      lastUpdated: 'May 16, 2025 • 1:15 PM',
-      recommendedAction: 'Send congratulatory note on regional expansion and introduce scalable team structure services.',
-      targetRole: 'Chief Operating Officer'
-    },
-    {
-      id: 'sig-3',
-      title: 'Leadership Change',
-      subtitle: 'New COO appointed',
-      companyName: 'Acme Technologies',
-      location: 'Lagos, Nigeria',
-      type: 'leadership',
-      impactLevel: 'High',
-      impactScore: 90,
-      detectedTime: '5h ago',
-      detectedTimestamp: 'May 16, 2025 • 11:30 AM',
-      whyItMatters: 'New COO with enterprise scaling experience joined the leadership team.',
-      whatHappened: 'Former Microsoft regional director appointed as Chief Operating Officer.',
-      source: 'TechCabal News',
-      sourceType: 'news',
-      confidence: 'High (94%)',
-      firstDetected: 'May 16, 2025',
-      lastUpdated: 'May 16, 2025 • 11:30 AM',
-      recommendedAction: 'Engage new COO on executive coaching and leadership alignment during transition.',
-      targetRole: 'Chief Operating Officer'
-    },
-    {
-      id: 'sig-4',
-      title: 'Funding Raised',
-      subtitle: '$12M Series B',
-      companyName: 'FinServe Ltd',
-      location: 'Lagos, Nigeria',
-      type: 'funding',
-      impactLevel: 'High',
-      impactScore: 94,
-      detectedTime: '1d ago',
-      detectedTimestamp: 'May 15, 2025 • 4:00 PM',
-      whyItMatters: 'Raised $12M Series B to expand product and enter new markets.',
-      whatHappened: 'FinServe Ltd secured $12M led by international venture partners to fuel West Africa fintech expansion.',
-      source: 'Disrupt Africa',
-      sourceType: 'globe',
-      confidence: 'Very High (98%)',
-      firstDetected: 'May 15, 2025',
-      lastUpdated: 'May 15, 2025 • 4:00 PM',
-      recommendedAction: 'Schedule briefing with HR Director regarding scaling headcount post-funding.',
-      targetRole: 'HR Director'
-    },
-    {
-      id: 'sig-5',
-      title: 'Technology Change',
-      subtitle: 'Implemented AWS',
-      companyName: 'Delta Systems',
-      location: 'Abuja, Nigeria',
-      type: 'technology',
-      impactLevel: 'Medium',
-      impactScore: 68,
-      detectedTime: '1d ago',
-      detectedTimestamp: 'May 15, 2025 • 1:45 PM',
-      whyItMatters: 'Migrated core infrastructure to AWS - opportunity for cloud optimization services.',
-      whatHappened: 'Detected DNS & cloud architecture switch to Amazon Web Services enterprise tier.',
-      source: 'BuiltWith Radar',
-      sourceType: 'news',
-      confidence: 'Medium (84%)',
-      firstDetected: 'May 15, 2025',
-      lastUpdated: 'May 15, 2025 • 1:45 PM',
-      recommendedAction: 'Provide engineering team training on agile cloud workflows.',
-      targetRole: 'CTO'
-    },
-    {
-      id: 'sig-6',
-      title: 'Hiring Surge',
-      subtitle: '22 new job postings',
-      companyName: 'Vertex Solutions',
-      location: 'Lagos, Nigeria',
-      type: 'hiring',
-      impactLevel: 'Medium',
-      impactScore: 72,
-      detectedTime: '1d ago',
-      detectedTimestamp: 'May 15, 2025 • 10:20 AM',
-      whyItMatters: 'Hiring engineers and product managers.',
-      whatHappened: 'Vertex Solutions opened 22 new technical positions on careers portal.',
-      source: 'LinkedIn Jobs',
-      sourceType: 'linkedin',
-      confidence: 'High (89%)',
-      firstDetected: 'May 15, 2025',
-      lastUpdated: 'May 15, 2025 • 10:20 AM',
-      recommendedAction: 'Offer structured technical recruitment and onboarding frameworks.',
-      targetRole: 'VP Talent'
-    },
-    {
-      id: 'sig-7',
-      title: 'Industry News',
-      subtitle: 'Market expansion',
-      companyName: 'Nimbus Analytics',
-      location: 'Lagos, Nigeria',
-      type: 'news',
-      impactLevel: 'Medium',
-      impactScore: 65,
-      detectedTime: '2d ago',
-      detectedTimestamp: 'May 14, 2025 • 3:10 PM',
-      whyItMatters: 'Announced entry into 3 new West African countries.',
-      whatHappened: 'Nimbus Analytics announced official launch in Ghana, Ivory Coast, and Senegal.',
-      source: 'BusinessDay',
-      sourceType: 'news',
-      confidence: 'Medium (82%)',
-      firstDetected: 'May 14, 2025',
-      lastUpdated: 'May 14, 2025 • 3:10 PM',
-      recommendedAction: 'Connect with Managing Director to discuss multi-country cultural training.',
-      targetRole: 'Managing Director'
-    },
-    {
-      id: 'sig-8',
-      title: 'Regulatory Change',
-      subtitle: 'New data protection law',
-      companyName: 'Peak Consulting',
-      location: 'Lagos, Nigeria',
-      type: 'compliance',
-      impactLevel: 'High',
-      impactScore: 84,
-      detectedTime: '2d ago',
-      detectedTimestamp: 'May 14, 2025 • 9:00 AM',
-      whyItMatters: 'New data protection law takes effect in July 2025.',
-      whatHappened: 'Nigeria Data Protection Act mandatory compliance guidelines released for enterprise services.',
-      source: 'NDPC Official Gazette',
-      sourceType: 'compliance',
-      confidence: 'Very High (100%)',
-      firstDetected: 'May 14, 2025',
-      lastUpdated: 'May 14, 2025 • 9:00 AM',
-      recommendedAction: 'Update internal compliance advisory frameworks for enterprise clients.',
-      targetRole: 'Managing Partner'
+  const selectedSig: SignalItem | undefined = (selectedSignalId ? signals.find((s: SignalItem) => s.id === selectedSignalId) : null) || signals[0];
+
+  const filteredSignals = signals.filter((sig: SignalItem) => {
+    // Type Filter
+    if (activeTypeFilter !== 'all' && sig.type !== activeTypeFilter) return false;
+
+    // Search Query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchCompany = sig.companyName.toLowerCase().includes(q);
+      const matchTitle = sig.title.toLowerCase().includes(q);
+      const matchSubtitle = sig.subtitle.toLowerCase().includes(q);
+      const matchLoc = sig.location.toLowerCase().includes(q);
+      if (!matchCompany && !matchTitle && !matchSubtitle && !matchLoc) return false;
     }
-  ]);
 
-  const selectedSig = signals.find((s) => s.id === selectedSignalId) || signals[0];
+    // KPI Card Filter
+    if (activeKpiFilter === 'new') {
+      return sig.detectedTime.includes('ago') || sig.detectedTime.includes('Just now') || sig.detectedTime.includes('Today');
+    }
+    if (activeKpiFilter === 'high_impact') {
+      return sig.impactLevel === 'Very High' || sig.impactLevel === 'High' || sig.impactScore >= 85;
+    }
+    if (activeKpiFilter === 'hot_companies') {
+      const comp = companies.find((c) => c.name.toLowerCase() === sig.companyName.toLowerCase());
+      return comp ? (comp.opportunityScore || 0) >= 80 : sig.impactScore >= 85;
+    }
 
-  const filteredSignals = signals.filter((sig) => {
-    if (activeTypeFilter === 'all') return true;
-    return sig.type === activeTypeFilter;
+    return true;
   });
 
   return (
@@ -298,6 +146,8 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
               <input
                 type="text"
                 placeholder="Search companies, people, signals..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   border: 'none',
                   outline: 'none',

@@ -8,6 +8,7 @@ import {
   Tag, 
   ArrowUpRight 
 } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface OpportunitiesKpiCardsProps {
   activeFilter: string;
@@ -18,52 +19,66 @@ export const OpportunitiesKpiCards: React.FC<OpportunitiesKpiCardsProps> = ({
   activeFilter,
   onSelectKpi
 }) => {
+  const { companies, pipelineDeals } = useHuntiq();
+
+  const totalOppsCount = companies.length;
+  const hotCount = companies.filter(c => (c.opportunityScore || 0) >= 85).length;
+  const highCount = companies.filter(c => (c.opportunityScore || 0) >= 75 && (c.opportunityScore || 0) < 85).length;
+  
+  const activeDeals = pipelineDeals.filter(d => d.stage !== 'lost');
+  const pipelineValueTotal = activeDeals.reduce((sum, d) => sum + (d.dealValue || 0), 0);
+  const expectedRevenueTotal = activeDeals.reduce((sum, d) => {
+    const prob = (d.probability ?? 50) / 100;
+    return sum + Math.round((d.dealValue || 0) * prob);
+  }, 0);
+  const avgDealSizeVal = activeDeals.length > 0 ? Math.round(pipelineValueTotal / activeDeals.length) : 0;
+
   const kpis = [
     {
       id: 'all',
       title: 'Total Opportunities',
-      value: '284',
-      change: '↑ 24.7% vs last 30 days',
+      value: totalOppsCount.toLocaleString(),
+      change: 'Active account directory',
       icon: <Briefcase size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff'
     },
     {
       id: 'hot',
       title: 'Hot Opportunities',
-      value: '68',
-      change: '↑ 19.3% vs last 30 days',
+      value: hotCount.toLocaleString(),
+      change: 'Score ≥ 85',
       icon: <Flame size={16} color="#e11d48" />,
       iconBg: '#ffe4e6'
     },
     {
       id: 'high',
       title: 'High Priority',
-      value: '116',
-      change: '↑ 23.5% vs last 30 days',
+      value: highCount.toLocaleString(),
+      change: 'Score 75 - 84',
       icon: <Star size={16} color="#d97706" />,
       iconBg: '#fef3c7'
     },
     {
       id: 'pipeline',
       title: 'Pipeline Value',
-      value: '$428,600',
-      change: '↑ 16.1% vs last 30 days',
+      value: `$${pipelineValueTotal.toLocaleString()}`,
+      change: `${activeDeals.length} active deals`,
       icon: <ShieldCheck size={16} color="#059669" />,
       iconBg: '#ecfdf5'
     },
     {
       id: 'expected',
       title: 'Expected Revenue',
-      value: '$176,400',
-      change: '↑ 19.3% vs last 30 days',
+      value: `$${expectedRevenueTotal.toLocaleString()}`,
+      change: 'Weighted conversion',
       icon: <BarChart3 size={16} color="#2563eb" />,
       iconBg: '#eff6ff'
     },
     {
       id: 'deal_size',
       title: 'Avg. Deal Size',
-      value: '$25,812',
-      change: '↑ 8.7% vs last 30 days',
+      value: `$${avgDealSizeVal.toLocaleString()}`,
+      change: 'Per active deal',
       icon: <Tag size={16} color="#8b5cf6" />,
       iconBg: '#faf5ff'
     },

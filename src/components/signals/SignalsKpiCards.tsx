@@ -8,6 +8,7 @@ import {
   Activity, 
   ArrowUpRight 
 } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface SignalsKpiCardsProps {
   activeFilter: string;
@@ -18,52 +19,67 @@ export const SignalsKpiCards: React.FC<SignalsKpiCardsProps> = ({
   activeFilter,
   onSelectKpi
 }) => {
+  const { signals, companies } = useHuntiq();
+
+  const totalSignalsCount = signals.length;
+  const newSignalsCount = signals.filter(s => 
+    s.detectedTime.includes('ago') || s.detectedTime.includes('Just now') || s.detectedTime.includes('Today')
+  ).length;
+  const highImpactCount = signals.filter(s => 
+    s.impactLevel === 'Very High' || s.impactLevel === 'High' || s.impactScore >= 85
+  ).length;
+  const companiesAffectedCount = new Set(signals.map(s => s.companyName)).size;
+  const hotCompaniesCount = companies.filter(c => (c.opportunityScore || 0) >= 80).length;
+  const avgImpactVal = totalSignalsCount > 0 
+    ? Math.round(signals.reduce((sum, s) => sum + (s.impactScore || 80), 0) / totalSignalsCount) 
+    : 0;
+
   const kpis = [
     {
       id: 'total',
       title: 'Total Signals',
-      value: '1,429',
-      change: '↑ 31.2% vs last 30 days',
+      value: totalSignalsCount.toLocaleString(),
+      change: 'Active intelligence stream',
       icon: <Radio size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff'
     },
     {
       id: 'new',
       title: 'New Signals',
-      value: '184',
-      change: '↑ 28.7% vs last 30 days',
+      value: newSignalsCount.toLocaleString(),
+      change: 'Recently detected',
       icon: <Users size={16} color="#059669" />,
       iconBg: '#ecfdf5'
     },
     {
       id: 'high_impact',
       title: 'High Impact Signals',
-      value: '97',
-      change: '↑ 26.4% vs last 30 days',
+      value: highImpactCount.toLocaleString(),
+      change: 'Score ≥ 85 / Very High',
       icon: <Flame size={16} color="#e11d48" />,
       iconBg: '#ffe4e6'
     },
     {
       id: 'companies',
       title: 'Companies Affected',
-      value: '386',
-      change: '↑ 24.3% vs last 30 days',
+      value: companiesAffectedCount.toLocaleString(),
+      change: 'Unique corporate entities',
       icon: <Building2 size={16} color="#2563eb" />,
       iconBg: '#eff6ff'
     },
     {
       id: 'hot_companies',
       title: 'Hot Companies',
-      value: '68',
-      change: '↑ 19.8% vs last 30 days',
+      value: hotCompaniesCount.toLocaleString(),
+      change: 'High conversion propensity',
       icon: <Star size={16} color="#d97706" />,
       iconBg: '#fef3c7'
     },
     {
       id: 'avg_impact',
       title: 'Avg. Signal Impact',
-      value: '78/100',
-      change: '↑ 15.1% vs last 30 days',
+      value: `${avgImpactVal}/100`,
+      change: 'Weighted telemetry score',
       icon: <Activity size={16} color="#8b5cf6" />,
       iconBg: '#faf5ff'
     },

@@ -8,73 +8,91 @@ import {
   Calculator, 
   Tag 
 } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface KpiCardsProps {
   onCardClick?: (metricId: string) => void;
 }
 
 export const KpiCards: React.FC<KpiCardsProps> = ({ onCardClick }) => {
+  const { companies, signals, pipelineDeals } = useHuntiq();
+
+  // Dynamic real data calculations
+  const totalProspectsCount = companies.length;
+  const hotOppsCount = companies.filter(c => (c.opportunityScore || 0) >= 80).length;
+  const signalsCount = signals.length;
+  const activeDeals = pipelineDeals.filter(d => d.stage !== 'lost');
+  const activeDealsCount = activeDeals.length;
+  
+  const pipelineValueTotal = activeDeals.reduce((sum, d) => sum + (d.dealValue || 0), 0);
+  const expectedRevenueTotal = activeDeals.reduce((sum, d) => {
+    const prob = (d.probability ?? 50) / 100;
+    return sum + Math.round((d.dealValue || 0) * prob);
+  }, 0);
+
+  const avgDealSizeVal = activeDealsCount > 0 ? Math.round(pipelineValueTotal / activeDealsCount) : 0;
+
   const kpis = [
     {
       id: 'prospects',
       label: 'Total Prospects',
-      value: '12,842',
-      trend: '↑ 18.4%',
-      period: 'vs last 7 days',
+      value: totalProspectsCount.toLocaleString(),
+      trend: totalProspectsCount > 0 ? 'Live Stream' : '0 verified',
+      period: 'active directory',
       icon: <Users size={16} color="#7c3aed" />,
       iconBg: '#f3e8ff',
     },
     {
       id: 'hot_opps',
       label: 'Hot Opportunities',
-      value: '284',
-      trend: '↑ 24.7%',
-      period: 'vs last 7 days',
+      value: hotOppsCount.toLocaleString(),
+      trend: hotOppsCount > 0 ? `${Math.round((hotOppsCount / Math.max(1, totalProspectsCount)) * 100)}% of total` : '0 active',
+      period: 'score ≥ 80',
       icon: <Flame size={16} color="#e11d48" />,
       iconBg: '#ffe4e6',
     },
     {
       id: 'signals',
       label: 'Buying Signals',
-      value: '1,429',
-      trend: '↑ 31.2%',
-      period: 'vs last 7 days',
+      value: signalsCount.toLocaleString(),
+      trend: signalsCount > 0 ? 'Verified real-time' : '0 detected',
+      period: 'active telemetry',
       icon: <Zap size={16} color="#d97706" />,
       iconBg: '#fef3c7',
     },
     {
       id: 'deals',
       label: 'Active Deals',
-      value: '86',
-      trend: '↑ 12.6%',
-      period: 'vs last 7 days',
+      value: activeDealsCount.toLocaleString(),
+      trend: activeDealsCount > 0 ? 'In pipeline' : '0 in pipeline',
+      period: 'pipeline stages',
       icon: <Briefcase size={16} color="#4f46e5" />,
       iconBg: '#e0e7ff',
     },
     {
       id: 'pipeline',
       label: 'Pipeline Value',
-      value: '$428,600',
-      trend: '↑ 16.1%',
-      period: 'vs last 7 days',
+      value: `$${pipelineValueTotal.toLocaleString()}`,
+      trend: 'Cumulative volume',
+      period: 'active pipeline',
       icon: <DollarSign size={16} color="#16a34a" />,
       iconBg: '#dcfce7',
     },
     {
       id: 'revenue',
       label: 'Expected Revenue',
-      value: '$176,400',
-      trend: '↑ 19.3%',
-      period: 'vs last 7 days',
+      value: `$${expectedRevenueTotal.toLocaleString()}`,
+      trend: 'Weighted forecast',
+      period: 'probability weighted',
       icon: <Calculator size={16} color="#0284c7" />,
       iconBg: '#e0f2fe',
     },
     {
       id: 'avg_deal',
       label: 'Avg. Deal Size',
-      value: '$25,812',
-      trend: '↑ 8.7%',
-      period: 'vs last 7 days',
+      value: `$${avgDealSizeVal.toLocaleString()}`,
+      trend: 'Per active deal',
+      period: 'deal average',
       icon: <Tag size={16} color="#9333ea" />,
       iconBg: '#f5f3ff',
     },

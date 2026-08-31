@@ -218,6 +218,13 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
     }
   ]);
 
+  // Sync deals from context
+  React.useEffect(() => {
+    if (pipelineDeals && pipelineDeals.length > 0) {
+      setDeals(pipelineDeals);
+    }
+  }, [pipelineDeals]);
+
   const activeDealsList = deals.filter(d => d.stage !== 'lost');
   const pipelineVal = activeDealsList.filter(d => d.stage !== 'won').reduce((sum, d) => sum + d.dealValue, 0);
   const expectedRev = activeDealsList.filter(d => d.stage !== 'won').reduce((sum, d) => sum + Math.round(d.dealValue * (d.probability / 100)), 0);
