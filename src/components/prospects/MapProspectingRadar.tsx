@@ -14,7 +14,8 @@ import {
   ArrowRight, 
   ChevronRight, 
   ShieldAlert, 
-  Sparkles 
+  Sparkles,
+  Key
 } from 'lucide-react';
 import { 
   POPULAR_ZONES, 
@@ -22,6 +23,7 @@ import {
   type GeoScrapedBusiness 
 } from '../../engine/geoScraperEngine';
 import { useHuntiq } from '../../context/HuntiqContext';
+import { GoogleProspectingMap } from './GoogleProspectingMap';
 
 interface MapProspectingRadarProps {
   onSelectBusiness?: (business: GeoScrapedBusiness) => void;
@@ -41,6 +43,13 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
   const [selectedCategory, setSelectedCategory] = useState('All Industries');
   const [discoveryMode, setDiscoveryMode] = useState<'ALL' | 'ENTERPRISE' | 'LOCAL_COMMERCIAL' | 'DIGITAL_GAP'>('ALL');
   const [issueFilter, setIssueFilter] = useState<string>('ALL');
+
+  // Map Engine: 'google' vs 'canvas'
+  const [mapEngine, setMapEngine] = useState<'google' | 'canvas'>('google');
+  const [googleApiKey, setGoogleApiKey] = useState<string>(
+    (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || ''
+  );
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
 
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -143,7 +152,6 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
     setTimeout(() => setCopiedPitch(false), 2500);
   };
 
-  // Color helper matching live.md spec
   const getPinVisuals = (biz: GeoScrapedBusiness) => {
     if (biz.targetType === 'ENTERPRISE') {
       return { bg: '#8b5cf6', label: 'Enterprise', border: '#c4b5fd' };
@@ -192,19 +200,82 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
           </div>
           <div>
             <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>Live Location Radar & Digital Gap Discovery</span>
+              <span>Live Location Radar & Google Maps Prospecting</span>
               <span style={{ fontSize: '10.5px', backgroundColor: '#eef2ff', color: '#4f46e5', padding: '2px 8px', borderRadius: '9999px', border: '1px solid #c7d2fe', fontWeight: 800 }}>
-                Live Ingestion & Audit
+                Google Maps + Places API
               </span>
             </h2>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0 0' }}>
-              Discover commercial entities in real time, evaluate digital deficits, and generate turnkey client pitch packages.
+              Discover commercial entities on Google Maps, evaluate 8-factor digital gaps, and generate client proposal packages.
             </p>
           </div>
         </div>
 
-        {/* Scan & Batch Capture Buttons */}
+        {/* Scan, Mode & Key Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Map Engine Switcher */}
+          <div style={{
+            display: 'flex',
+            backgroundColor: '#f1f5f9',
+            borderRadius: '8px',
+            padding: '2px',
+            border: '1px solid #e2e8f0'
+          }}>
+            <button
+              onClick={() => setMapEngine('google')}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: mapEngine === 'google' ? '#ffffff' : 'transparent',
+                color: mapEngine === 'google' ? '#4f46e5' : '#64748b',
+                boxShadow: mapEngine === 'google' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+              }}
+            >
+              Google Maps
+            </button>
+            <button
+              onClick={() => setMapEngine('canvas')}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: mapEngine === 'canvas' ? '#ffffff' : 'transparent',
+                color: mapEngine === 'canvas' ? '#4f46e5' : '#64748b',
+                boxShadow: mapEngine === 'canvas' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+              }}
+            >
+              Radar Grid
+            </button>
+          </div>
+
+          <button
+            onClick={() => setIsKeyModalOpen(!isKeyModalOpen)}
+            title="Configure Google Maps API Key"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: googleApiKey ? '#f8fafc' : '#fee2e2',
+              color: googleApiKey ? '#475569' : '#dc2626',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              padding: '7px 10px',
+              fontSize: '11.5px',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            <Key size={13} />
+            <span>{googleApiKey ? 'API Key Configured' : 'Set Maps Key'}</span>
+          </button>
+
           <button
             onClick={handleBatchCapture}
             title="Promote all discovered businesses in view to Opportunities"
@@ -216,15 +287,15 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
               color: '#047857',
               border: '1px solid #a7f3d0',
               borderRadius: '10px',
-              padding: '9px 14px',
-              fontSize: '12.5px',
+              padding: '8px 14px',
+              fontSize: '12px',
               fontWeight: 700,
               cursor: 'pointer',
               boxShadow: '0 1px 3px rgba(16, 185, 129, 0.1)'
             }}
           >
             <Zap size={14} color="#059669" fill="#059669" />
-            <span>Capture All in Viewport ({filteredBusinesses.length})</span>
+            <span>Capture Viewport ({filteredBusinesses.length})</span>
           </button>
 
           <button
@@ -238,8 +309,8 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
               color: '#ffffff',
               border: 'none',
               borderRadius: '10px',
-              padding: '9px 16px',
-              fontSize: '12.5px',
+              padding: '8px 14px',
+              fontSize: '12px',
               fontWeight: 700,
               cursor: isScanning ? 'not-allowed' : 'pointer',
               boxShadow: '0 4px 12px rgba(9, 13, 22, 0.25)',
@@ -247,10 +318,64 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
             }}
           >
             <RefreshCw size={14} className={isScanning ? 'animate-spin' : ''} />
-            <span>{isScanning ? `Scraping Coordinates (${scanProgress}%)...` : 'Rescan Radar'}</span>
+            <span>{isScanning ? `Scraping (${scanProgress}%)...` : 'Rescan'}</span>
           </button>
         </div>
       </div>
+
+      {/* Google Maps API Key Drawer Banner */}
+      {isKeyModalOpen && (
+        <div style={{
+          backgroundColor: '#f8fafc',
+          border: '1px solid #cbd5e1',
+          borderRadius: '10px',
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
+        }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: '11px', fontWeight: 800, color: '#0f172a', display: 'block', marginBottom: '4px' }}>
+              Google Maps Platform API Key
+            </label>
+            <input
+              type="password"
+              placeholder="Paste your AIzaSy... API key here"
+              value={googleApiKey}
+              onChange={(e) => setGoogleApiKey(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '6px 10px',
+                border: '1px solid #94a3b8',
+                borderRadius: '6px',
+                fontSize: '12px',
+                backgroundColor: '#ffffff'
+              }}
+            />
+          </div>
+          <button
+            onClick={() => {
+              setIsKeyModalOpen(false);
+              setCaptureToast('Google Maps API Key saved for session!');
+              setTimeout(() => setCaptureToast(null), 3000);
+            }}
+            style={{
+              marginTop: '16px',
+              padding: '7px 14px',
+              backgroundColor: '#4f46e5',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            Save Key
+          </button>
+        </div>
+      )}
 
       {/* Discovery Lens Toggle Bar */}
       <div style={{
@@ -512,7 +637,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
         gap: '16px',
         minHeight: '520px'
       }}>
-        {/* 1. Interactive Radar Canvas Map */}
+        {/* 1. Map Canvas (Google Maps or Fallback Radar) */}
         <div style={{
           backgroundColor: '#090d16',
           borderRadius: '12px',
@@ -524,126 +649,143 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
           boxShadow: 'inset 0 0 40px rgba(0, 0, 0, 0.8)',
           minHeight: '400px'
         }}>
-          {/* Radar Grid Overlay */}
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundImage: `
-              radial-gradient(circle at center, rgba(99, 102, 241, 0.12) 0, rgba(99, 102, 241, 0) 70%),
-              linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px)
-            `,
-            backgroundSize: '100% 100%, 36px 36px, 36px 36px',
-            pointerEvents: 'none'
-          }} />
+          {mapEngine === 'google' ? (
+            <GoogleProspectingMap
+              apiKey={googleApiKey}
+              center={{ lat: activeZone.lat, lng: activeZone.lng }}
+              radiusKm={radiusKm}
+              businesses={filteredBusinesses}
+              selectedBusinessId={activePin?.id || null}
+              onSelectBusiness={(biz) => {
+                setActivePin(biz);
+                onSelectBusiness?.(biz);
+              }}
+            />
+          ) : (
+            /* Fallback Cyber Radar View */
+            <>
+              {/* Radar Grid Overlay */}
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundImage: `
+                  radial-gradient(circle at center, rgba(99, 102, 241, 0.12) 0, rgba(99, 102, 241, 0) 70%),
+                  linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px)
+                `,
+                backgroundSize: '100% 100%, 36px 36px, 36px 36px',
+                pointerEvents: 'none'
+              }} />
 
-          {/* Compass Rings */}
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '260px',
-            height: '260px',
-            borderRadius: '50%',
-            border: '1px dashed rgba(99, 102, 241, 0.3)',
-            pointerEvents: 'none'
-          }} />
+              {/* Compass Rings */}
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '260px',
+                height: '260px',
+                borderRadius: '50%',
+                border: '1px dashed rgba(99, 102, 241, 0.3)',
+                pointerEvents: 'none'
+              }} />
 
-          {/* Map Status Badge */}
-          <div style={{
-            position: 'absolute',
-            top: '12px',
-            left: '12px',
-            zIndex: 4,
-            backgroundColor: 'rgba(9, 13, 22, 0.85)',
-            backdropFilter: 'blur(6px)',
-            padding: '5px 10px',
-            borderRadius: '8px',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <MapPin size={12} color="#818cf8" />
-            <span style={{ fontSize: '11px', fontWeight: 700, color: '#ffffff' }}>
-              {activeZone.name} ({radiusKm}km)
-            </span>
-            <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 800 }}>
-              ● {filteredBusinesses.length} Pins
-            </span>
-          </div>
+              {/* Map Status Badge */}
+              <div style={{
+                position: 'absolute',
+                top: '12px',
+                left: '12px',
+                zIndex: 4,
+                backgroundColor: 'rgba(9, 13, 22, 0.85)',
+                backdropFilter: 'blur(6px)',
+                padding: '5px 10px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <MapPin size={12} color="#818cf8" />
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#ffffff' }}>
+                  {activeZone.name} ({radiusKm}km)
+                </span>
+                <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 800 }}>
+                  ● {filteredBusinesses.length} Pins
+                </span>
+              </div>
 
-          {/* Interactive Map Pins */}
-          <div style={{ position: 'relative', flex: 1, zIndex: 5, padding: '30px' }}>
-            {filteredBusinesses.map((biz, idx) => {
-              const positions = [
-                { top: '35%', left: '38%' },
-                { top: '55%', left: '65%' },
-                { top: '68%', left: '30%' },
-                { top: '25%', left: '72%' },
-                { top: '48%', left: '22%' },
-                { top: '78%', left: '55%' },
-                { top: '32%', left: '85%' }
-              ];
-              const pos = positions[idx % positions.length];
-              const isSelected = activePin?.id === biz.id;
-              const visuals = getPinVisuals(biz);
+              {/* Interactive Map Pins */}
+              <div style={{ position: 'relative', flex: 1, zIndex: 5, padding: '30px' }}>
+                {filteredBusinesses.map((biz, idx) => {
+                  const positions = [
+                    { top: '35%', left: '38%' },
+                    { top: '55%', left: '65%' },
+                    { top: '68%', left: '30%' },
+                    { top: '25%', left: '72%' },
+                    { top: '48%', left: '22%' },
+                    { top: '78%', left: '55%' },
+                    { top: '32%', left: '85%' }
+                  ];
+                  const pos = positions[idx % positions.length];
+                  const isSelected = activePin?.id === biz.id;
+                  const visuals = getPinVisuals(biz);
 
-              return (
-                <div
-                  key={biz.id}
-                  onClick={() => {
-                    setActivePin(biz);
-                    onSelectBusiness?.(biz);
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: pos.top,
-                    left: pos.left,
-                    transform: 'translate(-50%, -50%)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    transition: 'all 0.2s ease',
-                    zIndex: isSelected ? 10 : 5
-                  }}
-                >
-                  <div style={{
-                    width: isSelected ? '38px' : '28px',
-                    height: isSelected ? '38px' : '28px',
-                    borderRadius: '50%',
-                    backgroundColor: isSelected ? visuals.bg : '#0f172a',
-                    border: `2px solid ${visuals.border}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    fontSize: '11px',
-                    fontWeight: 900,
-                    boxShadow: isSelected ? `0 0 20px ${visuals.bg}` : '0 0 8px rgba(0,0,0,0.6)'
-                  }}>
-                    {biz.opportunityScore}
-                  </div>
+                  return (
+                    <div
+                      key={biz.id}
+                      onClick={() => {
+                        setActivePin(biz);
+                        onSelectBusiness?.(biz);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: pos.top,
+                        left: pos.left,
+                        transform: 'translate(-50%, -50%)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        transition: 'all 0.2s ease',
+                        zIndex: isSelected ? 10 : 5
+                      }}
+                    >
+                      <div style={{
+                        width: isSelected ? '38px' : '28px',
+                        height: isSelected ? '38px' : '28px',
+                        borderRadius: '50%',
+                        backgroundColor: isSelected ? visuals.bg : '#0f172a',
+                        border: `2px solid ${visuals.border}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ffffff',
+                        fontSize: '11px',
+                        fontWeight: 900,
+                        boxShadow: isSelected ? `0 0 20px ${visuals.bg}` : '0 0 8px rgba(0,0,0,0.6)'
+                      }}>
+                        {biz.opportunityScore}
+                      </div>
 
-                  <div style={{
-                    marginTop: '4px',
-                    backgroundColor: 'rgba(9, 13, 22, 0.9)',
-                    color: '#ffffff',
-                    fontSize: '9.5px',
-                    fontWeight: 700,
-                    padding: '2px 5px',
-                    borderRadius: '4px',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {biz.name.split(' ')[0]}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                      <div style={{
+                        marginTop: '4px',
+                        backgroundColor: 'rgba(9, 13, 22, 0.9)',
+                        color: '#ffffff',
+                        fontSize: '9.5px',
+                        fontWeight: 700,
+                        padding: '2px 5px',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {biz.name.split(' ')[0]}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         {/* 2. Middle Column: Discovered Prospect List */}
@@ -679,7 +821,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
                   }}
                   style={{
                     padding: '10px 12px',
-                    backgroundColor: isSelected ? '#ffffff' : '#ffffff',
+                    backgroundColor: '#ffffff',
                     borderRadius: '10px',
                     border: isSelected ? `2px solid ${visuals.bg}` : '1px solid #e2e8f0',
                     cursor: 'pointer',

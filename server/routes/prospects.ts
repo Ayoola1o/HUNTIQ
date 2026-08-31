@@ -32,15 +32,15 @@ prospectsRouter.post('/prospects/search', (req: Request, res: Response) => {
   res.status(200).json(response);
 });
 
-// 2. Discover Geographically Scraped Prospects & Digital Gaps
-prospectsRouter.post('/prospects/scrape-geo', (req: Request, res: Response) => {
-  const { zoneId, district, radiusKm, categoryFilter, mode, filters } = req.body || {};
+// 2. Discover Geographically Scraped Prospects & Digital Gaps (Google Places / Geo Discovery)
+prospectsRouter.post(['/prospects/scrape-geo', '/prospects/discover-geo'], (req: Request, res: Response) => {
+  const { zoneId, district, radiusKm, categoryFilter, category, mode, filters, location } = req.body || {};
 
   const scraped = geoProspectingEngine.discover({
-    zoneId: zoneId || 'lagos',
+    zoneId: zoneId || (location?.lat ? 'custom' : 'lagos'),
     district,
     radiusKm: radiusKm ? Number(radiusKm) : 15,
-    category: categoryFilter,
+    category: categoryFilter || category,
     mode: mode || 'ALL',
     filters
   });
