@@ -16,9 +16,10 @@ import {
 } from '../../data/mockGeoBusinesses';
 import type { GeoScrapedBusiness } from '../../engine/geoScraperEngine';
 import { useHuntiq } from '../../context/HuntiqContext';
-import { geoapifyService } from '../../services/geoapifyService';
+import { geoapifyService, type ExtractedAddressReport } from '../../services/geoapifyService';
 import { MapLibreProspectingMap } from './MapLibreProspectingMap';
 import { AuditDetailDrawer } from './AuditDetailDrawer';
+import { MapPin } from 'lucide-react';
 
 interface MapProspectingRadarProps {
   onSelectBusiness?: (business: GeoScrapedBusiness) => void;
@@ -50,6 +51,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
   const [businesses, setBusinesses] = useState<GeoScrapedBusiness[]>(MOCK_GEO_BUSINESSES);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [inspectedBusiness, setInspectedBusiness] = useState<GeoScrapedBusiness | null>(null);
+  const [addressReport, setAddressReport] = useState<ExtractedAddressReport | null>(null);
 
   // Status & Telemetry
   const [isSearching, setIsSearching] = useState(false);
@@ -68,6 +70,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
   // 2. Handle Preset Zone Change
   const handlePresetChange = async (zoneId: string) => {
     setSelectedZoneId(zoneId);
+    setAddressReport(null);
     const preset = GEO_LOCATION_PRESETS.find(p => p.id === zoneId);
     if (preset) {
       const newCenter = { lat: preset.lat, lng: preset.lng };
@@ -86,25 +89,28 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
     }
   };
 
-  // 3. Handle Location Search (Geocoding)
+  // 3. Handle Location Search (Extract Address & Businesses at Location)
   const handleSearchLocation = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
 
     setIsSearching(true);
-    const result = await geoapifyService.geocodeLocation(searchQuery);
-    const newCenter = { lat: result.lat, lng: result.lng };
+    const report = await geoapifyService.extractAddressEntities({ query: searchQuery }, radiusKm);
+    const newCenter = { lat: report.location.lat, lng: report.location.lng };
     setMapCenter(newCenter);
-    setMapZoom(result.zoom);
+    setMapZoom(14);
+    setBusinesses(report.businessesFound);
+    setAddressReport(report);
+    setIsSearching(false);
+  };
 
-    const results = await geoapifyService.discoverPlacesInBounds(
-      null,
-      newCenter,
-      radiusKm,
-      selectedCategory,
-      discoveryMode
-    );
-    setBusinesses(results);
+  // 4. Handle Direct Map Click (Reverse Geocode Exact Coordinates & Extract Entities)
+  const handleMapClick = async (coords: { lat: number; lng: number }) => {
+    setIsSearching(true);
+    const report = await geoapifyService.extractAddressEntities({ lat: coords.lat, lng: coords.lng }, radiusKm);
+    setMapCenter({ lat: coords.lat, lng: coords.lng });
+    setBusinesses(report.businessesFound);
+    setAddressReport(report);
     setIsSearching(false);
   };
 
@@ -350,9 +356,98 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
             boxShadow: '0 2px 6px rgba(79, 70, 229, 0.3)'
           }}
         >
-          Locate
+          {isSearching ? 'Locating...' : 'Locate & Extract'}
         </button>
       </form>
+
+      {/* Extracted Address Intelligence Card */}
+      {addressReport && (
+        <div style={{
+          backgroundColor: '#eff6ff',
+          border: '1px solid #bfdbfe',
+          borderRadius: '12px',
+          padding: '14px 16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          boxShadow: '0 4px 12px rgba(59, 130, 246, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '260px' }}>
+            <div style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '9px',
+              backgroundColor: '#3b82f6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              flexShrink: 0
+            }}>
+              <MapPin size={18} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#1e3a8a' }}>
+                  {addressReport.location.formattedAddress || addressReport.location.name}
+                </span>
+                <span style={{
+                  fontSize: '10.5px',
+                  fontWeight: 800,
+                  backgroundColor: '#dbeafe',
+                  color: '#1d4ed8',
+                  padding: '2px 8px',
+                  borderRadius: '9999px'
+                }}>
+                  {addressReport.businessesFound.length} Entities Located
+                </span>
+              </div>
+              <div style={{ fontSize: '11.5px', color: '#475569', marginTop: '2px' }}>
+                {addressReport.location.district ? `District: ${addressReport.location.district} • ` : ''}
+                {addressReport.location.city ? `City: ${addressReport.location.city} • ` : ''}
+                {addressReport.location.country ? `Country: ${addressReport.location.country} • ` : ''}
+                GPS: {addressReport.location.lat.toFixed(4)}, {addressReport.location.lng.toFixed(4)}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={handleCaptureSelected}
+              disabled={filteredBusinesses.length === 0}
+              style={{
+                padding: '7px 14px',
+                backgroundColor: '#1d4ed8',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(29, 78, 216, 0.3)'
+              }}
+            >
+              Capture All into Pipeline ({filteredBusinesses.length})
+            </button>
+            <button
+              onClick={() => setAddressReport(null)}
+              style={{
+                padding: '7px 10px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                fontSize: '12px',
+                color: '#64748b',
+                cursor: 'pointer'
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mode & Radius Filters */}
       <div style={{
@@ -624,6 +719,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
               onSelectBusiness?.(biz);
             }}
             onBoundsChange={(b) => setCurrentBounds(b)}
+            onMapClick={handleMapClick}
           />
         </div>
 

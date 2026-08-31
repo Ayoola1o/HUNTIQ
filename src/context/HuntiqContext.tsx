@@ -417,6 +417,75 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
       const filtered = newCompanies.filter(c => !existingNames.has(c.name.toLowerCase()));
       return [...filtered, ...prev];
     });
+
+    // Automatically create and push deals into the active pipeline
+    const newDeals: PipelineDealItem[] = scrapedList.map((b) => {
+      const audit = b.digitalAudit;
+      const pkg = audit?.recommendedPackage;
+      const dealVal = pkg?.estimatedValue?.max || b.estimatedDealValue || 15000;
+      const score = b.opportunityScore || 85;
+
+      return {
+        id: `deal-geo-${b.id}-${Date.now()}`,
+        companyName: b.name,
+        domain: b.domain || b.website?.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] || 'company.com',
+        dealTitle: pkg ? `${pkg.packageName} (${audit.gapScore >= 70 ? 'Turnkey Fix' : 'Growth Optimization'})` : 'Digital Transformation & Acquisition Package',
+        serviceName: pkg?.packageName || 'Digital Modernization Suite',
+        dealValue: dealVal,
+        probability: Math.min(95, Math.round(score * 0.85)),
+        opportunityScore: score,
+        stage: 'contacted' as const,
+        stageEnteredAt: 'Just now',
+        expectedCloseDate: 'In 21 days',
+        ownerName: 'Ayoola Ade',
+        contactName: 'Business Owner / GM',
+        contactRole: 'Managing Director',
+        contactAvatarBg: '#eff6ff',
+        contactAvatarColor: '#1d4ed8',
+        lastActivity: `Discovered & audited via HUNTIQ Geo Radar in ${b.district || 'Commercial District'}`,
+        nextAction: `Deliver customized ${pkg?.packageName || 'Proposal'} Scoping Brief`,
+        nextActionDueDate: 'Tomorrow, 10 AM',
+        priority: (score >= 85 ? 'High' : 'Medium') as 'High' | 'Medium' | 'Low',
+        activities: [
+          {
+            id: `act-${Date.now()}`,
+            type: 'note' as const,
+            title: 'Lead Captured via Live Geo Radar',
+            detail: `Audited ${b.name}: ${audit?.issuesDetected?.length || 2} digital gaps detected. Recommended package: ${pkg?.packageName || 'Turnkey Solution'} ($${dealVal.toLocaleString()}).`,
+            timestamp: 'Just now'
+          }
+        ]
+      };
+    });
+
+    setPipelineDeals((prev) => [...newDeals, ...prev]);
+
+    // Push new buying & digital gap signals into global feed
+    const newSignals: SignalItem[] = scrapedList.map((b) => ({
+      id: `sig-geo-${b.id}`,
+      title: b.targetType === 'ENTERPRISE'
+        ? `High Growth Commercial Expansion in ${b.district}`
+        : `Critical Digital Gap Detected (${b.digitalAudit?.issuesDetected?.[0]?.title || 'Zero Web Presence'})`,
+      subtitle: `Commercial Entity in ${b.district || 'Commercial District'}`,
+      companyName: b.name,
+      location: `${b.district || 'Lagos'}, Nigeria`,
+      type: (b.targetType === 'ENTERPRISE' ? 'expansion' : 'technology') as any,
+      impactLevel: (b.opportunityScore >= 85 ? 'Very High' : 'High') as any,
+      impactScore: b.opportunityScore || 85,
+      detectedTime: 'Just now',
+      detectedTimestamp: 'Just now',
+      whyItMatters: `Gap Score: ${b.digitalAudit?.gapScore || 65}/100. High conversion propensity for digital modernization & client acquisition.`,
+      whatHappened: `Audited by HUNTIQ Geo Radar: ${b.digitalAudit?.issuesDetected?.[0]?.description || 'Missing verified digital infrastructure.'}`,
+      source: 'HUNTIQ Live Geo Radar',
+      sourceType: 'globe' as const,
+      confidence: `${Math.min(99, b.opportunityScore || 88)}%`,
+      firstDetected: 'Just now',
+      lastUpdated: 'Just now',
+      recommendedAction: `Deliver ${b.digitalAudit?.recommendedPackage?.packageName || 'Digital Modernization Suite'} turnkey proposal.`,
+      targetRole: 'Managing Director / Owner'
+    }));
+
+    setSignals((prev) => [...newSignals, ...prev]);
   }, []);
 
   const value = useMemo(() => ({

@@ -4,10 +4,22 @@ import type { GeoScrapedBusiness } from '../engine/geoScraperEngine';
 
 export interface GeocodedLocation {
   name: string;
+  formattedAddress?: string;
+  street?: string;
+  district?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postcode?: string;
   lat: number;
   lng: number;
-  country?: string;
   zoom: number;
+}
+
+export interface ExtractedAddressReport {
+  location: GeocodedLocation;
+  businessesFound: GeoScrapedBusiness[];
+  extractedAt: string;
 }
 
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -55,13 +67,20 @@ export class GeoapifyService {
           const data = await res.json();
           if (data.features && data.features.length > 0) {
             const feature = data.features[0];
+            const props = feature.properties || {};
             const [lng, lat] = feature.geometry.coordinates;
             return {
-              name: feature.properties.formatted || feature.properties.name || query,
+              name: props.name || props.formatted?.split(',')[0] || query,
+              formattedAddress: props.formatted || query,
+              street: `${props.housenumber || ''} ${props.street || ''}`.trim() || undefined,
+              district: props.suburb || props.district || props.city,
+              city: props.city || props.county || 'Commercial Hub',
+              state: props.state,
+              country: props.country || 'Nigeria',
+              postcode: props.postcode,
               lat,
               lng,
-              country: feature.properties.country,
-              zoom: 13
+              zoom: 14
             };
           }
         }
@@ -73,23 +92,110 @@ export class GeoapifyService {
     if (preset) {
       return {
         name: preset.name,
+        formattedAddress: `${preset.name}, ${preset.country}`,
+        district: preset.districts[0] || 'Central Commercial District',
+        city: preset.name.split(' ')[0],
+        country: preset.country,
         lat: preset.lat,
         lng: preset.lng,
-        country: preset.country,
         zoom: preset.zoom
       };
     }
 
     return {
       name: query || 'Lagos Metropolitan Area',
+      formattedAddress: query || 'Lagos, Nigeria',
+      district: 'Commercial District',
+      city: 'Lagos',
+      country: 'Nigeria',
       lat: 6.4541,
       lng: 3.4246,
-      country: 'Nigeria',
       zoom: 12
     };
   }
 
-  // 2. Discover Places in Viewport Bounds or Radius (Live API with Instant Audit)
+  // 2. Reverse Geocode (Address extracted directly from map click)
+  public async reverseGeocode(lat: number, lng: number): Promise<GeocodedLocation> {
+    const apiKey = this.getApiKey();
+
+    if (apiKey) {
+      try {
+        const url = `https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&apiKey=${apiKey}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.features && data.features.length > 0) {
+            const props = data.features[0].properties || {};
+            return {
+              name: props.name || props.street || props.formatted?.split(',')[0] || 'Commercial Point',
+              formattedAddress: props.formatted || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+              street: `${props.housenumber || ''} ${props.street || ''}`.trim() || undefined,
+              district: props.suburb || props.district || props.city,
+              city: props.city || props.county,
+              state: props.state,
+              country: props.country,
+              postcode: props.postcode,
+              lat,
+              lng,
+              zoom: 14
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Geoapify Reverse Geocoding failed:', err);
+      }
+    }
+
+    // Fallback: estimate nearest district
+    return {
+      name: `Commercial Coordinate (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+      formattedAddress: `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+      district: 'Commercial Area',
+      city: 'Metropolitan District',
+      country: 'Nigeria',
+      lat,
+      lng,
+      zoom: 13
+    };
+  }
+
+  // 3. Extract Address & Associated Businesses (Search query or Map Pin)
+  public async extractAddressEntities(
+    input: { query?: string; lat?: number; lng?: number },
+    radiusKm: number = 5
+  ): Promise<ExtractedAddressReport> {
+    let location: GeocodedLocation;
+
+    if (input.lat !== undefined && input.lng !== undefined) {
+      location = await this.reverseGeocode(input.lat, input.lng);
+    } else if (input.query) {
+      location = await this.geocodeLocation(input.query);
+    } else {
+      location = {
+        name: 'Lagos Commercial Core',
+        formattedAddress: 'Victoria Island, Lagos, Nigeria',
+        lat: 6.4541,
+        lng: 3.4246,
+        zoom: 12
+      };
+    }
+
+    const businesses = await this.discoverPlacesInBounds(
+      null,
+      { lat: location.lat, lng: location.lng },
+      radiusKm,
+      'All Industries',
+      'ALL'
+    );
+
+    return {
+      location,
+      businessesFound: businesses,
+      extractedAt: new Date().toISOString()
+    };
+  }
+
+  // 4. Discover Places in Viewport Bounds or Radius (Live API with Instant Audit)
   public async discoverPlacesInBounds(
     bounds: { west: number; south: number; east: number; north: number } | null,
     center: { lat: number; lng: number },
@@ -222,7 +328,6 @@ export class GeoapifyService {
 
     let results: GeoScrapedBusiness[] = nearby.filter(item => item.distanceKm < 250).map(item => item.biz);
     if (results.length === 0) {
-      // If user navigated to a city without explicit mock coords, project mock businesses around current center
       results = MOCK_GEO_BUSINESSES.slice(0, 12).map((b, i) => {
         const offsetLat = (Math.sin(i * 1.3) * radiusKm * 0.4) / 111;
         const offsetLng = (Math.cos(i * 1.3) * radiusKm * 0.4) / (111 * Math.cos((center.lat * Math.PI) / 180));

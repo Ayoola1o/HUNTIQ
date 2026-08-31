@@ -12,6 +12,7 @@ interface MapLibreProspectingMapProps {
   selectedBusinessIds?: Set<string>;
   onSelectBusiness: (business: GeoScrapedBusiness) => void;
   onBoundsChange?: (bounds: { west: number; south: number; east: number; north: number }) => void;
+  onMapClick?: (coords: { lat: number; lng: number }) => void;
 }
 
 export const MapLibreProspectingMap: React.FC<MapLibreProspectingMapProps> = ({
@@ -21,7 +22,8 @@ export const MapLibreProspectingMap: React.FC<MapLibreProspectingMapProps> = ({
   selectedBusinessId,
   selectedBusinessIds = new Set(),
   onSelectBusiness,
-  onBoundsChange
+  onBoundsChange,
+  onMapClick
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
@@ -89,6 +91,9 @@ export const MapLibreProspectingMap: React.FC<MapLibreProspectingMapProps> = ({
 
     map.on('moveend', emitBounds);
     map.on('zoomend', emitBounds);
+    map.on('click', (e) => {
+      onMapClick?.({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+    });
 
     mapInstanceRef.current = map;
 

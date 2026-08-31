@@ -8,7 +8,57 @@ import { ScoringEngine } from '../engine/scoringEngine';
 import { LeadGenerator } from '../engine/leadGenerator';
 import type { DbCompany, DbJob, DbSignal, DbContact } from '../db/types';
 
-describe('HUNTIQ Phase 2: Live Data Pipeline & Verification Tests', () => {
+// Lightweight runner for TSX execution
+const tests: Array<{ name: string; fn: () => Promise<void> | void }> = [];
+const test = (name: string, fn: () => Promise<void> | void) => {
+  tests.push({ name, fn });
+};
+const describe = (_suiteName: string, fn: () => void) => {
+  fn();
+};
+
+const expect = (actual: any) => ({
+  toBe: (expected: any) => {
+    if (actual !== expected) throw new Error(`Expected ${JSON.stringify(actual)} to be ${JSON.stringify(expected)}`);
+  },
+  toEqual: (expected: any) => {
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`Expected ${JSON.stringify(actual)} to equal ${JSON.stringify(expected)}`);
+    }
+  },
+  toBeGreaterThan: (expected: number) => {
+    if (typeof actual !== 'number' || actual <= expected) throw new Error(`Expected ${actual} > ${expected}`);
+  },
+  toBeGreaterThanOrEqual: (expected: number) => {
+    if (typeof actual !== 'number' || actual < expected) throw new Error(`Expected ${actual} >= ${expected}`);
+  },
+  toBeDefined: () => {
+    if (actual === undefined) throw new Error(`Expected value to be defined`);
+  },
+  toBeNull: () => {
+    if (actual !== null) throw new Error(`Expected value to be null, got ${JSON.stringify(actual)}`);
+  },
+  not: {
+    toBeNull: () => {
+      if (actual === null) throw new Error(`Expected value not to be null`);
+    },
+    toBe: (expected: any) => {
+      if (actual === expected) throw new Error(`Expected ${JSON.stringify(actual)} not to be ${JSON.stringify(expected)}`);
+    }
+  },
+  toHaveProperty: (prop: string) => {
+    if (actual === null || typeof actual !== 'object' || !(prop in actual)) {
+      throw new Error(`Expected object to have property ${prop}`);
+    }
+  },
+  toContain: (item: any) => {
+    if (Array.isArray(actual) && !actual.includes(item)) {
+      throw new Error(`Expected array to contain ${JSON.stringify(item)}`);
+    } else if (typeof actual === 'string' && !actual.includes(item)) {
+      throw new Error(`Expected string to contain "${item}"`);
+    }
+  }
+});
   // Test 1 — Provider
   test('Test 1 — Provider returns jobs', async () => {
     const provider = new GreenhouseJobProvider();
@@ -381,4 +431,29 @@ describe('HUNTIQ Phase 2: Live Data Pipeline & Verification Tests', () => {
     expect(list.length).toBe(1);
     expect(lead2.score).toBe(95);
   });
-});
+
+// Run all test suites
+(async () => {
+  console.log('🚀 Running HUNTIQ Data Pipeline Integration Tests...\n');
+  let passed = 0;
+  let failed = 0;
+
+  for (const t of tests) {
+    try {
+      await t.fn();
+      console.log(`  ✅ ${t.name}`);
+      passed++;
+    } catch (err: any) {
+      console.error(`  ❌ ${t.name}: ${err.message}`);
+      failed++;
+    }
+  }
+
+  console.log(`\n========================================`);
+  console.log(`Total: ${tests.length} | Passed: ${passed} | Failed: ${failed}`);
+  console.log(`========================================`);
+
+  if (failed > 0) {
+    process.exit(1);
+  }
+})();
