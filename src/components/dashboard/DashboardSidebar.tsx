@@ -180,23 +180,25 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
               style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
             >
               <div style={{
-                width: '32px',
-                height: '32px',
+                width: '34px',
+                height: '34px',
                 borderRadius: '9px',
                 background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 boxShadow: '0 0 14px rgba(124, 58, 237, 0.6)',
-                flexShrink: 0
+                flexShrink: 0,
+                overflow: 'hidden'
               }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21C14.0747 21 15.9868 20.2974 17.5097 19.1171L19.2929 20.9003C19.6834 21.2908 20.3166 21.2908 20.7071 20.9003C21.0976 20.5097 21.0976 19.8766 20.7071 19.486L18.9959 17.7748C20.2474 16.1952 21 14.1873 21 12C21 7.02944 16.9706 3 12 3ZM7.5 12C7.5 9.51472 9.51472 7.5 12 7.5C14.4853 7.5 16.5 9.51472 16.5 12C16.5 14.4853 14.4853 16.5 12 16.5C9.51472 16.5 7.5 14.4853 7.5 12Z"
-                    fill="white"
-                  />
-                  <circle cx="12" cy="12" r="2.2" fill="#c4b5fd" />
-                </svg>
+                <img 
+                  src="/brand-logo.png" 
+                  alt="HUNTIQ" 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
               </div>
 
               {(!isCollapsed || isMobileScreen) && (
