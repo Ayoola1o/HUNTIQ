@@ -7,9 +7,15 @@ export interface ServerConfig {
   databaseUrl?: string;
 }
 
+const nodeEnv = (process.env.NODE_ENV as ServerConfig['nodeEnv']) || 'development';
+
+if (nodeEnv === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is mandatory in production environment.');
+}
+
 export const config: ServerConfig = {
   port: Number(process.env.PORT) || 3001,
-  nodeEnv: (process.env.NODE_ENV as ServerConfig['nodeEnv']) || 'development',
+  nodeEnv,
   corsOrigins: process.env.CORS_ORIGINS 
     ? process.env.CORS_ORIGINS.split(',').map(s => s.trim()) 
     : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],

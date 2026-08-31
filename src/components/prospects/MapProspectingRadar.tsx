@@ -55,29 +55,60 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [captureToast, setCaptureToast] = useState<string | null>(null);
 
-  // 1. Handle Preset Zone Change
-  const handlePresetChange = (zoneId: string) => {
+  // 1. Initial Discovery on mount
+  React.useEffect(() => {
+    let isMounted = true;
+    geoapifyService.discoverPlacesInBounds(null, mapCenter, radiusKm, selectedCategory, discoveryMode)
+      .then(results => {
+        if (isMounted) setBusinesses(results);
+      });
+    return () => { isMounted = false; };
+  }, []);
+
+  // 2. Handle Preset Zone Change
+  const handlePresetChange = async (zoneId: string) => {
     setSelectedZoneId(zoneId);
     const preset = GEO_LOCATION_PRESETS.find(p => p.id === zoneId);
     if (preset) {
-      setMapCenter({ lat: preset.lat, lng: preset.lng });
+      const newCenter = { lat: preset.lat, lng: preset.lng };
+      setMapCenter(newCenter);
       setMapZoom(preset.zoom);
+      setIsSearching(true);
+      const results = await geoapifyService.discoverPlacesInBounds(
+        null,
+        newCenter,
+        radiusKm,
+        selectedCategory,
+        discoveryMode
+      );
+      setBusinesses(results);
+      setIsSearching(false);
     }
   };
 
-  // 2. Handle Location Search (Geocoding)
+  // 3. Handle Location Search (Geocoding)
   const handleSearchLocation = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
 
     setIsSearching(true);
     const result = await geoapifyService.geocodeLocation(searchQuery);
-    setMapCenter({ lat: result.lat, lng: result.lng });
+    const newCenter = { lat: result.lat, lng: result.lng };
+    setMapCenter(newCenter);
     setMapZoom(result.zoom);
+
+    const results = await geoapifyService.discoverPlacesInBounds(
+      null,
+      newCenter,
+      radiusKm,
+      selectedCategory,
+      discoveryMode
+    );
+    setBusinesses(results);
     setIsSearching(false);
   };
 
-  // 3. Search This Area (Reads Viewport Bounds)
+  // 4. Search This Area (Reads Viewport Bounds)
   const handleSearchThisArea = async () => {
     setIsSearching(true);
     const results = await geoapifyService.discoverPlacesInBounds(
@@ -225,12 +256,19 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
               <span style={{ fontSize: '10px', backgroundColor: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: '9999px', border: '1px solid #a7f3d0', fontWeight: 800 }}>
                 MapLibre GL + OpenStreetMap
               </span>
-              <span style={{ fontSize: '10px', backgroundColor: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: '9999px', border: '1px solid #fde68a', fontWeight: 800 }}>
-                DEMO DATA
-              </span>
+              {geoapifyService.isLiveApiAvailable() ? (
+                <span style={{ fontSize: '10px', backgroundColor: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: '9999px', border: '1px solid #a7f3d0', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }}></span>
+                  LIVE DATA ACTIVE
+                </span>
+              ) : (
+                <span style={{ fontSize: '10px', backgroundColor: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: '9999px', border: '1px solid #fde68a', fontWeight: 800 }}>
+                  OFFLINE DATA
+                </span>
+              )}
             </h2>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0 0' }}>
-              Discover commercial businesses in any area, evaluate digital maturity gaps, and capture high-margin proposal packages.
+              Real-time commercial discovery powered by Geoapify & OpenStreetMap with automated digital gap auditing.
             </p>
           </div>
         </div>

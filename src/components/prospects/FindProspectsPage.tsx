@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { AiSearchInput } from './AiSearchInput';
 import { QuickStartTemplates } from './QuickStartTemplates';
@@ -12,10 +12,21 @@ import type { SearchCriteria, QuickTemplate, SearchEstimation } from '../../type
 import { 
   Sparkles, 
   Search, 
-  Bell, 
   Calendar, 
-  Bookmark
+  Bookmark,
+  CheckCircle2,
+  Trash2,
+  ChevronDown,
+  FolderDown
 } from 'lucide-react';
+
+interface SavedSearchRecord {
+  id: string;
+  name: string;
+  createdAt: string;
+  autoAlert: boolean;
+  criteria: SearchCriteria;
+}
 
 interface FindProspectsPageProps {
   onNavigate: (nav: string) => void;
@@ -60,10 +71,55 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
     dataFreshness: 'Real-time'
   });
 
+  // Saved searches persistent state
+  const [savedSearches, setSavedSearches] = useState<SavedSearchRecord[]>(() => {
+    try {
+      const stored = localStorage.getItem('huntiq_saved_searches');
+      if (stored) return JSON.parse(stored);
+    } catch (_e) {}
+    return [
+      {
+        id: 'saved-1',
+        name: 'Lagos Tech & HR Scaleups',
+        createdAt: '2026-08-30T10:00:00Z',
+        autoAlert: true,
+        criteria: {
+          naturalQuery: 'High-growth B2B SaaS in Lagos with hiring surges',
+          tab: 'ai',
+          industries: ['Technology', 'Financial Services'],
+          locations: ['Lagos, Nigeria'],
+          companySize: '50 - 500 employees',
+          revenue: '$10M - $50M',
+          businessType: 'B2B',
+          technologies: ['React', 'PostgreSQL'],
+          yearsInBusiness: '3-10 years',
+          icpFit: 'High Propensity',
+          signals: ['Hiring Activity', 'Funding Raised', 'Expansion']
+        }
+      }
+    ];
+  });
+
   // Modals state
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
+  const [isSavedSearchesOpen, setIsSavedSearchesOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState('Last 30 Days (Real-Time)');
+  const [isDateMenuOpen, setIsDateMenuOpen] = useState(false);
+
+  // Sync saved searches to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('huntiq_saved_searches', JSON.stringify(savedSearches));
+    } catch (_e) {}
+  }, [savedSearches]);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   const handleCriteriaChange = (updates: Partial<SearchCriteria>) => {
     setCriteria((prev) => {
@@ -85,6 +141,31 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
 
       return next;
     });
+  };
+
+  const handleSaveSearch = (name: string, autoAlert: boolean) => {
+    const newRecord: SavedSearchRecord = {
+      id: `saved-${Date.now()}`,
+      name,
+      createdAt: new Date().toISOString(),
+      autoAlert,
+      criteria: { ...criteria }
+    };
+
+    setSavedSearches(prev => [newRecord, ...prev]);
+    showToast(`✅ Saved search "${name}" successfully! Real-time alerts enabled.`);
+  };
+
+  const handleLoadSavedSearch = (saved: SavedSearchRecord) => {
+    setCriteria(saved.criteria);
+    setIsSavedSearchesOpen(false);
+    showToast(`Loaded saved search "${saved.name}"`);
+  };
+
+  const handleDeleteSavedSearch = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSavedSearches(prev => prev.filter(s => s.id !== id));
+    showToast('Search deleted');
   };
 
   const handleSelectTemplate = (template: QuickTemplate) => {
@@ -113,7 +194,6 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
   };
 
   const handleExecuteSearch = () => {
-    // Navigate directly to opportunities / search results
     onNavigate('opportunities');
   };
 
@@ -171,8 +251,33 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        position: 'relative'
       }}>
+        {/* Toast Notification */}
+        {toastMessage && (
+          <div style={{
+            position: 'absolute',
+            top: '76px',
+            right: '32px',
+            zIndex: 100,
+            backgroundColor: '#0f172a',
+            color: '#ffffff',
+            padding: '12px 18px',
+            borderRadius: '10px',
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '13px',
+            fontWeight: 600,
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            <CheckCircle2 size={16} color="#10b981" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
         {/* Top Header */}
         <header style={{
           padding: '16px 32px 14px',
@@ -219,13 +324,16 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
               borderRadius: '10px',
               padding: '0 12px',
               height: '38px',
-              width: '280px',
+              width: '260px',
               gap: '8px'
             }}>
               <Search size={15} color="#94a3b8" />
               <input
                 type="text"
-                placeholder="Search companies, people, signals..."
+                value={criteria.naturalQuery}
+                onChange={(e) => handleCriteriaChange({ naturalQuery: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && handleExecuteSearch()}
+                placeholder="Search companies, signals..."
                 style={{
                   border: 'none',
                   outline: 'none',
@@ -235,16 +343,6 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
                   width: '100%'
                 }}
               />
-              <span style={{
-                fontSize: '10.5px',
-                fontWeight: 700,
-                color: '#94a3b8',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
-                padding: '1px 4px'
-              }}>
-                ⌘ K
-              </span>
             </div>
 
             {/* Ask AI Copilot Button */}
@@ -270,76 +368,176 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
               <span>Ask AI Copilot</span>
             </button>
 
-            {/* Notification Bell */}
+            {/* Date Range Selector Dropdown */}
             <div style={{ position: 'relative' }}>
               <button
+                onClick={() => setIsDateMenuOpen(!isDateMenuOpen)}
                 style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '10px',
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e2e8f0',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#475569',
+                  gap: '6px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  height: '38px',
+                  padding: '0 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#334155',
                   cursor: 'pointer'
                 }}
               >
-                <Bell size={16} />
+                <Calendar size={14} color="#64748b" />
+                <span>{dateRange}</span>
+                <ChevronDown size={12} color="#94a3b8" />
               </button>
-              <span style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-4px',
-                backgroundColor: '#e11d48',
-                color: '#ffffff',
-                fontSize: '10px',
-                fontWeight: 800,
-                borderRadius: '10px',
-                padding: '1px 5px'
-              }}>
-                12
-              </span>
+
+              {isDateMenuOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '44px',
+                  right: 0,
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)',
+                  padding: '6px',
+                  width: '200px',
+                  zIndex: 80
+                }}>
+                  {['Last 7 Days (Surge)', 'Last 14 Days (Velocity)', 'Last 30 Days (Real-Time)', 'Last 90 Days (Quarterly)'].map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => {
+                        setDateRange(opt);
+                        setIsDateMenuOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        backgroundColor: dateRange === opt ? '#f1f5f9' : 'transparent',
+                        color: dateRange === opt ? '#4f46e5' : '#334155',
+                        fontSize: '12px',
+                        fontWeight: dateRange === opt ? 700 : 500,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* User Avatar */}
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              backgroundColor: '#f1f5f9',
-              border: '1px solid #cbd5e1',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12.5px',
-              fontWeight: 800,
-              color: '#334155'
-            }}>
-              AA
-            </div>
+            {/* Saved Searches Dropdown Trigger */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setIsSavedSearchesOpen(!isSavedSearchesOpen)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: isSavedSearchesOpen ? '#eef2ff' : '#ffffff',
+                  border: isSavedSearchesOpen ? '1px solid #818cf8' : '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  height: '38px',
+                  padding: '0 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: isSavedSearchesOpen ? '#4f46e5' : '#334155',
+                  cursor: 'pointer'
+                }}
+              >
+                <FolderDown size={14} color="#6366f1" />
+                <span>Saved ({savedSearches.length})</span>
+                <ChevronDown size={12} color="#94a3b8" />
+              </button>
 
-            {/* Date Range Selector */}
-            <button
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                height: '38px',
-                padding: '0 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#334155',
-                cursor: 'pointer'
-              }}
-            >
-              <Calendar size={14} color="#64748b" />
-              <span>May 16, 2025 - May 30, 2025</span>
-            </button>
+              {/* Saved Searches Dropdown Menu */}
+              {isSavedSearchesOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '44px',
+                  right: 0,
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  boxShadow: '0 15px 35px -5px rgba(0,0,0,0.2)',
+                  padding: '8px',
+                  width: '320px',
+                  zIndex: 80,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}>
+                  <div style={{
+                    padding: '6px 8px',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    color: '#94a3b8',
+                    borderBottom: '1px solid #f1f5f9',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span>Your Saved Queries</span>
+                    <span>{savedSearches.length} saved</span>
+                  </div>
+
+                  {savedSearches.length === 0 ? (
+                    <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
+                      No saved searches yet. Click "Save Search" to bookmark queries.
+                    </div>
+                  ) : (
+                    savedSearches.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => handleLoadSavedSearch(item)}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                            {item.name}
+                          </span>
+                          <button
+                            onClick={(e) => handleDeleteSavedSearch(item.id, e)}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              color: '#94a3b8',
+                              cursor: 'pointer',
+                              padding: '2px 4px'
+                            }}
+                            title="Delete saved search"
+                          >
+                            <Trash2 size={13} color="#ef4444" />
+                          </button>
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>
+                          {item.criteria.naturalQuery || `${item.criteria.industries.join(', ')} • ${item.criteria.locations.join(', ')}`}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Save Search Button */}
             <button
@@ -348,18 +546,19 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e2e8f0',
+                backgroundColor: '#4f46e5',
+                border: 'none',
                 borderRadius: '10px',
                 height: '38px',
                 padding: '0 14px',
                 fontSize: '12px',
-                fontWeight: 600,
-                color: '#334155',
-                cursor: 'pointer'
+                fontWeight: 700,
+                color: '#ffffff',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(79, 70, 229, 0.3)'
               }}
             >
-              <Bookmark size={14} color="#64748b" />
+              <Bookmark size={14} color="#ffffff" />
               <span>Save Search</span>
             </button>
           </div>
@@ -490,7 +689,7 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
         isOpen={isSaveModalOpen}
         onClose={() => setIsSaveModalOpen(false)}
         criteria={criteria}
-        onSave={(_name, _auto) => {}}
+        onSave={handleSaveSearch}
       />
 
       {/* AI Copilot Modal */}
