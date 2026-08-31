@@ -19,16 +19,19 @@ export const SignalsKpiCards: React.FC<SignalsKpiCardsProps> = ({
   activeFilter,
   onSelectKpi
 }) => {
-  const { signals, companies } = useHuntiq();
+  const { signals = [], companies = [] } = useHuntiq();
 
   const totalSignalsCount = signals.length;
-  const newSignalsCount = signals.filter(s => 
-    s.detectedTime.includes('ago') || s.detectedTime.includes('Just now') || s.detectedTime.includes('Today')
-  ).length;
+  const newSignalsCount = signals.filter(s => {
+    const timeStr = String(s.detectedTime || s.detectedTimestamp || '');
+    return timeStr.includes('ago') || timeStr.includes('Just now') || timeStr.includes('Today') || !timeStr;
+  }).length;
+
   const highImpactCount = signals.filter(s => 
-    s.impactLevel === 'Very High' || s.impactLevel === 'High' || s.impactScore >= 85
+    s.impactLevel === 'Very High' || s.impactLevel === 'High' || (s.impactScore || 0) >= 85
   ).length;
-  const companiesAffectedCount = new Set(signals.map(s => s.companyName)).size;
+
+  const companiesAffectedCount = new Set(signals.map(s => String(s.companyName || 'Corporate Entity'))).size;
   const hotCompaniesCount = companies.filter(c => (c.opportunityScore || 0) >= 80).length;
   const avgImpactVal = totalSignalsCount > 0 
     ? Math.round(signals.reduce((sum, s) => sum + (s.impactScore || 80), 0) / totalSignalsCount) 

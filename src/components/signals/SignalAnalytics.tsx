@@ -8,8 +8,38 @@ import {
   MapPin, 
   Cpu 
 } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 export const SignalAnalytics: React.FC = () => {
+  const { signals } = useHuntiq();
+
+  const totalCount = signals.length;
+  
+  // Calculate breakdown
+  const countsByType = {
+    hiring: signals.filter(s => s.type === 'hiring').length,
+    expansion: signals.filter(s => s.type === 'expansion').length,
+    leadership: signals.filter(s => s.type === 'leadership').length,
+    funding: signals.filter(s => s.type === 'funding').length,
+    technology: signals.filter(s => s.type === 'technology').length,
+    news: signals.filter(s => s.type === 'news').length,
+    compliance: signals.filter(s => s.type === 'compliance').length,
+    other: signals.filter(s => s.type === 'other' || !(s.type in { hiring: 1, expansion: 1, leadership: 1, funding: 1, technology: 1, news: 1, compliance: 1 })).length
+  };
+
+  const getPct = (cnt: number) => totalCount > 0 ? `${Math.round((cnt / totalCount) * 100)}%` : '0%';
+
+  const typeItems = [
+    { label: 'Hiring', count: countsByType.hiring, pct: getPct(countsByType.hiring), color: '#3b82f6' },
+    { label: 'Expansion', count: countsByType.expansion, pct: getPct(countsByType.expansion), color: '#38bdf8' },
+    { label: 'Leadership', count: countsByType.leadership, pct: getPct(countsByType.leadership), color: '#f97316' },
+    { label: 'Funding', count: countsByType.funding, pct: getPct(countsByType.funding), color: '#ef4444' },
+    { label: 'Technology', count: countsByType.technology, pct: getPct(countsByType.technology), color: '#6366f1' },
+    { label: 'News', count: countsByType.news, pct: getPct(countsByType.news), color: '#8b5cf6' },
+    { label: 'Compliance', count: countsByType.compliance, pct: getPct(countsByType.compliance), color: '#10b981' },
+    { label: 'Digital Gap / Other', count: countsByType.other, pct: getPct(countsByType.other), color: '#94a3b8' },
+  ];
+
   return (
     <div style={{
       display: 'grid',
@@ -43,7 +73,7 @@ export const SignalAnalytics: React.FC = () => {
             borderRadius: '6px',
             border: '1px solid #e2e8f0'
           }}>
-            <span>This month</span>
+            <span>Live Stream</span>
             <ChevronDown size={12} />
           </div>
         </div>
@@ -53,19 +83,12 @@ export const SignalAnalytics: React.FC = () => {
           {/* SVG Donut */}
           <div style={{ position: 'relative', width: '130px', height: '130px', flexShrink: 0 }}>
             <svg viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
-              {/* Hiring 34% */}
               <circle cx="50" cy="50" r="38" fill="transparent" stroke="#3b82f6" strokeWidth="14" strokeDasharray="81.2 238.7" strokeDashoffset="0" />
-              {/* Expansion 17% */}
               <circle cx="50" cy="50" r="38" fill="transparent" stroke="#38bdf8" strokeWidth="14" strokeDasharray="40.6 238.7" strokeDashoffset="-81.2" />
-              {/* Leadership 15% */}
               <circle cx="50" cy="50" r="38" fill="transparent" stroke="#f97316" strokeWidth="14" strokeDasharray="35.8 238.7" strokeDashoffset="-121.8" />
-              {/* Funding 13% */}
               <circle cx="50" cy="50" r="38" fill="transparent" stroke="#ef4444" strokeWidth="14" strokeDasharray="31 238.7" strokeDashoffset="-157.6" />
-              {/* Technology 10% */}
               <circle cx="50" cy="50" r="38" fill="transparent" stroke="#6366f1" strokeWidth="14" strokeDasharray="23.9 238.7" strokeDashoffset="-188.6" />
-              {/* News 7% */}
               <circle cx="50" cy="50" r="38" fill="transparent" stroke="#8b5cf6" strokeWidth="14" strokeDasharray="16.7 238.7" strokeDashoffset="-212.5" />
-              {/* Compliance 4% */}
               <circle cx="50" cy="50" r="38" fill="transparent" stroke="#10b981" strokeWidth="14" strokeDasharray="9.5 238.7" strokeDashoffset="-229.2" />
             </svg>
             <div style={{
@@ -77,23 +100,14 @@ export const SignalAnalytics: React.FC = () => {
               justifyContent: 'center',
               pointerEvents: 'none'
             }}>
-              <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>1,429</span>
+              <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{totalCount.toLocaleString()}</span>
               <span style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '2px' }}>Total</span>
             </div>
           </div>
 
           {/* Legend */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '3px', fontSize: '11px', flex: 1 }}>
-            {[
-              { label: 'Hiring', count: '482', pct: '34%', color: '#3b82f6' },
-              { label: 'Expansion', count: '246', pct: '17%', color: '#38bdf8' },
-              { label: 'Leadership', count: '218', pct: '15%', color: '#f97316' },
-              { label: 'Funding', count: '186', pct: '13%', color: '#ef4444' },
-              { label: 'Technology', count: '142', pct: '10%', color: '#6366f1' },
-              { label: 'News', count: '95', pct: '7%', color: '#8b5cf6' },
-              { label: 'Compliance', count: '60', pct: '4%', color: '#10b981' },
-              { label: 'Other', count: '0', pct: '0%', color: '#94a3b8' },
-            ].map((item) => (
+            {typeItems.map((item) => (
               <div key={item.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: item.color }} />

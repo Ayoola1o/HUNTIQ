@@ -513,7 +513,7 @@ export const SignalTable: React.FC<SignalTableProps> = ({
         fontSize: '12px',
         color: '#64748b'
       }}>
-        <span>Showing 1 to 8 of 1,429 signals</span>
+        <span>Showing {signals.length > 0 ? 1 : 0} to {signals.length} of {signals.length} signals</span>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <button

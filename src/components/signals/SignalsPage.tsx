@@ -47,23 +47,25 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
     // Search Query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const matchCompany = sig.companyName.toLowerCase().includes(q);
-      const matchTitle = sig.title.toLowerCase().includes(q);
-      const matchSubtitle = sig.subtitle.toLowerCase().includes(q);
-      const matchLoc = sig.location.toLowerCase().includes(q);
+      const matchCompany = String(sig.companyName || '').toLowerCase().includes(q);
+      const matchTitle = String(sig.title || '').toLowerCase().includes(q);
+      const matchSubtitle = String(sig.subtitle || '').toLowerCase().includes(q);
+      const matchLoc = String(sig.location || '').toLowerCase().includes(q);
       if (!matchCompany && !matchTitle && !matchSubtitle && !matchLoc) return false;
     }
 
     // KPI Card Filter
     if (activeKpiFilter === 'new') {
-      return sig.detectedTime.includes('ago') || sig.detectedTime.includes('Just now') || sig.detectedTime.includes('Today');
+      const timeStr = String(sig.detectedTime || sig.detectedTimestamp || '');
+      return timeStr.includes('ago') || timeStr.includes('Just now') || timeStr.includes('Today') || !timeStr;
     }
     if (activeKpiFilter === 'high_impact') {
-      return sig.impactLevel === 'Very High' || sig.impactLevel === 'High' || sig.impactScore >= 85;
+      return sig.impactLevel === 'Very High' || sig.impactLevel === 'High' || (sig.impactScore || 0) >= 85;
     }
     if (activeKpiFilter === 'hot_companies') {
-      const comp = companies.find((c) => c.name.toLowerCase() === sig.companyName.toLowerCase());
-      return comp ? (comp.opportunityScore || 0) >= 80 : sig.impactScore >= 85;
+      const sigCompName = String(sig.companyName || '').toLowerCase();
+      const comp = companies.find((c) => String(c.name || '').toLowerCase() === sigCompName);
+      return comp ? (comp.opportunityScore || 0) >= 80 : (sig.impactScore || 0) >= 85;
     }
 
     return true;
