@@ -7,19 +7,36 @@ export const healthRouter = Router();
 
 const startTime = Date.now();
 
-healthRouter.get('/health', (_req: Request, res: Response) => {
+healthRouter.get('/health', async (_req: Request, res: Response) => {
   const uptimeSeconds = Math.floor((Date.now() - startTime) / 1000);
   const memoryUsageMb = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
 
+  let dbStatus = 'unconfigured';
+  if (config.databaseUrl) {
+    try {
+      const { pool } = await import('../database/postgres');
+      if (pool) {
+        await pool.query('SELECT 1');
+        dbStatus = 'healthy';
+      }
+    } catch {
+      dbStatus = 'degraded';
+    }
+  }
+
   const healthData: HealthResponse = {
-    status: 'ok',
+    status: dbStatus === 'degraded' ? 'degraded' : 'ok',
     service: 'huntiq-api',
     version: config.apiVersion,
     uptimeSeconds,
     environment: config.nodeEnv,
     timestamp: new Date().toISOString(),
-    memoryUsageMb
-  };
+    memoryUsageMb,
+    dependencies: {
+      database: dbStatus,
+      providers: ['greenhouse', 'lever', 'ashby']
+    }
+  } as any;
 
   const response: ApiResponse<HealthResponse> = {
     success: true,

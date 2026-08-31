@@ -174,25 +174,29 @@ export class CompanyResolver {
       }
     }
 
-    // 4. Auto-Create & Index New Canonical Company
-    const fallbackDomain = normalizedDomain || `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+    // 4. Auto-Create & Index New Canonical Company (Strict Evidence-Based)
+    const verifiedDomain = normalizedDomain || undefined;
+    const resolutionStatus = verifiedDomain ? 'ACTIVE' : 'RESOLUTION_PENDING';
+    
     const newCompany: DbCompany = {
       id: `comp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       workspaceId,
       name: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
       legalName: req.name || cleanName,
-      domain: fallbackDomain,
-      website: req.website || `https://${fallbackDomain}`,
-      industry: req.industry || 'Technology & FinTech',
-      employeeCount: '150',
-      employeeRange: '100-250',
+      domain: verifiedDomain || '',
+      website: req.website || (verifiedDomain ? `https://${verifiedDomain}` : undefined),
+      industry: req.industry || 'Technology & Commercial',
+      employeeCount: '100',
+      employeeRange: '50-150',
       country: req.country || 'Nigeria',
       city: req.city || 'Lagos',
-      description: `Canonical company record auto-indexed by HUNTIQ Resolution Engine for ${cleanName}.`,
-      logoUrl: `https://${fallbackDomain}/favicon.ico`,
-      status: 'ACTIVE',
+      description: verifiedDomain
+        ? `Canonical company record auto-indexed by HUNTIQ Resolution Engine for ${cleanName}.`
+        : `Company entity pending external domain verification for ${cleanName}.`,
+      logoUrl: verifiedDomain ? `https://${verifiedDomain}/favicon.ico` : undefined,
+      status: resolutionStatus as any,
       firstSeenAt: new Date().toISOString(),
-      lastVerifiedAt: new Date().toISOString(),
+      lastVerifiedAt: verifiedDomain ? new Date().toISOString() : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -204,15 +208,17 @@ export class CompanyResolver {
       userId: 'usr-1',
       companyId: newCompany.id,
       type: 'COMPANY_TRACKED',
-      title: `Canonical Entity Resolved & Indexed: ${newCompany.name}`,
-      description: `Discovered and registered ${newCompany.domain} in ${newCompany.city}.`
+      title: `Canonical Entity Resolved: ${newCompany.name}`,
+      description: verifiedDomain 
+        ? `Discovered and registered ${newCompany.domain} in ${newCompany.city}.`
+        : `Registered ${newCompany.name} (Resolution Pending domain verification).`
     });
 
     return {
       company: newCompany,
       matchType: 'AUTO_CREATED',
-      confidence: 90,
-      normalizedDomain: fallbackDomain,
+      confidence: verifiedDomain ? 85 : 60,
+      normalizedDomain: verifiedDomain || '',
       cleanName,
       isNew: true
     };

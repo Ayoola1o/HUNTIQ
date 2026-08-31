@@ -7,7 +7,71 @@ export interface GeneratedSignalBundle {
   opportunityImpact: 'CRITICAL' | 'HIGH' | 'MEDIUM';
 }
 
+export interface HiringVelocityMetrics {
+  totalOpenJobs: number;
+  jobsLast7Days: number;
+  jobsPrev7Days: number;
+  acceleration7DaysPercent: number;
+  jobsLast14Days: number;
+  jobsLast30Days: number;
+  jobsPrev30Days: number;
+  acceleration30DaysPercent: number;
+  departmentBreakdown: Record<string, number>;
+}
+
 export class HiringSignalEngine {
+  /**
+   * Computes multi-window velocity metrics (7d, 14d, 30d and historical acceleration).
+   */
+  public static calculateHiringMetrics(jobs: DbJob[]): HiringVelocityMetrics {
+    const openJobs = jobs.filter(j => j.status === 'OPEN');
+    const now = Date.now();
+    const dayMs = 86400000;
+
+    let jobsLast7Days = 0;
+    let jobsPrev7Days = 0;
+    let jobsLast14Days = 0;
+    let jobsLast30Days = 0;
+    let jobsPrev30Days = 0;
+    const departmentBreakdown: Record<string, number> = {};
+
+    openJobs.forEach(job => {
+      const postedTime = new Date(job.postedAt || job.firstSeenAt).getTime();
+      const ageDays = (now - postedTime) / dayMs;
+
+      if (ageDays <= 7) jobsLast7Days++;
+      else if (ageDays <= 14) jobsPrev7Days++;
+
+      if (ageDays <= 14) jobsLast14Days++;
+
+      if (ageDays <= 30) jobsLast30Days++;
+      else if (ageDays <= 60) jobsPrev30Days++;
+
+      const dept = job.department || 'General';
+      departmentBreakdown[dept] = (departmentBreakdown[dept] || 0) + 1;
+    });
+
+    const acceleration7DaysPercent = jobsPrev7Days === 0
+      ? (jobsLast7Days > 0 ? 100 : 0)
+      : Math.round(((jobsLast7Days - jobsPrev7Days) / jobsPrev7Days) * 100);
+
+    const acceleration30DaysPercent = jobsPrev30Days === 0
+      ? (jobsLast30Days > 0 ? 100 : 0)
+      : Math.round(((jobsLast30Days - jobsPrev30Days) / jobsPrev30Days) * 100);
+
+    return {
+      totalOpenJobs: openJobs.length,
+      jobsLast7Days,
+      jobsPrev7Days,
+      acceleration7DaysPercent,
+      jobsLast14Days,
+      jobsLast30Days,
+      jobsPrev30Days,
+      acceleration30DaysPercent,
+      departmentBreakdown
+    };
+  }
+
   /**
    * Evaluates all jobs for a company to detect specific buying signals and attach verifiable evidence.
    */
@@ -18,10 +82,12 @@ export class HiringSignalEngine {
 
     if (openJobs.length === 0) return bundles;
 
+    const metrics = this.calculateHiringMetrics(jobs);
+
     // 1. SIGNAL: HIRING_ACCELERATION (Surge in job openings)
     if (openJobs.length >= 2) {
-      const isSurge = openJobs.length >= 6;
-      const velocityGrowthPercent = openJobs.length >= 10 ? 240 : openJobs.length >= 5 ? 120 : 65;
+      const isSurge = openJobs.length >= 6 || metrics.acceleration7DaysPercent >= 100;
+      const velocityGrowthPercent = metrics.acceleration7DaysPercent > 0 ? metrics.acceleration7DaysPercent : (openJobs.length >= 10 ? 240 : openJobs.length >= 5 ? 120 : 65);
       
       const signal: Omit<DbSignal, 'id' | 'createdAt' | 'updatedAt'> = {
         workspaceId: company.workspaceId,
