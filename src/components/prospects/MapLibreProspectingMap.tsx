@@ -33,41 +33,44 @@ export const MapLibreProspectingMap: React.FC<MapLibreProspectingMapProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    const geoapifyKey = (import.meta as any).env?.VITE_GEOAPIFY_API_KEY || '';
-
-    // Choose Map Style: Geoapify Dark Matter vector tile or CartoDB Dark Matter / OSM
-    const mapStyle = geoapifyKey 
-      ? `https://maps.geoapify.com/v1/styles/dark-matter-purple-roads/style.json?apiKey=${geoapifyKey}`
-      : {
-          version: 8 as const,
-          sources: {
-            'osm-tiles': {
-              type: 'raster' as const,
-              tiles: [
-                'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-                'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-              ],
-              tileSize: 256,
-              attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>'
-            }
-          },
-          layers: [
-            {
-              id: 'osm-tiles-layer',
-              type: 'raster' as const,
-              source: 'osm-tiles',
-              minzoom: 0,
-              maxzoom: 19
-            }
-          ]
-        };
+    // Ultra-reliable, high-contrast Dark Matter basemap tiles via CartoDB / OpenStreetMap
+    const cartoDarkStyle: maplibregl.StyleSpecification = {
+      version: 8,
+      sources: {
+        'carto-dark': {
+          type: 'raster',
+          tiles: [
+            'https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png',
+            'https://b.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png',
+            'https://c.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png',
+            'https://d.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png'
+          ],
+          tileSize: 256,
+          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>'
+        }
+      },
+      layers: [
+        {
+          id: 'carto-dark-layer',
+          type: 'raster',
+          source: 'carto-dark',
+          minzoom: 0,
+          maxzoom: 20
+        }
+      ]
+    };
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: mapStyle,
+      style: cartoDarkStyle,
       center: [center.lng, center.lat],
       zoom,
       attributionControl: false
+    });
+
+    // Suppress individual tile network timeout glitches
+    map.on('error', (e) => {
+      if (e && (e as any).error?.status === 0) return;
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: true, showZoom: true }), 'top-right');
