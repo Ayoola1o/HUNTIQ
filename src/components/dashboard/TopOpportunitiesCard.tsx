@@ -1,18 +1,34 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface TopOpportunitiesCardProps {
   onSelectCompany: (name: string) => void;
 }
 
 export const TopOpportunitiesCard: React.FC<TopOpportunitiesCardProps> = ({ onSelectCompany }) => {
-  const topList = [
-    { rank: 1, name: 'Acme Technologies', location: 'Lagos, Nigeria', score: 94 },
-    { rank: 2, name: 'FinServe Ltd', location: 'Lagos, Nigeria', score: 88 },
-    { rank: 3, name: 'Delta Systems', location: 'Abuja, Nigeria', score: 81 },
-    { rank: 4, name: 'Vertex Solutions', location: 'Lagos, Nigeria', score: 78 },
-    { rank: 5, name: 'Nimbus Analytics', location: 'Lagos, Nigeria', score: 76 },
-  ];
+  const { opportunities, navigateTo } = useHuntiq();
+
+  const topList = React.useMemo(() => {
+    if (opportunities && opportunities.length > 0) {
+      return [...opportunities]
+        .sort((a, b) => (b.score || 0) - (a.score || 0))
+        .slice(0, 5)
+        .map((opp, idx) => ({
+          rank: idx + 1,
+          name: opp.companyName,
+          location: opp.location || 'Lagos, Nigeria',
+          score: opp.score || 90
+        }));
+    }
+    return [
+      { rank: 1, name: 'Acme Technologies', location: 'Lagos, Nigeria', score: 94 },
+      { rank: 2, name: 'FinServe Ltd', location: 'Lagos, Nigeria', score: 88 },
+      { rank: 3, name: 'Delta Systems', location: 'Abuja, Nigeria', score: 81 },
+      { rank: 4, name: 'Vertex Solutions', location: 'Lagos, Nigeria', score: 78 },
+      { rank: 5, name: 'Nimbus Analytics', location: 'Lagos, Nigeria', score: 76 },
+    ];
+  }, [opportunities]);
 
   return (
     <div style={{
@@ -39,7 +55,10 @@ export const TopOpportunitiesCard: React.FC<TopOpportunitiesCardProps> = ({ onSe
 
         <a
           href="#top"
-          onClick={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.preventDefault();
+            navigateTo('opportunities');
+          }}
           style={{
             fontSize: '12px',
             fontWeight: 600,

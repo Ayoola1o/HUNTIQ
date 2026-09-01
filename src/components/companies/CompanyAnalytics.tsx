@@ -1,7 +1,27 @@
 import React from 'react';
 import { ChevronDown, ArrowRight } from 'lucide-react';
+import type { CompanyItem } from '../../types/company';
 
-export const CompanyAnalytics: React.FC = () => {
+interface CompanyAnalyticsProps {
+  companies?: CompanyItem[];
+}
+
+export const CompanyAnalytics: React.FC<CompanyAnalyticsProps> = ({ companies = [] }) => {
+  // Score Distribution
+  const lowCount = companies.filter(c => (c.opportunityScore || 0) < 50).length || 312;
+  const medCount = companies.filter(c => (c.opportunityScore || 0) >= 50 && (c.opportunityScore || 0) < 70).length || 864;
+  const highCount = companies.filter(c => (c.opportunityScore || 0) >= 70 && (c.opportunityScore || 0) < 90).length || 1142;
+  const veryHighCount = companies.filter(c => (c.opportunityScore || 0) >= 90).length || 524;
+
+  const recentItems = companies.slice(0, 5).map((comp, idx) => ({
+    id: comp.id || `rec-${idx}`,
+    name: comp.name,
+    desc: comp.industry || 'Technology',
+    time: comp.lastActivity || '2h ago',
+    logoBg: comp.logoBg || '#eff6ff',
+    logoColor: comp.logoColor || '#2563eb',
+    initial: comp.logoInitial || comp.name.charAt(0)
+  }));
   return (
     <div style={{
       display: 'grid',
@@ -138,28 +158,28 @@ export const CompanyAnalytics: React.FC = () => {
             padding: '0 10px',
             borderBottom: '1px solid #eaecf0'
           }}>
-            {/* Low (0-49): 312 */}
+            {/* Low (0-49) */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', width: '46px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>312</span>
-              <div style={{ width: '36px', height: '42px', backgroundColor: '#94a3b8', borderRadius: '4px 4px 0 0' }} />
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>{lowCount}</span>
+              <div style={{ width: '36px', height: `${Math.min(130, Math.max(16, (lowCount / 1200) * 130))}px`, backgroundColor: '#94a3b8', borderRadius: '4px 4px 0 0' }} />
             </div>
 
-            {/* Medium (50-69): 864 */}
+            {/* Medium (50-69) */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', width: '46px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#d97706' }}>864</span>
-              <div style={{ width: '36px', height: '94px', backgroundColor: '#f59e0b', borderRadius: '4px 4px 0 0' }} />
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#d97706' }}>{medCount}</span>
+              <div style={{ width: '36px', height: `${Math.min(130, Math.max(24, (medCount / 1200) * 130))}px`, backgroundColor: '#f59e0b', borderRadius: '4px 4px 0 0' }} />
             </div>
 
-            {/* High (70-89): 1,142 */}
+            {/* High (70-89) */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', width: '46px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb' }}>1,142</span>
-              <div style={{ width: '36px', height: '136px', backgroundColor: '#3b82f6', borderRadius: '4px 4px 0 0' }} />
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb' }}>{highCount}</span>
+              <div style={{ width: '36px', height: `${Math.min(130, Math.max(32, (highCount / 1200) * 130))}px`, backgroundColor: '#3b82f6', borderRadius: '4px 4px 0 0' }} />
             </div>
 
-            {/* Very High (90-100): 524 */}
+            {/* Very High (90-100) */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', width: '46px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#059669' }}>524</span>
-              <div style={{ width: '36px', height: '70px', backgroundColor: '#10b981', borderRadius: '4px 4px 0 0' }} />
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#059669' }}>{veryHighCount}</span>
+              <div style={{ width: '36px', height: `${Math.min(130, Math.max(20, (veryHighCount / 1200) * 130))}px`, backgroundColor: '#10b981', borderRadius: '4px 4px 0 0' }} />
             </div>
           </div>
 
@@ -218,53 +238,7 @@ export const CompanyAnalytics: React.FC = () => {
 
         {/* List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
-          {[
-            {
-              id: '1',
-              name: 'CloudNova Solutions',
-              desc: 'Cloud computing services',
-              time: '2h ago',
-              logoBg: '#eff6ff',
-              logoColor: '#2563eb',
-              initial: 'C'
-            },
-            {
-              id: '2',
-              name: 'BrightPay Financials',
-              desc: 'Fintech payment solutions',
-              time: '6h ago',
-              logoBg: '#ecfdf5',
-              logoColor: '#059669',
-              initial: 'B'
-            },
-            {
-              id: '3',
-              name: 'Medix Healthcare',
-              desc: 'Digital health platform',
-              time: '1d ago',
-              logoBg: '#fdf2f8',
-              logoColor: '#db2777',
-              initial: 'M'
-            },
-            {
-              id: '4',
-              name: 'GreenBuild Construction',
-              desc: 'Sustainable construction',
-              time: '1d ago',
-              logoBg: '#f0fdf4',
-              logoColor: '#16a34a',
-              initial: 'G'
-            },
-            {
-              id: '5',
-              name: 'Edutech Innovations',
-              desc: 'Education technology',
-              time: '2d ago',
-              logoBg: '#f5f3ff',
-              logoColor: '#7c3aed',
-              initial: 'E'
-            },
-          ].map((item) => (
+          {recentItems.map((item) => (
             <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{

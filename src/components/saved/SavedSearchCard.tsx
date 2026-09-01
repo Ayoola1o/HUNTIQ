@@ -32,6 +32,16 @@ export const SavedSearchCard: React.FC<SavedSearchCardProps> = ({
   onDelete
 }) => {
   const [showMenu, setShowMenu] = React.useState(false);
+  const [isScanning, setIsScanning] = React.useState(false);
+
+  const handleRun = async () => {
+    setIsScanning(true);
+    try {
+      await onRunSearch(search.id);
+    } finally {
+      setTimeout(() => setIsScanning(false), 600);
+    }
+  };
 
   const getTypeBadge = (type: SavedSearchItem['searchType']) => {
     switch (type) {
@@ -175,8 +185,9 @@ export const SavedSearchCard: React.FC<SavedSearchCardProps> = ({
                 <button
                   onClick={() => {
                     setShowMenu(false);
-                    onRunSearch(search.id);
+                    handleRun();
                   }}
+                  disabled={isScanning}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -190,8 +201,8 @@ export const SavedSearchCard: React.FC<SavedSearchCardProps> = ({
                     cursor: 'pointer'
                   }}
                 >
-                  <RefreshCw size={14} />
-                  <span>Run Search Now</span>
+                  <RefreshCw size={14} className={isScanning ? 'animate-spin' : ''} />
+                  <span>{isScanning ? 'Running Scan...' : 'Run Search Now'}</span>
                 </button>
 
                 <button

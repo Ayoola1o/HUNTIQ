@@ -291,7 +291,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     setIsDataLoading(true);
     try {
       const health = await checkApiHealth();
-      if (health.status === 'ok' && health.environment !== 'browser-local') {
+      if ((health.status === 'ok' || health.status === 'degraded' || health.service === 'huntiq-api') && health.environment !== 'browser-local') {
         setIsLiveBackend(true);
       }
 

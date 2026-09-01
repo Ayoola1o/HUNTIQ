@@ -28,28 +28,10 @@ interface CompaniesPageProps {
   onGoToOnboarding?: () => void;
 }
 
-export const CompaniesPage: React.FC<CompaniesPageProps> = ({
-  onNavigate,
-  onGoToOnboarding
-}) => {
-  const { companies: dynamicCompanies } = useHuntiq();
-  const [activeTab, setActiveTab] = useState('all');
-  const [activeKpiFilter, setActiveKpiFilter] = useState('total');
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>('comp-1');
-
-  // Modals state
-  const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false);
-  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
-  const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
-  const [listModalCompany, setListModalCompany] = useState<CompanyItem | null>(null);
-  const [scoreBreakdownTarget, setScoreBreakdownTarget] = useState<OpportunityItem | null>(null);
-
-  // Live dataset from Huntiq engine with fallback
-  const [companies, setCompanies] = useState<CompanyItem[]>(() => 
-    dynamicCompanies && dynamicCompanies.length > 0 ? dynamicCompanies : [
-    {
-      id: 'comp-1',
-      name: 'Acme Technologies',
+const initialFallbackCompanies: CompanyItem[] = [
+  {
+    id: 'comp-1',
+    name: 'Acme Technologies',
       domain: 'acmetech.com',
       logoBg: '#ef4444',
       logoColor: '#ffffff',
@@ -357,22 +339,54 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
         linkedin: 'https://linkedin.com/company/bluechipindustries'
       }
     }
-  ]);
+];
+
+export const CompaniesPage: React.FC<CompaniesPageProps> = ({
+  onNavigate,
+  onGoToOnboarding
+}) => {
+  const { companies: dynamicCompanies } = useHuntiq();
+  const [activeTab, setActiveTab] = useState('all');
+  const [activeKpiFilter, setActiveKpiFilter] = useState('total');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>('comp-1');
+
+  // Modals state
+  const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false);
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
+  const [listModalCompany, setListModalCompany] = useState<CompanyItem | null>(null);
+  const [scoreBreakdownTarget, setScoreBreakdownTarget] = useState<OpportunityItem | null>(null);
+
+  const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
+
+  const companies = React.useMemo(() => {
+    const base = dynamicCompanies && dynamicCompanies.length > 0 ? dynamicCompanies : initialFallbackCompanies;
+    return base.map(c => ({
+      ...c,
+      isSaved: savedMap[c.id] !== undefined ? savedMap[c.id] : c.isSaved
+    }));
+  }, [dynamicCompanies, savedMap]);
 
   const selectedComp = companies.find((c) => c.id === selectedCompanyId) || companies[0];
 
   const handleToggleSave = (companyId: string) => {
-    setCompanies((prev) =>
-      prev.map((c) =>
-        c.id === companyId ? { ...c, isSaved: !c.isSaved } : c
-      )
-    );
+    setSavedMap((prev) => {
+      const current = companies.find(c => c.id === companyId)?.isSaved;
+      return { ...prev, [companyId]: !current };
+    });
   };
 
   const filteredCompanies = companies.filter((c) => {
-    if (activeTab === 'high-opportunity') return c.opportunityScore >= 80;
-    if (activeTab === 'recently-added') return c.lastActivity.includes('h ago') || c.lastActivity.includes('1d ago');
-    if (activeTab === 'saved') return c.isSaved;
+    // Tab filtering
+    if (activeTab === 'high-opportunity' && (c.opportunityScore || 0) < 80) return false;
+    if (activeTab === 'recently-added' && !(c.lastActivity?.includes('h ago') || c.lastActivity?.includes('1d ago') || c.lastActivity?.includes('2d ago'))) return false;
+    if (activeTab === 'saved' && !c.isSaved) return false;
+
+    // KPI Card filtering
+    if (activeKpiFilter === 'high-opportunity' && (c.opportunityScore || 0) < 80) return false;
+    if (activeKpiFilter === 'new' && !(c.lastActivity?.includes('h ago') || c.lastActivity?.includes('1d ago') || c.lastActivity?.includes('2d ago') || c.lastActivity?.includes('Just now'))) return false;
+    if (activeKpiFilter === 'with-signals' && (c.signalsCount || 0) === 0 && (!c.activeSignals || c.activeSignals.length === 0)) return false;
+
     return true;
   });
 
@@ -640,6 +654,7 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
           <CompaniesKpiCards
             activeFilter={activeKpiFilter}
             onSelectKpi={(f) => setActiveKpiFilter(f)}
+            companies={companies}
           />
 
           {/* Middle Table & Detail Preview Drawer */}
@@ -708,7 +723,7 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
           </div>
 
           {/* Bottom 3-Column Analytics */}
-          <CompanyAnalytics />
+          <CompanyAnalytics companies={companies} />
         </main>
       </div>
 

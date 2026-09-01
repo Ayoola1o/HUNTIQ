@@ -345,9 +345,9 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({
                 Tags
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {contact.tags.map((tag) => (
+                {contact.tags.map((tag, idx) => (
                   <span
-                    key={tag}
+                    key={`${contact.id}-tag-${tag}-${idx}`}
                     style={{
                       fontSize: '11px',
                       fontWeight: 600,

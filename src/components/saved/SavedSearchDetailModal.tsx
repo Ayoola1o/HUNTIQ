@@ -16,6 +16,7 @@ interface SavedSearchDetailModalProps {
   onToggleMonitoring: (searchId: string) => void;
   onRunSearch: (searchId: string) => void;
   onInvestigateCompany: (companyName: string) => void;
+  onUpdateAlertSettings?: (alertSettings: any, frequency: AlertFrequency) => void;
 }
 
 export const SavedSearchDetailModal: React.FC<SavedSearchDetailModalProps> = ({
@@ -24,12 +25,20 @@ export const SavedSearchDetailModal: React.FC<SavedSearchDetailModalProps> = ({
   onClose,
   onToggleMonitoring,
   onRunSearch,
-  onInvestigateCompany
+  onInvestigateCompany,
+  onUpdateAlertSettings
 }) => {
   const [activeTab, setActiveTab] = useState<'results' | 'new_matches' | 'activity' | 'criteria' | 'alerts'>('results');
   const [alertSettings, setAlertSettings] = useState(search?.alertSettings);
   const [frequency, setFrequency] = useState<AlertFrequency>(search?.alertFrequency || 'immediately');
   const [isRunning, setIsRunning] = useState(false);
+
+  React.useEffect(() => {
+    if (search) {
+      setAlertSettings(search.alertSettings);
+      setFrequency(search.alertFrequency || 'immediately');
+    }
+  }, [search]);
 
   if (!isOpen || !search) return null;
 
@@ -447,10 +456,12 @@ export const SavedSearchDetailModal: React.FC<SavedSearchDetailModalProps> = ({
                         type="checkbox"
                         checked={(alertSettings as any)?.[rule.key] ?? true}
                         onChange={(e) => {
-                          setAlertSettings({
+                          const nextSettings = {
                             ...alertSettings!,
                             [rule.key]: e.target.checked
-                          });
+                          };
+                          setAlertSettings(nextSettings);
+                          onUpdateAlertSettings?.(nextSettings, frequency);
                         }}
                         style={{ width: '16px', height: '16px', accentColor: '#4f46e5' }}
                       />
@@ -477,7 +488,10 @@ export const SavedSearchDetailModal: React.FC<SavedSearchDetailModalProps> = ({
                         type="radio"
                         name="alertFrequency"
                         checked={frequency === f}
-                        onChange={() => setFrequency(f)}
+                        onChange={() => {
+                          setFrequency(f);
+                          onUpdateAlertSettings?.(alertSettings, f);
+                        }}
                         style={{ accentColor: '#4f46e5' }}
                       />
                       <span>{f} Digest</span>

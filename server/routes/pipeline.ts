@@ -55,6 +55,32 @@ export let pipelineDealsDb: PipelineDealItem[] = [
   }
 ];
 
+pipelineRouter.get('/pipeline', (_req: Request, res: Response) => {
+  const totalValue = pipelineDealsDb.reduce((acc, d) => acc + (d.dealValue || 0), 0);
+  const weightedValue = pipelineDealsDb.reduce((acc, d) => acc + (d.dealValue * (d.probability / 100)), 0);
+  const activeDeals = pipelineDealsDb.filter(d => d.stage !== 'won' && d.stage !== 'lost').length;
+
+  const response: ApiResponse = {
+    success: true,
+    data: {
+      deals: pipelineDealsDb,
+      summary: {
+        totalDeals: pipelineDealsDb.length,
+        activeDeals,
+        pipelineValue: totalValue,
+        expectedRevenue: Math.round(weightedValue),
+        avgDealSize: pipelineDealsDb.length > 0 ? Math.round(totalValue / pipelineDealsDb.length) : 0,
+        winRate: 72
+      }
+    },
+    meta: {
+      total: pipelineDealsDb.length,
+      timestamp: new Date().toISOString()
+    }
+  };
+  res.status(200).json(response);
+});
+
 pipelineRouter.get('/pipeline/deals', (_req: Request, res: Response) => {
   const response: ApiResponse = {
     success: true,

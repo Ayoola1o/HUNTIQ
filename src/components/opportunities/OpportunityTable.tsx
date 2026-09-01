@@ -490,9 +490,9 @@ export const OpportunityTable: React.FC<OpportunityTableProps> = ({
                   {opp.whyNow}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '5px' }}>
-                  {opp.tags.map((tag) => (
+                  {opp.tags.map((tag, idx) => (
                     <span
-                      key={tag}
+                      key={`${opp.id}-tag-${tag}-${idx}`}
                       style={{
                         fontSize: '10.5px',
                         backgroundColor: '#f1f5f9',

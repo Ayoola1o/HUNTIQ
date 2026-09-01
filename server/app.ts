@@ -12,6 +12,7 @@ import { copilotRouter } from './routes/copilot';
 import { jobsRouter } from './routes/jobs';
 import { contactsRouter } from './routes/contacts';
 import { leadsRouter } from './routes/leads';
+import { savedSearchesRouter } from './routes/savedSearches';
 import { registerDefaultJobProviders } from './providers/jobs';
 
 export const createApp = () => {
@@ -38,6 +39,7 @@ export const createApp = () => {
   app.use('/api', jobsRouter);
   app.use('/api', contactsRouter);
   app.use('/api', leadsRouter);
+  app.use('/api', savedSearchesRouter);
 
   // Root fallback info
   app.get('/', (_req, res) => {

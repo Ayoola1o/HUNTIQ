@@ -13,12 +13,13 @@ import {
   Sparkles, 
   Search, 
   Calendar, 
-  Bookmark,
-  CheckCircle2,
-  Trash2,
-  ChevronDown,
-  FolderDown
+  Bookmark, 
+  CheckCircle2, 
+  Trash2, 
+  ChevronDown, 
+  FolderDown 
 } from 'lucide-react';
+import { createSavedSearch } from '../../api';
 
 interface SavedSearchRecord {
   id: string;
@@ -154,6 +155,25 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
 
     setSavedSearches(prev => [newRecord, ...prev]);
     showToast(`✅ Saved search "${name}" successfully! Real-time alerts enabled.`);
+
+    // Persist to backend API
+    createSavedSearch({
+      name,
+      description: criteria.naturalQuery || `Prospects search with ${criteria.industries.length} industries & ${criteria.locations.length} locations.`,
+      searchType: activeTab === 'ai' ? 'ai_search' : (activeTab === 'geo-radar' ? 'signal_search' : 'advanced_search'),
+      naturalQuery: criteria.naturalQuery,
+      monitoringEnabled: autoAlert,
+      filters: {
+        industries: criteria.industries.length ? criteria.industries : ['Technology & SaaS'],
+        locations: criteria.locations.length ? criteria.locations : ['Lagos, Nigeria'],
+        companySizes: criteria.companySize ? (Array.isArray(criteria.companySize) ? criteria.companySize : [criteria.companySize]) : ['50 – 500'],
+        revenueRanges: criteria.revenue ? (Array.isArray(criteria.revenue) ? criteria.revenue : [criteria.revenue]) : undefined
+      },
+      signalsToWatch: criteria.signals.length ? criteria.signals : ['Hiring Surge', 'Regional Expansion'],
+      icpName: 'Primary ICP'
+    }).catch(err => {
+      console.warn('Could not sync saved search to backend:', err);
+    });
   };
 
   const handleLoadSavedSearch = (saved: SavedSearchRecord) => {

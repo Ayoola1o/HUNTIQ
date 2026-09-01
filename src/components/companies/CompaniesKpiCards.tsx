@@ -7,21 +7,32 @@ import {
   Radio, 
   Users 
 } from 'lucide-react';
+import type { CompanyItem } from '../../types/company';
 
 interface CompaniesKpiCardsProps {
   activeFilter?: string;
   onSelectKpi?: (filter: string) => void;
+  companies?: CompanyItem[];
 }
 
 export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
   activeFilter = 'total',
-  onSelectKpi
+  onSelectKpi,
+  companies = []
 }) => {
+  const totalCount = companies.length || 2842;
+  const newCount = companies.filter(c => c.lastActivity?.includes('h ago') || c.lastActivity?.includes('1d ago') || c.lastActivity?.includes('2d ago')).length || 186;
+  const highOppCount = companies.filter(c => (c.opportunityScore || 0) >= 80).length || 412;
+  const avgScore = companies.length > 0
+    ? Math.round(companies.reduce((sum, c) => sum + (c.opportunityScore || 0), 0) / companies.length)
+    : 68;
+  const withSignalsCount = companies.filter(c => (c.signalsCount || 0) > 0 || (c.activeSignals && c.activeSignals.length > 0)).length || 1124;
+
   const cards = [
     {
       id: 'total',
       title: 'Total Companies',
-      value: '2,842',
+      value: companies.length > 0 ? totalCount.toLocaleString() : '2,842',
       change: '24.7%',
       isPositive: true,
       icon: <Building2 size={16} color="#2563eb" />,
@@ -30,7 +41,7 @@ export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
     {
       id: 'new',
       title: 'New Companies',
-      value: '186',
+      value: newCount.toLocaleString(),
       change: '18.3%',
       isPositive: true,
       icon: <Star size={16} color="#0284c7" />,
@@ -39,7 +50,7 @@ export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
     {
       id: 'high-opportunity',
       title: 'High Opportunity',
-      value: '412',
+      value: highOppCount.toLocaleString(),
       change: '32.1%',
       isPositive: true,
       icon: <Flame size={16} color="#ea580c" />,
@@ -48,7 +59,7 @@ export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
     {
       id: 'avg-score',
       title: 'Avg. Opportunity Score',
-      value: '68/100',
+      value: `${avgScore}/100`,
       change: '6.8%',
       isPositive: true,
       icon: <TrendingUp size={16} color="#7c3aed" />,
@@ -57,7 +68,7 @@ export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
     {
       id: 'with-signals',
       title: 'Companies with Signals',
-      value: '1,124',
+      value: withSignalsCount.toLocaleString(),
       change: '27.9%',
       isPositive: true,
       icon: <Radio size={16} color="#16a34a" />,

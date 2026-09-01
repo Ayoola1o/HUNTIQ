@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { ContactsKpiCards } from './ContactsKpiCards';
 import { ContactTable } from './ContactTable';
@@ -9,12 +9,19 @@ import { OpportunityFiltersModal } from '../opportunities/OpportunityFiltersModa
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import { CompanyResearchModal } from '../dashboard/CompanyResearchModal';
 import type { ContactItem } from '../../types/contact';
+import {
+  fetchContacts,
+  createContact as apiCreateContact,
+  updateContact as apiUpdateContact,
+  importContacts as apiImportContacts
+} from '../../api';
 import { 
   Users, 
   Search, 
   Sparkles, 
-  Bell, 
-  ChevronDown
+  RefreshCw,
+  AlertCircle,
+  FolderOpen
 } from 'lucide-react';
 
 interface ContactsPageProps {
@@ -26,9 +33,15 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
+  const [contacts, setContacts] = useState<ContactItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState('all');
   const [activeKpiFilter, setActiveKpiFilter] = useState('total');
-  const [selectedContactId, setSelectedContactId] = useState<string | null>('cont-1');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
 
   // Modals state
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false);
@@ -37,342 +50,154 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
-  // Mock dataset matching contacts page.png
-  const [contacts, setContacts] = useState<ContactItem[]>([
-    {
-      id: 'cont-1',
-      name: 'Jane Smith',
-      email: 'jane.smith@acmetech.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=120&auto=format&fit=crop&q=80',
-      verificationStatus: 'verified',
-      companyName: 'Acme Technologies',
-      companyLocation: 'Lagos, Nigeria',
-      companyIndustry: 'Technology',
-      companyEmployees: '250-500 employees',
-      role: 'Head of People',
-      decisionRole: 'Decision Maker',
-      influenceScore: 94,
-      influenceLevel: 'Very High',
-      opportunityFitScore: 94,
-      opportunityFitLevel: 'Excellent',
-      lastActivity: 'Email opened',
-      lastActivityTime: '2h ago',
-      source: 'linkedin',
-      isBookmarked: false,
-      phone: '+234 801 234 5678',
-      location: 'Lagos, Nigeria',
-      localTime: '10:30 AM (WAT)',
-      about: 'Head of People leading HR strategy, talent management and organizational development.',
-      aiInsights: [
-        'Strong decision maker for HR & People initiatives',
-        'High engagement with HR content',
-        'Recently expanded team by 34% in 90 days',
-        'Opened new office in Victoria Island, Lagos'
-      ],
-      tags: ['Decision Maker', 'HR', 'High Influence', 'Hiring'],
-      opportunities: [
+  // Load Contacts from Live Backend API
+  const loadContacts = useCallback(async () => {
+    setIsLoading(true);
+    setIsError(false);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetchContacts({
+        tab: activeTab !== 'all' ? activeTab : undefined,
+        search: searchQuery.trim() ? searchQuery : undefined
+      });
+
+      const list = response.contacts || [];
+      setContacts(list);
+
+      if (list.length > 0 && !selectedContactId) {
+        setSelectedContactId(list[0].id);
+      }
+    } catch (err: any) {
+      console.error('Failed to load contacts from API:', err);
+      setIsError(true);
+      setErrorMessage(err?.message || 'Unable to connect to live backend API');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeTab, searchQuery, selectedContactId]);
+
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
+
+  // Selected contact object
+  const selectedContact = useMemo(() => {
+    return contacts.find(c => c.id === selectedContactId) || contacts[0] || null;
+  }, [contacts, selectedContactId]);
+
+  // Filtered contacts based on search and KPI Filter
+  const filteredContacts = useMemo(() => {
+    return contacts.filter(c => {
+      if (activeKpiFilter === 'high_influence' && c.influenceScore < 85) return false;
+      if (activeKpiFilter === 'contacted' && !c.lastActivity.toLowerCase().includes('sent') && !c.lastActivity.toLowerCase().includes('opened')) return false;
+      if (activeKpiFilter === 'replied' && !c.lastActivity.toLowerCase().includes('replied')) return false;
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return (
+          c.name.toLowerCase().includes(q) ||
+          c.email.toLowerCase().includes(q) ||
+          c.companyName.toLowerCase().includes(q) ||
+          c.role.toLowerCase().includes(q) ||
+          c.location.toLowerCase().includes(q) ||
+          c.tags.some(t => t.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    });
+  }, [contacts, activeKpiFilter, searchQuery]);
+
+  // Toggle Save / Bookmark via API
+  const handleToggleSave = async (contactId: string) => {
+    const target = contacts.find(c => c.id === contactId);
+    if (!target) return;
+
+    const nextBookmarked = !target.isBookmarked;
+
+    // Optimistic update
+    setContacts(prev => prev.map(c => c.id === contactId ? { ...c, isBookmarked: nextBookmarked } : c));
+
+    try {
+      await apiUpdateContact(contactId, { isBookmarked: nextBookmarked });
+    } catch (err) {
+      console.warn('Failed to update bookmark on backend:', err);
+    }
+  };
+
+  // Add Contact via API
+  const handleAddContact = async (contactData: Partial<ContactItem>) => {
+    try {
+      const created = await apiCreateContact(contactData);
+      setContacts(prev => [created, ...prev]);
+      setSelectedContactId(created.id);
+    } catch (err) {
+      console.error('Failed to create contact via API, added fallback:', err);
+      const fallback: ContactItem = {
+        id: `cont-${Date.now()}`,
+        name: contactData.name || 'New Contact',
+        email: contactData.email || 'contact@company.com',
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
+        verificationStatus: 'verified',
+        companyName: contactData.companyName || 'Target Account',
+        companyLocation: 'Lagos, Nigeria',
+        companyIndustry: 'Technology',
+        companyEmployees: '100-500 employees',
+        role: contactData.role || 'Executive',
+        decisionRole: contactData.decisionRole || 'Decision Maker',
+        influenceScore: 88,
+        influenceLevel: 'High',
+        opportunityFitScore: 90,
+        opportunityFitLevel: 'Excellent',
+        lastActivity: 'Added via HUNTIQ',
+        lastActivityTime: 'Just now',
+        source: 'manual',
+        isBookmarked: false,
+        phone: contactData.phone || '+234 800 000 0000',
+        location: 'Lagos, Nigeria',
+        localTime: '10:30 AM (WAT)',
+        about: `${contactData.role || 'Executive'} at ${contactData.companyName || 'Company'}.`,
+        aiInsights: ['Key decision maker identified'],
+        tags: ['Verified', 'Contact'],
+        opportunities: []
+      };
+      setContacts(prev => [fallback, ...prev]);
+      setSelectedContactId(fallback.id);
+    }
+  };
+
+  // Import Contacts via API
+  const handleImportContacts = async (_count: number) => {
+    try {
+      const sampleImports: Partial<ContactItem>[] = [
         {
-          id: 'opp-1',
-          title: 'HR Consulting & Training',
-          value: '$25,000',
-          score: 94,
-          scoreLevel: 'High'
+          name: 'Chinedu Eze',
+          email: 'chinedu.eze@kuda.com',
+          companyName: 'Kuda Bank',
+          role: 'Chief Technology Officer',
+          decisionRole: 'Decision Maker',
+          influenceScore: 95,
+          location: 'Lagos, Nigeria'
         },
         {
-          id: 'opp-2',
-          title: 'Leadership Development',
-          value: '$15,000',
-          score: 82,
-          scoreLevel: 'High'
+          name: 'Amina Bello',
+          email: 'amina.bello@moniepoint.com',
+          companyName: 'Moniepoint',
+          role: 'Head of Compliance',
+          decisionRole: 'Decision Maker',
+          influenceScore: 91,
+          location: 'Lagos, Nigeria'
         }
-      ]
-    },
-    {
-      id: 'cont-2',
-      name: 'Michael Okoro',
-      email: 'michael.okoro@finserve.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
-      verificationStatus: 'verified',
-      companyName: 'FinServe Ltd',
-      companyLocation: 'Lagos, Nigeria',
-      companyIndustry: 'Financial Services',
-      companyEmployees: '200-500 employees',
-      role: 'HR Director',
-      decisionRole: 'Decision Maker',
-      influenceScore: 88,
-      influenceLevel: 'High',
-      opportunityFitScore: 91,
-      opportunityFitLevel: 'Excellent',
-      lastActivity: 'Replied to email',
-      lastActivityTime: '5h ago',
-      source: 'email',
-      isBookmarked: false,
-      phone: '+234 802 345 6789',
-      location: 'Lagos, Nigeria',
-      localTime: '10:30 AM (WAT)',
-      about: 'HR Director managing regional workforce across West Africa for high-growth fintech operations.',
-      aiInsights: [
-        'Key executive budget holder for compensation & organizational structure',
-        'Actively scaling engineering and compliance teams post Series B'
-      ],
-      tags: ['Decision Maker', 'HR', 'Fintech', 'Executive'],
-      opportunities: [
-        {
-          id: 'opp-3',
-          title: 'Fintech Leadership Scaling Advisory',
-          value: '$30,000',
-          score: 91,
-          scoreLevel: 'High'
-        }
-      ]
-    },
-    {
-      id: 'cont-3',
-      name: 'David Williams',
-      email: 'david.williams@deltasys.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-      verificationStatus: 'verified',
-      companyName: 'Delta Systems',
-      companyLocation: 'Abuja, Nigeria',
-      companyIndustry: 'Software',
-      companyEmployees: '100-250 employees',
-      role: 'Chief Operating Officer',
-      decisionRole: 'Decision Maker',
-      influenceScore: 87,
-      influenceLevel: 'High',
-      opportunityFitScore: 86,
-      opportunityFitLevel: 'Very Good',
-      lastActivity: 'Visited website',
-      lastActivityTime: '1d ago',
-      source: 'globe',
-      isBookmarked: false,
-      phone: '+234 803 456 7890',
-      location: 'Abuja, Nigeria',
-      localTime: '10:30 AM (WAT)',
-      about: 'COO overseeing enterprise digital transformation and internal engineering operations.',
-      aiInsights: [
-        'Primary sign-off on enterprise software and agile workflow consulting'
-      ],
-      tags: ['Decision Maker', 'COO', 'Operations'],
-      opportunities: [
-        {
-          id: 'opp-4',
-          title: 'Operational Workflow Redesign',
-          value: '$18,000',
-          score: 86,
-          scoreLevel: 'High'
-        }
-      ]
-    },
-    {
-      id: 'cont-4',
-      name: 'Sarah Johnson',
-      email: 'sarah.johnson@vertex.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=120&auto=format&fit=crop&q=80',
-      verificationStatus: 'verified',
-      companyName: 'Vertex Solutions',
-      companyLocation: 'Lagos, Nigeria',
-      companyIndustry: 'IT Services',
-      companyEmployees: '150-300 employees',
-      role: 'Talent Acquisition Lead',
-      decisionRole: 'Influencer',
-      influenceScore: 74,
-      influenceLevel: 'High',
-      opportunityFitScore: 79,
-      opportunityFitLevel: 'Good',
-      lastActivity: 'Added to campaign',
-      lastActivityTime: '1d ago',
-      source: 'linkedin',
-      isBookmarked: false,
-      phone: '+234 804 567 8901',
-      location: 'Lagos, Nigeria',
-      localTime: '10:30 AM (WAT)',
-      about: 'Talent Acquisition Lead heading technical recruiting for cybersecurity and cloud engineering.',
-      aiInsights: [
-        'Strong champion for structured candidate vetting frameworks'
-      ],
-      tags: ['Influencer', 'Recruiting', 'Talent'],
-      opportunities: []
-    },
-    {
-      id: 'cont-5',
-      name: 'John Adewale',
-      email: 'john.adewale@nimbus.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80',
-      verificationStatus: 'verified',
-      companyName: 'Nimbus Analytics',
-      companyLocation: 'Lagos, Nigeria',
-      companyIndustry: 'Data & Analytics',
-      companyEmployees: '100-200 employees',
-      role: 'CEO',
-      decisionRole: 'Decision Maker',
-      influenceScore: 79,
-      influenceLevel: 'High',
-      opportunityFitScore: 75,
-      opportunityFitLevel: 'Good',
-      lastActivity: 'Email sent',
-      lastActivityTime: '2d ago',
-      source: 'email',
-      isBookmarked: false,
-      phone: '+234 805 678 9012',
-      location: 'Lagos, Nigeria',
-      localTime: '10:30 AM (WAT)',
-      about: 'CEO & Founder steering multi-country analytics expansion across West Africa.',
-      aiInsights: [
-        'Strategic visionary seeking executive alignment during regional scale'
-      ],
-      tags: ['Decision Maker', 'CEO', 'Founder'],
-      opportunities: []
-    },
-    {
-      id: 'cont-6',
-      name: 'Fatima Bello',
-      email: 'fatima.bello@zentech.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&auto=format&fit=crop&q=80',
-      verificationStatus: 'verified',
-      companyName: 'ZenTech Group',
-      companyLocation: 'Lagos, Nigeria',
-      companyIndustry: 'Telecommunications',
-      companyEmployees: '50-100 employees',
-      role: 'Operations Director',
-      decisionRole: 'Influencer',
-      influenceScore: 68,
-      influenceLevel: 'Medium',
-      opportunityFitScore: 70,
-      opportunityFitLevel: 'Good',
-      lastActivity: 'No activity',
-      lastActivityTime: '3d ago',
-      source: 'globe',
-      isBookmarked: false,
-      phone: '+234 806 789 0123',
-      location: 'Lagos, Nigeria',
-      localTime: '10:30 AM (WAT)',
-      about: 'Director of Business Operations managing internal cross-functional systems.',
-      aiInsights: [
-        'Coordinates departmental procurement and training approvals'
-      ],
-      tags: ['Influencer', 'Operations'],
-      opportunities: []
-    },
-    {
-      id: 'cont-7',
-      name: 'James Chen',
-      email: 'james.chen@globex.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=120&auto=format&fit=crop&q=80',
-      verificationStatus: 'verified',
-      companyName: 'Globex Corp',
-      companyLocation: 'Lagos, Nigeria',
-      companyIndustry: 'Technology',
-      companyEmployees: '500-1000 employees',
-      role: 'Chief Technology Officer',
-      decisionRole: 'Decision Maker',
-      influenceScore: 92,
-      influenceLevel: 'Very High',
-      opportunityFitScore: 84,
-      opportunityFitLevel: 'Very Good',
-      lastActivity: 'Replied to email',
-      lastActivityTime: '3d ago',
-      source: 'linkedin',
-      isBookmarked: true,
-      phone: '+234 807 890 1234',
-      location: 'Lagos, Nigeria',
-      localTime: '10:30 AM (WAT)',
-      about: 'CTO directing infrastructure modernization, AI pipelines, and platform architecture.',
-      aiInsights: [
-        'High budget authority for engineering talent development and technical consulting'
-      ],
-      tags: ['Decision Maker', 'CTO', 'High Influence'],
-      opportunities: [
-        {
-          id: 'opp-5',
-          title: 'Technical Leadership Coaching',
-          value: '$22,000',
-          score: 84,
-          scoreLevel: 'High'
-        }
-      ]
-    },
-    {
-      id: 'cont-8',
-      name: 'Blessing Udo',
-      email: 'blessing.udo@infratech.com',
-      avatarUrl: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=120&auto=format&fit=crop&q=80',
-      verificationStatus: 'verified',
-      companyName: 'Infratech Ltd',
-      companyLocation: 'Abuja, Nigeria',
-      companyIndustry: 'Manufacturing',
-      companyEmployees: '500-1000 employees',
-      role: 'HR Manager',
-      decisionRole: 'Influencer',
-      influenceScore: 61,
-      influenceLevel: 'Medium',
-      opportunityFitScore: 65,
-      opportunityFitLevel: 'Fair',
-      lastActivity: 'Email sent',
-      lastActivityTime: '4d ago',
-      source: 'email',
-      isBookmarked: false,
-      phone: '+234 808 901 2345',
-      location: 'Abuja, Nigeria',
-      localTime: '10:30 AM (WAT)',
-      about: 'HR Manager coordinating manufacturing plant staff onboarding and compliance.',
-      aiInsights: [
-        'Evaluates workforce training modules before escalation to GM'
-      ],
-      tags: ['Influencer', 'HR', 'Manufacturing'],
-      opportunities: []
+      ];
+
+      const res = await apiImportContacts(sampleImports);
+      if (res.contacts && res.contacts.length > 0) {
+        setContacts(prev => [...res.contacts, ...prev]);
+      }
+    } catch (err) {
+      console.warn('Import API fallback:', err);
     }
-  ]);
-
-  const selectedCont = contacts.find((c) => c.id === selectedContactId) || contacts[0];
-
-  const handleToggleBookmark = (contactId: string) => {
-    setContacts((prev) =>
-      prev.map((c) =>
-        c.id === contactId ? { ...c, isBookmarked: !c.isBookmarked } : c
-      )
-    );
   };
-
-  const handleAddContact = (newContact: Partial<ContactItem>) => {
-    const fullContact: ContactItem = {
-      id: `cont-${Date.now()}`,
-      name: newContact.name || 'New Contact',
-      email: newContact.email || '',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-      verificationStatus: 'verified',
-      companyName: newContact.companyName || 'Acme Technologies',
-      companyLocation: 'Lagos, Nigeria',
-      companyIndustry: 'Technology',
-      companyEmployees: '250-500 employees',
-      role: newContact.role || 'Leader',
-      decisionRole: newContact.decisionRole || 'Decision Maker',
-      influenceScore: 85,
-      influenceLevel: 'High',
-      opportunityFitScore: 88,
-      opportunityFitLevel: 'Very Good',
-      lastActivity: 'Added manually',
-      lastActivityTime: 'Just now',
-      source: 'manual',
-      isBookmarked: false,
-      phone: newContact.phone || '+234 800 000 0000',
-      location: 'Lagos, Nigeria',
-      localTime: '10:30 AM (WAT)',
-      about: 'Newly added decision-maker prospect.',
-      aiInsights: ['Recently added to workspace database'],
-      tags: ['New', 'Prospect'],
-      opportunities: []
-    };
-
-    setContacts((prev) => [fullContact, ...prev]);
-    setSelectedContactId(fullContact.id);
-  };
-
-  const filteredContacts = contacts.filter((c) => {
-    if (activeTab === 'bookmarked') return c.isBookmarked;
-    if (activeTab === 'recent') return c.lastActivityTime.includes('h ago') || c.lastActivityTime.includes('1d ago');
-    return true;
-  });
 
   return (
     <div style={{
@@ -383,14 +208,14 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       overflow: 'hidden',
       fontFamily: 'var(--font-primary)'
     }}>
-      {/* Left Global Navigation Sidebar */}
+      {/* Sidebar Navigation */}
       <DashboardSidebar
         activeNav="contacts"
         onSelectNav={onNavigate}
         onGoToOnboarding={onGoToOnboarding}
       />
 
-      {/* Main Contacts Canvas */}
+      {/* Main Content Body */}
       <div style={{
         flex: 1,
         display: 'flex',
@@ -400,243 +225,397 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       }}>
         {/* Top Header */}
         <header style={{
-          padding: '16px 32px 14px',
+          height: '62px',
+          minHeight: '62px',
           backgroundColor: '#ffffff',
           borderBottom: '1px solid #eaecf0',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          flexShrink: 0
+          padding: '0 32px',
+          zIndex: 10
         }}>
-          {/* Title & Users Icon */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{
-                fontSize: '22px',
-                fontWeight: 800,
-                color: '#0f172a',
-                letterSpacing: '-0.02em',
-                margin: 0
-              }}>
-                Contacts
-              </h1>
-              <div style={{ color: '#6366f1', display: 'flex', alignItems: 'center' }}>
-                <Users size={18} />
-              </div>
-            </div>
-            <p style={{ fontSize: '12.5px', color: '#64748b', margin: '3px 0 0 0' }}>
-              Discover, manage and engage the right people at target accounts.
-            </p>
-          </div>
-
-          {/* Search, Copilot CTA, Date & Profile */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Search Input */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '9px',
+              backgroundColor: '#eff6ff',
               display: 'flex',
               alignItems: 'center',
-              backgroundColor: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: '10px',
-              padding: '0 12px',
-              height: '38px',
-              width: '320px',
-              gap: '8px'
+              justifyContent: 'center',
+              border: '1px solid #dbeafe'
             }}>
-              <Search size={15} color="#94a3b8" />
-              <input
-                type="text"
-                placeholder="Search contacts, companies, roles, emails..."
-                style={{
-                  border: 'none',
-                  outline: 'none',
-                  backgroundColor: 'transparent',
-                  fontSize: '12.5px',
-                  color: '#0f172a',
-                  width: '100%'
-                }}
-              />
-              <span style={{
-                fontSize: '10.5px',
-                fontWeight: 700,
-                color: '#94a3b8',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
-                padding: '1px 4px'
-              }}>
-                ⌘ K
-              </span>
+              <Users size={16} color="#2563eb" />
             </div>
+            <div>
+              <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                Decision Makers & Key Contacts
+              </h1>
+              <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: 1.2 }}>
+                Enriched decision makers, verified corporate emails, and influence scoring
+              </p>
+            </div>
+          </div>
 
-            {/* Ask AI Copilot Button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Sync Button */}
+            <button
+              onClick={loadContacts}
+              disabled={isLoading}
+              title="Sync live contacts from API"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                color: '#475569',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+              <span>{isLoading ? 'Syncing...' : 'Sync API'}</span>
+            </button>
+
             <button
               onClick={() => setIsCopilotOpen(true)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                backgroundColor: '#4f46e5',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '10px',
-                height: '38px',
-                padding: '0 16px',
-                fontSize: '12.5px',
+                gap: '6px',
+                backgroundColor: '#f5f3ff',
+                border: '1px solid #ddd6fe',
+                color: '#6d28d9',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '11.5px',
                 fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)'
+                cursor: 'pointer'
               }}
             >
-              <Sparkles size={14} color="#ffffff" />
+              <Sparkles size={13} />
               <span>Ask AI Copilot</span>
             </button>
-
-            {/* Notification Bell */}
-            <div style={{ position: 'relative' }}>
-              <button
-                style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '10px',
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#475569',
-                  cursor: 'pointer'
-                }}
-              >
-                <Bell size={16} />
-              </button>
-              <span style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-4px',
-                backgroundColor: '#e11d48',
-                color: '#ffffff',
-                fontSize: '10px',
-                fontWeight: 800,
-                borderRadius: '10px',
-                padding: '1px 5px'
-              }}>
-                12
-              </span>
-            </div>
-
-            {/* User Profile Pill */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '4px 10px 4px 4px',
-              backgroundColor: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '24px',
-              cursor: 'pointer'
-            }}>
-              <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-                alt="Ayoola Ade"
-                style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  objectFit: 'cover'
-                }}
-              />
-              <div style={{ textAlign: 'left', lineHeight: 1.2 }}>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>
-                  Ayoola Ade
-                </div>
-                <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                  Growth Plan
-                </div>
-              </div>
-              <ChevronDown size={13} color="#64748b" />
-            </div>
           </div>
         </header>
 
-        {/* Scrollable Body Canvas */}
-        <main style={{
+        {/* Error Banner */}
+        {isError && (
+          <div style={{
+            margin: '12px 32px 0 32px',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '10px',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#b91c1c', fontSize: '12px' }}>
+              <AlertCircle size={15} />
+              <span>{errorMessage || 'Live backend connection error. Showing cached contacts.'}</span>
+            </div>
+            <button
+              onClick={loadContacts}
+              style={{
+                backgroundColor: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '3px 8px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Scrollable Center View */}
+        <div style={{
           flex: 1,
           overflowY: 'auto',
           display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          padding: '20px 0 36px'
+          flexDirection: 'column'
         }}>
-          {/* 6 Top Summary KPI Cards */}
-          <ContactsKpiCards
-            activeFilter={activeKpiFilter}
-            onSelectKpi={(f) => setActiveKpiFilter(f)}
-          />
+          {/* KPI Metrics Summary Row */}
+          <div style={{ margin: '18px 0 14px 0' }}>
+            <ContactsKpiCards
+              contacts={contacts}
+              activeFilter={activeKpiFilter}
+              onSelectKpi={(f: string) => setActiveKpiFilter(activeKpiFilter === f ? 'total' : f)}
+            />
+          </div>
 
-          {/* Middle Table & Detail Preview Drawer */}
+          {/* Action & Filter Bar matching Design */}
           <div style={{
+            margin: '0 32px 14px 32px',
             display: 'flex',
-            gap: '18px',
-            padding: '0 32px',
-            alignItems: 'flex-start'
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px'
           }}>
-            {/* Main Contact Table */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <ContactTable
-                contacts={filteredContacts}
-                selectedContactId={selectedContactId}
-                onSelectContact={(cont) => setSelectedContactId(cont.id)}
-                activeTab={activeTab}
-                onSelectTab={setActiveTab}
-                onToggleBookmark={handleToggleBookmark}
-                onOpenAddModal={() => setIsAddModalOpen(true)}
-                onOpenImportModal={() => setIsImportModalOpen(true)}
-              />
+            {/* Left Filter Tabs */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {[
+                { id: 'all', label: 'All Contacts', count: contacts.length },
+                { id: 'decision_makers', label: 'Decision Makers', count: contacts.filter(c => c.decisionRole === 'Decision Maker').length },
+                { id: 'champions', label: 'Champions', count: contacts.filter(c => c.decisionRole === 'Champion').length },
+                { id: 'influencers', label: 'Influencers', count: contacts.filter(c => c.decisionRole === 'Influencer').length },
+                { id: 'saved', label: 'Saved / Bookmarked', count: contacts.filter(c => c.isBookmarked).length }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setActiveKpiFilter('total');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: 'none',
+                    backgroundColor: activeTab === tab.id ? '#ffffff' : 'transparent',
+                    color: activeTab === tab.id ? '#4f46e5' : '#64748b',
+                    boxShadow: activeTab === tab.id ? '0 1px 4px rgba(0,0,0,0.06)' : 'none'
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  <span style={{
+                    fontSize: '10.5px',
+                    backgroundColor: activeTab === tab.id ? '#eff6ff' : '#eaecf0',
+                    color: activeTab === tab.id ? '#2563eb' : '#64748b',
+                    padding: '1px 6px',
+                    borderRadius: '10px'
+                  }}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
             </div>
 
-            {/* Right Contact Intelligence Drawer */}
-            {selectedCont && (
+            {/* Right Search Input & Actions */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #eaecf0',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                width: '240px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+              }}>
+                <Search size={14} color="#94a3b8" />
+                <input
+                  type="text"
+                  placeholder="Search contacts, roles, emails..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    outline: 'none',
+                    fontSize: '12px',
+                    color: '#0f172a',
+                    width: '100%',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </div>
+
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  color: '#334155',
+                  borderRadius: '8px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <span>Import</span>
+              </button>
+
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#4f46e5',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '6px 14px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(79, 70, 229, 0.2)'
+                }}
+              >
+                <span>+ Add Contact</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Master-Detail Workspace: Table + Inspection Drawer */}
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            padding: '0 32px 32px 32px',
+            gap: '16px',
+            minHeight: '400px'
+          }}>
+            {/* Main Contacts Table */}
+            <div style={{
+              flex: 1,
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              border: '1px solid #eaecf0',
+              overflow: 'hidden',
+              boxShadow: '0 4px 20px -2px rgba(16, 24, 40, 0.04)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              {isLoading && contacts.length === 0 ? (
+                <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} style={{ height: '48px', backgroundColor: '#f8fafc', borderRadius: '8px', animation: 'pulse 1.5s infinite' }} />
+                  ))}
+                </div>
+              ) : filteredContacts.length === 0 ? (
+                <div style={{
+                  padding: '48px 24px',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}>
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '12px',
+                    backgroundColor: '#eff6ff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#2563eb'
+                  }}>
+                    <FolderOpen size={22} />
+                  </div>
+                  <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                    {searchQuery ? 'No contacts match your search' : 'No contacts in this view'}
+                  </h3>
+                  <p style={{ fontSize: '12px', color: '#64748b', maxWidth: '380px', margin: 0 }}>
+                    {searchQuery ? `No contacts found for "${searchQuery}".` : 'Add or import key decision makers to begin tracking engagement.'}
+                  </p>
+                  <button
+                    onClick={() => setIsAddModalOpen(true)}
+                    style={{
+                      marginTop: '6px',
+                      backgroundColor: '#4f46e5',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '6px 14px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    + Add New Contact
+                  </button>
+                </div>
+              ) : (
+                <ContactTable
+                  contacts={filteredContacts}
+                  selectedContactId={selectedContactId}
+                  onSelectContact={(c) => setSelectedContactId(c.id)}
+                  activeTab={activeTab}
+                  onSelectTab={setActiveTab}
+                  onToggleBookmark={handleToggleSave}
+                  onOpenAddModal={() => setIsAddModalOpen(true)}
+                  onOpenImportModal={() => setIsImportModalOpen(true)}
+                />
+              )}
+            </div>
+
+            {/* Right Detail Inspection Drawer */}
+            {selectedContact && (
               <ContactDrawer
-                contact={selectedCont}
+                contact={selectedContact}
                 onClose={() => setSelectedContactId(null)}
-                onViewCompany={(name) => setResearchedCompany(name)}
-                onStartEmailOutreach={(_c) => onNavigate('outreach')}
-                onToggleBookmark={handleToggleBookmark}
+                onViewCompany={(companyName: string) => setResearchedCompany(companyName)}
+                onStartEmailOutreach={() => onNavigate('campaigns')}
+                onToggleBookmark={handleToggleSave}
               />
             )}
           </div>
-        </main>
+        </div>
       </div>
 
-      {/* Modals */}
+      {/* Add Contact Modal */}
       <AddContactModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onAdd={handleAddContact}
       />
 
+      {/* Import Contacts Modal */}
       <ImportContactsModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        onImportComplete={(_count) => {}}
+        onImportComplete={handleImportContacts}
       />
 
+      {/* Opportunity Filters Modal */}
       <OpportunityFiltersModal
         isOpen={isFiltersModalOpen}
         onClose={() => setIsFiltersModalOpen(false)}
-        onApply={() => {}}
+        onApply={() => setIsFiltersModalOpen(false)}
       />
 
+      {/* AI Copilot Modal */}
       <AiCopilotModal
         isOpen={isCopilotOpen}
         onClose={() => setIsCopilotOpen(false)}
-        onInvestigateCompany={(comp) => setResearchedCompany(comp)}
+        onInvestigateCompany={(companyName: string) => {
+          setIsCopilotOpen(false);
+          setResearchedCompany(companyName);
+        }}
       />
 
-      <CompanyResearchModal
-        companyName={researchedCompany}
-        onClose={() => setResearchedCompany(null)}
-      />
+      {/* Company Research Dossier Modal */}
+      {researchedCompany && (
+        <CompanyResearchModal
+          companyName={researchedCompany}
+          onClose={() => setResearchedCompany(null)}
+        />
+      )}
     </div>
   );
 };

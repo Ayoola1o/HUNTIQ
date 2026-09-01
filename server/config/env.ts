@@ -1,3 +1,7 @@
+try {
+  (process as any).loadEnvFile?.();
+} catch {}
+
 export interface ServerConfig {
   port: number;
   nodeEnv: 'development' | 'production' | 'test';

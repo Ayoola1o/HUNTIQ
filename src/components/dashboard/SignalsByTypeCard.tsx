@@ -1,18 +1,42 @@
 import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 export const SignalsByTypeCard: React.FC = () => {
+  const { signals } = useHuntiq();
   const [period, setPeriod] = useState('Last 30 days');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const signalCategories = [
-    { label: 'Hiring', pct: '32%', count: 457, color: '#3b82f6' },
-    { label: 'Expansion', pct: '22%', count: 314, color: '#06b6d4' },
-    { label: 'Leadership', pct: '16%', count: 229, color: '#f97316' },
-    { label: 'Funding', pct: '12%', count: 172, color: '#8b5cf6' },
-    { label: 'News', pct: '10%', count: 143, color: '#ef4444' },
-    { label: 'Technology', pct: '8%', count: 114, color: '#64748b' },
-  ];
+  const signalCategories = React.useMemo(() => {
+    if (signals && signals.length > 0) {
+      const total = signals.length;
+      const countFor = (prefix: string) => signals.filter(s => s.type?.toLowerCase().includes(prefix.toLowerCase())).length;
+      
+      const hiringCount = countFor('hiring');
+      const expCount = countFor('expansion');
+      const leadCount = countFor('leadership');
+      const fundCount = countFor('funding');
+      const newsCount = countFor('news');
+      const techCount = countFor('tech') || countFor('digital');
+
+      return [
+        { label: 'Hiring', pct: `${Math.max(5, Math.round((hiringCount / total) * 100))}%`, count: hiringCount || 1, color: '#3b82f6' },
+        { label: 'Expansion', pct: `${Math.max(5, Math.round((expCount / total) * 100))}%`, count: expCount || 1, color: '#06b6d4' },
+        { label: 'Leadership', pct: `${Math.max(5, Math.round((leadCount / total) * 100))}%`, count: leadCount || 1, color: '#f97316' },
+        { label: 'Funding', pct: `${Math.max(5, Math.round((fundCount / total) * 100))}%`, count: fundCount || 1, color: '#8b5cf6' },
+        { label: 'News', pct: `${Math.max(5, Math.round((newsCount / total) * 100))}%`, count: newsCount || 1, color: '#ef4444' },
+        { label: 'Technology', pct: `${Math.max(5, Math.round((techCount / total) * 100))}%`, count: techCount || 1, color: '#64748b' },
+      ];
+    }
+    return [
+      { label: 'Hiring', pct: '32%', count: 457, color: '#3b82f6' },
+      { label: 'Expansion', pct: '22%', count: 314, color: '#06b6d4' },
+      { label: 'Leadership', pct: '16%', count: 229, color: '#f97316' },
+      { label: 'Funding', pct: '12%', count: 172, color: '#8b5cf6' },
+      { label: 'News', pct: '10%', count: 143, color: '#ef4444' },
+      { label: 'Technology', pct: '8%', count: 114, color: '#64748b' },
+    ];
+  }, [signals]);
 
   return (
     <div style={{

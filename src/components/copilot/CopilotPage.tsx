@@ -21,6 +21,7 @@ import {
   Copy 
 } from 'lucide-react';
 import { copilotEngine } from '../../engine';
+import { geminiService } from '../../services/geminiService';
 
 interface CopilotPageProps {
   onNavigate: (nav: string) => void;
@@ -129,7 +130,7 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
     }
   ]);
 
-  const handleSendMessage = (inputText: string) => {
+  const handleSendMessage = async (inputText: string) => {
     const userMsg: Message = {
       id: `m-${Date.now()}`,
       sender: 'user',
@@ -140,8 +141,25 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
       const result = copilotEngine.executePrompt(inputText);
+      let responseText = result.message;
+
+      // Enhance with live Gemini reasoning if configured
+      if (geminiService.isConfigured()) {
+        try {
+          const geminiEnhanced = await geminiService.generateCopilotResponse(
+            inputText,
+            `User Intent: ${result.intent}. Proposed Action: ${result.actionTaken || 'None'}. Engine Context: ${result.message}`
+          );
+          if (geminiEnhanced) {
+            responseText = geminiEnhanced;
+          }
+        } catch {
+          // Keep deterministic text fallback
+        }
+      }
+
       let botMsg: Message;
 
       if (result.intent === 'SEARCH') {
@@ -149,7 +167,7 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: result.message,
+          text: responseText,
           actionCard: {
             id: `act-${Date.now()}`,
             type: 'search',
@@ -186,7 +204,7 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: result.message,
+          text: responseText,
           opportunities: [
             {
               id: d.company.id,
@@ -212,7 +230,7 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: result.message,
+          text: responseText,
           outreachDraft: {
             target: 'Babafemi Lawson (Head of People & Ops)',
             company: 'Paystack',
@@ -225,7 +243,7 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: result.message,
+          text: responseText,
           crmConfirmation: {
             company: 'Paystack',
             stage: 'Qualified Pipeline',
@@ -238,7 +256,7 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: result.message,
+          text: responseText,
           opportunities: result.companies.map((c, idx) => ({
             id: c.id,
             rank: idx + 1,
@@ -262,13 +280,14 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: result.message
+          text: responseText
         };
       }
 
       setMessages((prev) => [...prev, botMsg]);
+    } finally {
       setIsLoading(false);
-    }, 600);
+    }
   };
 
   const handleExecuteAction = (actionId: string) => {

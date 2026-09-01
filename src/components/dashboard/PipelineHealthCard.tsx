@@ -1,17 +1,32 @@
 import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 export const PipelineHealthCard: React.FC = () => {
+  const { pipelineDeals } = useHuntiq();
   const [period, setPeriod] = useState('This month');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const stages = [
-    { label: 'Won', count: 12, pct: '14%', color: '#22c55e' },
-    { label: 'Proposal', count: 18, pct: '21%', color: '#3b82f6' },
-    { label: 'Negotiation', count: 22, pct: '26%', color: '#f97316' },
-    { label: 'Meeting', count: 16, pct: '19%', color: '#eab308' },
-    { label: 'Contacted', count: 18, pct: '20%', color: '#94a3b8' },
-  ];
+  const stages = React.useMemo(() => {
+    if (pipelineDeals && pipelineDeals.length > 0) {
+      const total = pipelineDeals.length;
+      const countByStage = (st: string) => pipelineDeals.filter(d => d.stage?.toLowerCase() === st.toLowerCase()).length;
+      return [
+        { label: 'Won', count: countByStage('won'), pct: `${Math.round((countByStage('won') / total) * 100)}%`, color: '#22c55e' },
+        { label: 'Proposal', count: countByStage('proposal'), pct: `${Math.round((countByStage('proposal') / total) * 100)}%`, color: '#3b82f6' },
+        { label: 'Negotiation', count: countByStage('negotiation'), pct: `${Math.round((countByStage('negotiation') / total) * 100)}%`, color: '#f97316' },
+        { label: 'Meeting', count: countByStage('meeting'), pct: `${Math.round((countByStage('meeting') / total) * 100)}%`, color: '#eab308' },
+        { label: 'Contacted', count: countByStage('contacted'), pct: `${Math.round((countByStage('contacted') / total) * 100)}%`, color: '#94a3b8' },
+      ];
+    }
+    return [
+      { label: 'Won', count: 12, pct: '14%', color: '#22c55e' },
+      { label: 'Proposal', count: 18, pct: '21%', color: '#3b82f6' },
+      { label: 'Negotiation', count: 22, pct: '26%', color: '#f97316' },
+      { label: 'Meeting', count: 16, pct: '19%', color: '#eab308' },
+      { label: 'Contacted', count: 18, pct: '20%', color: '#94a3b8' },
+    ];
+  }, [pipelineDeals]);
 
   return (
     <div style={{

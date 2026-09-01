@@ -2,14 +2,12 @@ import React from 'react';
 import { 
   Flame, 
   Zap, 
-  UserCheck, 
-  Radar, 
-  Calendar, 
   Send, 
   MoreVertical, 
   ChevronDown,
   ArrowRight
 } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface AttentionFeedProps {
   onOpenResearch: (company: string) => void;
@@ -17,102 +15,90 @@ interface AttentionFeedProps {
 }
 
 export const AttentionFeed: React.FC<AttentionFeedProps> = ({ onOpenResearch, onOpenContact }) => {
-  const attentionItems = [
-    {
-      id: 'acme',
-      title: 'Acme Technologies',
-      score: 94,
-      scoreColor: '#0284c7',
-      scoreBorder: '#38bdf8',
-      typeBadge: 'HIGH PRIORITY',
-      typeColor: '#e11d48',
-      typeBg: '#ffe4e6',
-      typeIcon: <Flame size={14} color="#e11d48" />,
-      sub: 'Technology • 250-500 employees • Lagos, NG',
-      description: 'Hiring 38 new employees + opened a second office + appointed a new COO.',
-      tags: ['Hiring Surge', 'Expansion', 'New Executive'],
-      bestContact: {
-        name: 'Jane Smith',
-        role: 'Head of People',
+  const { signals, companies } = useHuntiq();
+
+  const attentionItems = React.useMemo(() => {
+    const liveItems: any[] = [];
+
+    // Map top signals
+    signals.slice(0, 4).forEach((sig, idx) => {
+      const comp = companies.find(c => c.name.toLowerCase() === sig.companyName?.toLowerCase()) || {
+        name: sig.companyName || 'Target Account',
+        industry: 'Technology & FinTech',
+        employees: '100-500',
+        location: sig.location || 'Lagos, Nigeria'
+      };
+
+      const isHigh = sig.impactLevel === 'Very High' || sig.impactLevel === 'High' || (sig.impactScore || 0) >= 85;
+
+      liveItems.push({
+        id: `sig-${sig.id || idx}`,
+        title: comp.name,
+        score: sig.impactScore || 90,
+        scoreColor: isHigh ? '#e11d48' : '#0284c7',
+        scoreBorder: isHigh ? '#f43f5e' : '#38bdf8',
+        typeBadge: (sig.type || 'Signal').replace(/_/g, ' ').toUpperCase(),
+        typeColor: isHigh ? '#e11d48' : '#2563eb',
+        typeBg: isHigh ? '#ffe4e6' : '#eff6ff',
+        typeIcon: isHigh ? <Flame size={14} color="#e11d48" /> : <Zap size={14} color="#2563eb" />,
+        sub: `${comp.industry} • ${comp.employees} employees • ${comp.location}`,
+        description: sig.whyItMatters || sig.subtitle || sig.title,
+        tags: [(sig.type || 'Signal').replace(/_/g, ' '), 'Verified Signal'],
+        bestContact: {
+          name: sig.targetRole ? 'Decision Maker' : 'Head of People',
+          role: sig.targetRole || 'Talent & Growth Strategy'
+        },
+        hasResearchBtn: true,
+        hasContactBtn: true
+      });
+    });
+
+    if (liveItems.length > 0) {
+      return liveItems;
+    }
+
+    return [
+      {
+        id: 'acme',
+        title: 'Acme Technologies',
+        score: 94,
+        scoreColor: '#0284c7',
+        scoreBorder: '#38bdf8',
+        typeBadge: 'HIGH PRIORITY',
+        typeColor: '#e11d48',
+        typeBg: '#ffe4e6',
+        typeIcon: <Flame size={14} color="#e11d48" />,
+        sub: 'Technology • 250-500 employees • Lagos, NG',
+        description: 'Hiring 38 new employees + opened a second office + appointed a new COO.',
+        tags: ['Hiring Surge', 'Expansion', 'New Executive'],
+        bestContact: {
+          name: 'Jane Smith',
+          role: 'Head of People',
+        },
+        hasResearchBtn: true,
+        hasContactBtn: true,
       },
-      hasResearchBtn: true,
-      hasContactBtn: true,
-    },
-    {
-      id: 'finserve',
-      title: 'FinServe Ltd',
-      score: 88,
-      scoreColor: '#d97706',
-      scoreBorder: '#f59e0b',
-      typeBadge: 'NEW SIGNAL',
-      typeColor: '#d97706',
-      typeBg: '#fef3c7',
-      typeIcon: <Zap size={14} color="#d97706" />,
-      sub: 'Financial Services • 200-500 employees • Lagos, NG',
-      description: 'Announced expansion into two new markets: Ghana and Kenya.',
-      tags: ['Expansion', 'News', 'Growth'],
-      bestContact: {
-        name: 'Michael Okoro',
-        role: 'HR Director',
-      },
-      customAction: 'View Intelligence',
-    },
-    {
-      id: 'sarah',
-      title: 'Sarah Johnson',
-      score: null,
-      typeBadge: 'CONTACT CHANGED',
-      typeColor: '#2563eb',
-      typeBg: '#eff6ff',
-      typeIcon: <UserCheck size={14} color="#2563eb" />,
-      sub: 'Former HR Director at Company A • Now HR Director at Company B',
-      description: 'Warm relationship opportunity detected.',
-      tags: ['Career Move'],
-      bestContact: {
-        name: 'Company B',
-        role: 'Technology • 150-300 employees',
-      },
-      customAction: 'View Contact',
-    },
-    {
-      id: 'delta',
-      title: 'Delta Systems',
-      score: 81,
-      scoreColor: '#059669',
-      scoreBorder: '#10b981',
-      typeBadge: 'NEW INTENT',
-      typeColor: '#059669',
-      typeBg: '#ecfdf5',
-      typeIcon: <Radar size={14} color="#059669" />,
-      sub: 'Software • 100-250 employees • Abuja, NG',
-      description: 'Researching "cybersecurity solutions" in the last 7 days.',
-      tags: ['Intent', 'Technology'],
-      bestContact: {
-        name: 'David Jonah',
-        role: 'CTO',
-      },
-      customAction: 'Investigate',
-    },
-    {
-      id: 'zenith',
-      title: 'Zenith Bank PLC',
-      score: 76,
-      scoreColor: '#7c3aed',
-      scoreBorder: '#8b5cf6',
-      typeBadge: 'MEETING TODAY',
-      typeColor: '#7c3aed',
-      typeBg: '#f3e8ff',
-      typeIcon: <Calendar size={14} color="#7c3aed" />,
-      sub: 'Banking • 1000+ employees • Lagos, NG',
-      description: 'Discovery call at 2:00 PM with John Adewale (CIO).',
-      tags: ['Meeting'],
-      bestContact: {
-        name: 'John Adewale',
-        role: 'CIO',
-      },
-      customAction: 'View Meeting',
-    },
-  ];
+      {
+        id: 'finserve',
+        title: 'FinServe Ltd',
+        score: 88,
+        scoreColor: '#d97706',
+        scoreBorder: '#f59e0b',
+        typeBadge: 'NEW SIGNAL',
+        typeColor: '#d97706',
+        typeBg: '#fef3c7',
+        typeIcon: <Zap size={14} color="#d97706" />,
+        sub: 'Financial Services • 200-500 employees • Lagos, NG',
+        description: 'Announced expansion into two new markets: Ghana and Kenya.',
+        tags: ['Expansion', 'News', 'Growth'],
+        bestContact: {
+          name: 'Michael Okoro',
+          role: 'HR Director',
+        },
+        customAction: 'View Intelligence',
+      }
+    ];
+  }, [signals, companies]);
 
   return (
     <div style={{
@@ -271,9 +257,9 @@ export const AttentionFeed: React.FC<AttentionFeedProps> = ({ onOpenResearch, on
 
               {/* Row 3: Tags */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {item.tags.map((tag) => (
+                {item.tags.map((tag: string, idx: number) => (
                   <span
-                    key={tag}
+                    key={`${item.id}-tag-${tag}-${idx}`}
                     style={{
                       fontSize: '10.5px',
                       fontWeight: 600,

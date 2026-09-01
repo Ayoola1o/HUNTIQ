@@ -7,3 +7,6 @@ export const postgresPool = config.databaseUrl
     })
   : undefined;
 
+export const pool = postgresPool;
+export default postgresPool;
+

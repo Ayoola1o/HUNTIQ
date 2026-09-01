@@ -219,3 +219,4 @@ export * from './leadGenerator';
 export * from './resolution/companyResolver';
 export * from './scoring/opportunityScoringEngine';
 export * from './enrichment/contactEnrichmentEngine';
+export * from './normalizer/jobNormalizer';

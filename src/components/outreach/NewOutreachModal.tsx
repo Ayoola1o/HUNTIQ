@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { 
   X, 
   Sparkles, 
-  Send 
+  Send,
+  Loader2,
+  Wand2
 } from 'lucide-react';
 import type { OutreachItem } from '../../types/outreach';
+import { geminiService } from '../../services/geminiService';
 
 interface NewOutreachModalProps {
   isOpen: boolean;
@@ -22,6 +25,30 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
   const [companyName, setCompanyName] = useState('');
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
+  const [isDrafting, setIsDrafting] = useState(false);
+
+  const handleAutoDraft = async () => {
+    if (!companyName.trim()) {
+      alert('Please enter a company name first to generate contextual outreach.');
+      return;
+    }
+    setIsDrafting(true);
+    try {
+      const draft = await geminiService.generateOutreach(
+        companyName,
+        contactName || 'Decision Maker',
+        contactRole || 'Head of People & Operations',
+        'recent hiring activity and growth momentum',
+        'Executive & Direct'
+      );
+      setSubject(draft.subject);
+      setContent(draft.body);
+    } catch {
+      // Handled inside geminiService
+    } finally {
+      setIsDrafting(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -217,9 +244,36 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
           </div>
 
           <div>
-            <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-              Message Content *
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155' }}>
+                Message Content *
+              </label>
+              <button
+                type="button"
+                onClick={handleAutoDraft}
+                disabled={isDrafting}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%)',
+                  border: '1px solid #c7d2fe',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#4f46e5',
+                  cursor: isDrafting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isDrafting ? (
+                  <Loader2 size={12} className="spin" />
+                ) : (
+                  <Wand2 size={12} color="#6366f1" />
+                )}
+                <span>{isDrafting ? 'Drafting with Gemini...' : '✨ Auto-Draft with Gemini'}</span>
+              </button>
+            </div>
             <textarea
               rows={4}
               placeholder="Write your email or let AI draft your opener based on signals..."

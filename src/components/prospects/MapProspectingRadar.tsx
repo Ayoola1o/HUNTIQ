@@ -793,7 +793,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
                           padding: '1px 6px',
                           borderRadius: '4px'
                         }}>
-                          {biz.targetType === 'ENTERPRISE' ? 'Growth' : `Gap: ${biz.digitalAudit.gapScore}`}
+                          {biz.targetType === 'ENTERPRISE' ? 'Growth' : `Gap: ${biz.digitalAudit?.gapScore ?? 50}`}
                         </span>
                       </div>
 
@@ -811,12 +811,14 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
                         marginBottom: '6px'
                       }}>
                         <strong>{biz.targetType === 'ENTERPRISE' ? 'Growth Signal: ' : 'Top Gap: '}</strong>
-                        {biz.targetType === 'ENTERPRISE' ? biz.detectedSignals[0] : biz.digitalAudit.issuesDetected[0]?.title || 'No Website'}
+                        {biz.targetType === 'ENTERPRISE'
+                          ? (biz.detectedSignals?.[0] || 'Regional Expansion & Hiring Signal')
+                          : (biz.digitalAudit?.issuesDetected?.[0]?.title || 'Digital Modernization Gap')}
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '11.5px', color: '#059669', fontWeight: 800 }}>
-                          Est: ${biz.digitalAudit.recommendedPackage.estimatedValue.max.toLocaleString()}
+                          Est: ${(biz.digitalAudit?.recommendedPackage?.estimatedValue?.max || 25000).toLocaleString()}
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4f46e5', fontSize: '11px', fontWeight: 700 }}>
                           <span>View Audit</span>

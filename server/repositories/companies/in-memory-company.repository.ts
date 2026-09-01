@@ -24,8 +24,36 @@ const emptyCompanyDefaults = (company: Pick<CompanyItem, 'id' | 'name'> & Partia
   socials: company.socials ?? {},
 });
 
+import { seedCompanies } from '../../db/seeds';
+
 export class InMemoryCompanyRepository implements CompanyRepository {
   private readonly companies = new Map<string, CompanyItem>();
+
+  constructor() {
+    for (const c of seedCompanies) {
+      this.companies.set(c.id, {
+        id: c.id,
+        name: c.name,
+        domain: c.domain,
+        website: c.website,
+        industry: c.industry,
+        employees: c.employeeRange || String(c.employeeCount),
+        revenue: '$20M - $50M',
+        location: `${c.city || ''}, ${c.country || ''}`.replace(/^, |, $/g, ''),
+        opportunityScore: 92,
+        opportunityLevel: 'Hot',
+        scoreColor: '#10b981',
+        scoreTrend: [85, 88, 92],
+        signalsCount: 3,
+        activeSignals: ['Hiring Surge', 'Leadership Expansion'],
+        lastActivity: 'New engineering hiring detected',
+        description: c.description,
+        founded: c.foundedYear,
+        headquarters: `${c.city || ''}, ${c.country || ''}`.replace(/^, |, $/g, ''),
+        socials: { linkedin: c.linkedinUrl, twitter: c.twitterUrl }
+      });
+    }
+  }
 
   async list(params: CompanySearchParams = {}): Promise<CompanyItem[]> {
     const query = params.query?.toLowerCase();

@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import type { Response } from 'express';
 import type { ApiResponse } from '../types/api';
-import { db } from '../db/memoryStore';
 import { enrichmentService } from '../services/enrichmentService';
 import { contactService } from '../services/contactService';
 import { ContactEnrichmentEngine } from '../engine';
@@ -11,40 +10,149 @@ export const contactsRouter = Router();
 
 /**
  * GET /api/contacts
- * Query contacts with optional filters
+ * Query contacts with tab, role, seniority, and search filters, returning live list & KPI data
  */
 contactsRouter.get('/contacts', (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
-  const { companyId, seniority, department, search } = req.query as Record<string, string | undefined>;
+  const { tab, seniority, department, role, search, q } = req.query as Record<string, string | undefined>;
 
-  let list = db.contacts.filter(c => c.workspaceId === workspaceId);
+  const { contacts, kpiSummary } = contactService.listContacts({
+    tab,
+    seniority,
+    department,
+    role,
+    search: search || q
+  });
 
-  if (companyId) {
-    list = list.filter(c => c.companyId === companyId);
-  }
-  if (seniority && seniority !== 'All') {
-    list = list.filter(c => c.seniority?.toLowerCase() === seniority.toLowerCase());
-  }
-  if (department && department !== 'All') {
-    list = list.filter(c => c.department?.toLowerCase().includes(department.toLowerCase()));
-  }
-  if (search) {
-    const q = search.toLowerCase();
-    list = list.filter(c => 
-      c.firstName.toLowerCase().includes(q) || 
-      c.lastName.toLowerCase().includes(q) || 
-      c.jobTitle.toLowerCase().includes(q) ||
-      c.email?.toLowerCase().includes(q)
-    );
+  const response: ApiResponse = {
+    success: true,
+    data: {
+      contacts,
+      kpiSummary
+    },
+    meta: {
+      total: contacts.length,
+      timestamp: new Date().toISOString()
+    }
+  };
+
+  res.status(200).json(response);
+});
+
+/**
+ * GET /api/contacts/:id
+ * Retrieve a specific contact
+ */
+contactsRouter.get('/contacts/:id', (req: AuthenticatedRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const contact = contactService.getById(id);
+
+  if (!contact) {
+    return res.status(404).json({
+      success: false,
+      error: { code: 'CONTACT_NOT_FOUND', message: `Contact with ID '${id}' was not found.` },
+      meta: { timestamp: new Date().toISOString() }
+    });
   }
 
   res.status(200).json({
     success: true,
-    data: list,
-    meta: {
-      total: list.length,
-      timestamp: new Date().toISOString()
-    }
+    data: contact,
+    meta: { timestamp: new Date().toISOString() }
+  });
+});
+
+/**
+ * POST /api/contacts
+ * Manually add a verified contact
+ */
+contactsRouter.post('/contacts', (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const newContact = contactService.createContact(req.body || {});
+
+    res.status(201).json({
+      success: true,
+      data: newContact,
+      meta: { timestamp: new Date().toISOString() }
+    });
+  } catch (err: any) {
+    res.status(400).json({
+      success: false,
+      error: { code: 'CREATE_CONTACT_ERROR', message: err.message },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+});
+
+/**
+ * POST /api/contacts/import
+ * Bulk import contacts from CSV / file
+ */
+contactsRouter.post('/contacts/import', (req: AuthenticatedRequest, res: Response) => {
+  const { contacts } = req.body || {};
+
+  if (!Array.isArray(contacts)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_IMPORT_PAYLOAD', message: 'contacts must be an array.' },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+
+  const imported = contactService.importContacts(contacts);
+
+  res.status(201).json({
+    success: true,
+    data: {
+      importedCount: imported.length,
+      contacts: imported
+    },
+    meta: { timestamp: new Date().toISOString() }
+  });
+});
+
+/**
+ * PATCH /api/contacts/:id
+ * Update contact details / bookmark status / role
+ */
+contactsRouter.patch('/contacts/:id', (req: AuthenticatedRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const updated = contactService.updateContact(id, req.body || {});
+
+  if (!updated) {
+    return res.status(404).json({
+      success: false,
+      error: { code: 'CONTACT_NOT_FOUND', message: `Contact with ID '${id}' was not found.` },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    data: updated,
+    meta: { timestamp: new Date().toISOString() }
+  });
+});
+
+/**
+ * DELETE /api/contacts/:id
+ * Delete contact
+ */
+contactsRouter.delete('/contacts/:id', (req: AuthenticatedRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const deleted = contactService.deleteContact(id);
+
+  if (!deleted) {
+    return res.status(404).json({
+      success: false,
+      error: { code: 'CONTACT_NOT_FOUND', message: `Contact with ID '${id}' was not found.` },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    data: { id, deleted: true },
+    meta: { timestamp: new Date().toISOString() }
   });
 });
 
@@ -67,13 +175,11 @@ contactsRouter.post('/contacts/enrich', async (req: AuthenticatedRequest, res: R
   try {
     const result = await enrichmentService.enrichCompanyContacts(companyId, workspaceId);
 
-    const response: ApiResponse = {
+    res.status(200).json({
       success: true,
       data: result,
       meta: { timestamp: new Date().toISOString() }
-    };
-
-    res.status(200).json(response);
+    });
   } catch (err: any) {
     res.status(500).json({
       success: false,
@@ -121,28 +227,4 @@ contactsRouter.get('/contacts/pattern/:domain', (req: AuthenticatedRequest, res:
     data: result,
     meta: { timestamp: new Date().toISOString() }
   });
-});
-
-/**
- * POST /api/contacts
- * Manually add a verified contact
- */
-contactsRouter.post('/contacts', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
-
-  try {
-    const newContact = await contactService.addContact(workspaceId, req.body);
-
-    res.status(201).json({
-      success: true,
-      data: newContact,
-      meta: { timestamp: new Date().toISOString() }
-    });
-  } catch (err: any) {
-    res.status(400).json({
-      success: false,
-      error: { code: 'CREATE_CONTACT_ERROR', message: err.message },
-      meta: { timestamp: new Date().toISOString() }
-    });
-  }
 });

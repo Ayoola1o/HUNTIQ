@@ -7,7 +7,7 @@ export class ApiClient {
   private baseUrl: string;
   private apiKey: string | null = null;
 
-  constructor(baseUrl: string = (import.meta.env?.VITE_API_URL as string) || 'http://localhost:3001') {
+  constructor(baseUrl: string = (import.meta.env?.VITE_API_URL as string) ?? '') {
     this.baseUrl = baseUrl;
   }
 

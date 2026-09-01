@@ -9,3 +9,4 @@ export * from './copilot';
 export * from './jobs';
 export * from './contacts';
 export * from './leads';
+export * from './savedSearches';

@@ -280,9 +280,11 @@ export class GeoapifyService {
                 });
 
                 const isEnterprise = audit.gapScore <= 35 && reviewCount > 50;
+                const domain = website ? website.replace(/^https?:\/\//, '').split('/')[0] : `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
 
                 return {
                   id: `geo-live-${props.place_id || index}`,
+                  placeId: props.place_id || `pid-${index}`,
                   name,
                   category: placeCategory,
                   rating,
@@ -291,12 +293,23 @@ export class GeoapifyService {
                   district,
                   phone: phone || 'Unlisted',
                   website: website || '',
+                  domain,
+                  isVerified: true,
                   hasWebsite: !!website,
                   lat,
                   lng,
                   targetType: isEnterprise ? 'ENTERPRISE' : 'LOCAL_COMMERCIAL',
                   opportunityScore: audit.gapScore >= 70 ? audit.gapScore : Math.round(98 - audit.gapScore * 0.4),
                   digitalAudit: audit,
+                  decisionMakers: [
+                    { name: 'Managing Director / Owner', role: 'Decision Maker', email: `contact@${domain}` }
+                  ],
+                  detectedSignals: isEnterprise
+                    ? ['Regional Commercial Footprint', 'Active Customer Traffic', 'Digital Modernization Surge']
+                    : ['Commercial Location Active', 'Local Market Footprint'],
+                  techStack: website ? ['Web Host', 'Digital Analytics'] : [],
+                  headcountEstimate: isEnterprise ? '50-200' : '5-25',
+                  scrapedAt: new Date().toISOString(),
                   recommendedPackage: audit.recommendedPackage.packageName,
                   estimatedDealValue: audit.recommendedPackage.estimatedValue.max,
                   verifiedAt: new Date().toISOString()

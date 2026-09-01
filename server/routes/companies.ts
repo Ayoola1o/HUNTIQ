@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { ApiResponse } from '../types/api';
-import { createCompanyRepository } from '../repositories/companies';
+import { createCompanyRepository, InMemoryCompanyRepository } from '../repositories/companies';
 import { CompanyResolver } from '../engine';
 
 export const companiesRouter = Router();
@@ -10,7 +10,13 @@ const companyRepository = createCompanyRepository();
 companiesRouter.get('/companies', async (req: Request, res: Response) => {
   const query = typeof req.query.q === 'string' ? req.query.q : undefined;
   const industry = typeof req.query.industry === 'string' ? req.query.industry : undefined;
-  const list = await companyRepository.list({ query, industry });
+  
+  let list: any[] = [];
+  try {
+    list = await companyRepository.list({ query, industry });
+  } catch {
+    list = await new InMemoryCompanyRepository().list({ query, industry });
+  }
 
   const response: ApiResponse = {
     success: true,

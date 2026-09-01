@@ -9,7 +9,7 @@ import type { SavedSearchItem, SavedSearchType } from '../../types/savedSearches
 interface CreateSavedSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateSearch: (newSearch: SavedSearchItem) => void;
+  onCreateSearch: (newSearch: Partial<SavedSearchItem>) => void;
 }
 
 export const CreateSavedSearchModal: React.FC<CreateSavedSearchModalProps> = ({
@@ -24,7 +24,7 @@ export const CreateSavedSearchModal: React.FC<CreateSavedSearchModalProps> = ({
   const [location, setLocation] = useState('Lagos, Nigeria');
   const [companySize, setCompanySize] = useState('50 – 500');
   const [monitoringEnabled, setMonitoringEnabled] = useState(true);
-  const [signals] = useState<string[]>(['Hiring Surge', 'Regional Expansion']);
+  const [alertFrequency] = useState<any>('immediately');
 
   if (!isOpen) return null;
 
@@ -32,29 +32,19 @@ export const CreateSavedSearchModal: React.FC<CreateSavedSearchModalProps> = ({
     e.preventDefault();
     if (!name.trim()) return;
 
-    const item: SavedSearchItem = {
-      id: `ss-${Date.now()}`,
-      name,
-      description: description || `Targeting ${industry} companies in ${location} with ${companySize} employees.`,
+    onCreateSearch({
+      name: name.trim(),
+      description: description.trim() || `Targeting ${industry} companies in ${location} with ${companySize} employees.`,
       searchType,
-      status: 'active',
       monitoringEnabled,
-      alertFrequency: 'immediately',
-      createdAt: 'Just now',
-      lastRunAt: 'Just now',
-      lastUpdated: 'Just now',
+      alertFrequency,
       filters: {
         industries: [industry],
         locations: [location],
         companySizes: [companySize]
       },
-      signalsToWatch: signals,
-      icpName: 'Peak Consulting ICP',
-      totalMatches: 42,
-      newMatchesCount: 5,
-      highOpportunityCount: 18,
-      activeSignalsCount: 8,
-      unreadAlertsCount: 2,
+      signalsToWatch: ['Hiring Surge', 'Regional Expansion', 'Leadership Change'],
+      icpName: 'Primary ICP',
       alertSettings: {
         onNewMatch: true,
         onHighOpportunity: true,
@@ -63,47 +53,11 @@ export const CreateSavedSearchModal: React.FC<CreateSavedSearchModalProps> = ({
         onLeadershipSignal: true,
         onFundingSignal: false,
         onTechMigration: false
-      },
-      matchedCompanies: [
-        {
-          id: 'mc-1',
-          companyName: 'Terragon Group',
-          domain: 'terragongroup.com',
-          industry: 'Technology & SaaS',
-          location: 'Lagos, Nigeria',
-          opportunityScore: 92,
-          opportunityLevel: 'Very High',
-          buyingIntent: 'Very High',
-          matchedDate: 'Just now',
-          isNewMatch: true,
-          signals: ['Hiring Surge', 'Regional Expansion']
-        },
-        {
-          id: 'mc-2',
-          companyName: 'SeamlessHR',
-          domain: 'seamlesshr.com',
-          industry: 'Enterprise Software',
-          location: 'Lagos, Nigeria',
-          opportunityScore: 89,
-          opportunityLevel: 'High',
-          buyingIntent: 'High',
-          matchedDate: '1h ago',
-          isNewMatch: false,
-          signals: ['New COO Appointed']
-        }
-      ],
-      activityHistory: [
-        {
-          id: 'act-1',
-          timestamp: 'Just now',
-          type: 'new_match',
-          title: 'Search created & 42 companies indexed',
-          detail: 'Monitoring Agent initiated autonomous background tracking.'
-        }
-      ]
-    };
+      }
+    });
 
-    onCreateSearch(item);
+    setName('');
+    setDescription('');
     onClose();
   };
 
