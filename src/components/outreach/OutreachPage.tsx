@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { OutreachKpiCards } from './OutreachKpiCards';
 import { OutreachConversationView } from './OutreachConversationView';
@@ -6,9 +6,18 @@ import { NewOutreachModal } from './NewOutreachModal';
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import type { OutreachItem, OutreachKpiSummary } from '../../types/outreach';
 import { 
+  fetchOutreachList, 
+  sendOutreachMessage as apiSendOutreachMessage, 
+  createOutreach as apiCreateOutreach 
+} from '../../api/outreach';
+import { 
   Send, 
   Sparkles, 
-  Plus 
+  Plus, 
+  RefreshCw, 
+  AlertCircle, 
+  CheckCircle2, 
+  Loader2 
 } from 'lucide-react';
 
 interface OutreachPageProps {
@@ -24,144 +33,75 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeKpiFilter, setActiveKpiFilter] = useState('due_today');
 
-  // Initial Mock Conversations
-  const [conversations, setConversations] = useState<OutreachItem[]>([
-    {
-      id: 'out-1',
-      contactName: 'Jane Smith',
-      contactRole: 'Head of People',
-      companyName: 'Acme Technologies',
-      domain: 'acmetech.com',
-      email: 'jane@acmetech.com',
-      avatarBg: '#fbcfe8',
-      avatarColor: '#9d174d',
-      subject: 'Workforce scaling frameworks & management ramp',
-      lastMessageSnippet: 'We have 38 new openings and need a coaching structure. What is your typical timeline?',
-      lastMessageTime: '12m ago',
-      status: 'replied',
-      channel: 'email',
-      campaignName: 'Lagos Tech Hiring Surge',
-      opportunityScore: 94,
-      unread: true,
-      thread: [
-        {
-          id: 'm1',
-          sender: 'me',
-          senderName: 'Ayoola Ade',
-          timestamp: 'Yesterday 10:30 AM',
-          channel: 'email',
-          content: 'Hi Jane, I noticed Acme Technologies recently posted 38 job openings across engineering and operations. Rapid headcount scaling often creates management bottlenecks—we help growth companies reduce onboarding time by 40%.'
-        },
-        {
-          id: 'm2',
-          sender: 'prospect',
-          senderName: 'Jane Smith',
-          timestamp: 'Today 9:15 AM',
-          channel: 'email',
-          content: 'Hi Ayoola, this is very timely. We are onboarding 14 new team leads next month and our current training is fragmented. What is your typical timeline for a management enablement sprint?'
-        }
-      ]
-    },
-    {
-      id: 'out-2',
-      contactName: 'Oluwaseun Adewale',
-      contactRole: 'VP People Operations',
-      companyName: 'Flutterwave',
-      domain: 'flutterwave.com',
-      email: 'oluwaseun@flutterwave.com',
-      avatarBg: '#ede9fe',
-      avatarColor: '#5b21b6',
-      subject: 'Cross-border compliance team enablement',
-      lastMessageSnippet: 'Thanks for sharing the case study. Let us do a brief intro call.',
-      lastMessageTime: '1h ago',
-      status: 'replied',
-      channel: 'email',
-      campaignName: 'Pan-African FinTech Outreach',
-      opportunityScore: 96,
-      unread: false,
-      thread: [
-        {
-          id: 'm3',
-          sender: 'me',
-          senderName: 'Ayoola Ade',
-          timestamp: 'May 14',
-          channel: 'email',
-          content: 'Hi Oluwaseun, congrats on the recent licenses across West Africa! We work with high-growth FinTechs to train multi-jurisdiction compliance officers.'
-        },
-        {
-          id: 'm4',
-          sender: 'prospect',
-          senderName: 'Oluwaseun Adewale',
-          timestamp: 'Today 8:00 AM',
-          channel: 'email',
-          content: 'Thanks for sharing the case study. Let us do a brief intro call this week to explore syllabus alignment.'
-        }
-      ]
-    },
-    {
-      id: 'out-3',
-      contactName: 'Tunde Bakare',
-      contactRole: 'CTO',
-      companyName: 'CloudNova Technologies',
-      domain: 'cloudnova.io',
-      email: 'tunde@cloudnova.io',
-      avatarBg: '#dbeafe',
-      avatarColor: '#1e40af',
-      subject: 'Technical leadership onboarding curriculum',
-      lastMessageSnippet: 'Follow-up step 2 due today based on AWS migration signal.',
-      lastMessageTime: 'Yesterday',
-      status: 'due_today',
-      channel: 'email',
-      opportunityScore: 91,
-      unread: false,
-      thread: [
-        {
-          id: 'm5',
-          sender: 'me',
-          senderName: 'Ayoola Ade',
-          timestamp: 'May 12',
-          channel: 'email',
-          content: 'Hi Tunde, noticed CloudNova just expanded its cloud infrastructure team. Would love to share our quick guide on mentoring senior staff engineers.'
-        }
-      ]
-    }
-  ]);
+  // Live Conversations & KPI State
+  const [conversations, setConversations] = useState<OutreachItem[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [kpiSummary, setKpiSummary] = useState<OutreachKpiSummary>({
+    dueToday: 0,
+    scheduled: 0,
+    replies: 0,
+    needsAttention: 0,
+    responseRate: 0
+  });
 
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(conversations[0]?.id || null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
 
-  const kpiSummary: OutreachKpiSummary = {
-    dueToday: 24,
-    scheduled: 38,
-    replies: 12,
-    needsAttention: 9,
-    responseRate: 8.4
-  };
+  const loadOutreach = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setIsRefreshing(true);
+    else setIsLoading(true);
+    setErrorMessage(null);
 
-  const handleSendMessage = (conversationId: string, text: string) => {
-    setConversations(conversations.map(c => {
-      if (c.id === conversationId) {
-        const newMsg = {
-          id: `m-${Date.now()}`,
-          sender: 'me' as const,
-          senderName: 'Ayoola Ade',
-          timestamp: 'Just now',
-          channel: 'email' as const,
-          content: text
-        };
-        return {
-          ...c,
-          lastMessageSnippet: text,
-          lastMessageTime: 'Just now',
-          thread: [...c.thread, newMsg]
-        };
+    try {
+      const response = await fetchOutreachList();
+      setConversations(response.conversations || []);
+      if (response.kpiSummary) {
+        setKpiSummary(response.kpiSummary);
       }
-      return c;
-    }));
+      if (response.conversations?.length > 0 && !activeConversationId) {
+        setActiveConversationId(response.conversations[0].id);
+      }
+    } catch (err: any) {
+      console.error('Failed to load outreach from API:', err);
+      setErrorMessage(err?.message || 'Unable to connect to live outreach server');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    loadOutreach();
+  }, [loadOutreach]);
+
+  const handleSendMessage = async (conversationId: string, text: string) => {
+    try {
+      const updated = await apiSendOutreachMessage(conversationId, text);
+      setConversations(prev => prev.map(c => c.id === conversationId ? updated : c));
+      setActionToast('Message dispatched successfully');
+      setTimeout(() => setActionToast(null), 3000);
+    } catch (err: any) {
+      console.error('Failed to send outreach message:', err);
+      setActionToast('Failed to send message');
+      setTimeout(() => setActionToast(null), 3000);
+    }
   };
 
-  const handleCreateOutreach = (newItem: OutreachItem) => {
-    setConversations([newItem, ...conversations]);
-    setActiveConversationId(newItem.id);
+  const handleCreateOutreach = async (newItemPayload: Partial<OutreachItem>) => {
+    try {
+      const created = await apiCreateOutreach(newItemPayload);
+      setConversations(prev => [created, ...prev]);
+      setActiveConversationId(created.id);
+      setActionToast(`Outreach initiated with ${created.contactName}!`);
+      setTimeout(() => setActionToast(null), 3500);
+      await loadOutreach(true);
+    } catch (err: any) {
+      console.error('Failed to start outreach:', err);
+      setActionToast('Failed to start outreach');
+      setTimeout(() => setActionToast(null), 3000);
+    }
   };
 
   return (
@@ -216,9 +156,22 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
               <Send size={16} color="#2563eb" />
             </div>
             <div>
-              <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                Outreach & Sales Communications
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                  Outreach & Sales Communications
+                </h1>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  backgroundColor: '#ecfdf5',
+                  color: '#059669',
+                  border: '1px solid #a7f3d0',
+                  padding: '1px 6px',
+                  borderRadius: '4px'
+                }}>
+                  LIVE INBOX
+                </span>
+              </div>
               <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: 1.2 }}>
                 Manage prospect conversations, handle replies and accelerate sales follow-ups
               </p>
@@ -226,6 +179,29 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Sync Button */}
+            <button
+              onClick={() => loadOutreach(true)}
+              disabled={isRefreshing}
+              title="Sync outreach inbox with live backend"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                color: '#475569',
+                cursor: isRefreshing ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+              <span>{isRefreshing ? 'Syncing...' : 'Sync'}</span>
+            </button>
+
             <button
               onClick={() => setIsCopilotOpen(true)}
               style={{
@@ -269,6 +245,63 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
           </div>
         </header>
 
+        {/* Action Toast Banner */}
+        {actionToast && (
+          <div style={{
+            margin: '12px 32px 0',
+            padding: '10px 16px',
+            backgroundColor: '#ecfdf5',
+            border: '1px solid #a7f3d0',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '12px',
+            color: '#065f46',
+            fontWeight: 600
+          }}>
+            <CheckCircle2 size={15} color="#059669" />
+            <span>{actionToast}</span>
+          </div>
+        )}
+
+        {/* Error Alert Banner */}
+        {errorMessage && (
+          <div style={{
+            margin: '12px 32px 0',
+            padding: '12px 16px',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            color: '#991b1b',
+            fontWeight: 600
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertCircle size={16} color="#dc2626" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              onClick={() => loadOutreach(true)}
+              style={{
+                backgroundColor: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Retry Sync
+            </button>
+          </div>
+        )}
+
         {/* KPI Metrics Row */}
         <div style={{ margin: '20px 0' }}>
           <OutreachKpiCards
@@ -278,22 +311,45 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
           />
         </div>
 
-        {/* Split Sales Inbox */}
-        <OutreachConversationView
-          conversations={conversations}
-          activeConversationId={activeConversationId}
-          onSelectConversation={(c) => setActiveConversationId(c.id)}
-          onSendMessage={handleSendMessage}
-          onCreateDealFromOutreach={() => {
-            onNavigate('pipeline');
-          }}
-          onScheduleMeetingFromOutreach={() => {
-            onNavigate('meetings');
-          }}
-          onNavigateToResearch={() => {
-            onNavigate('research');
-          }}
-        />
+        {/* Split Sales Inbox / Loading State */}
+        {isLoading ? (
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '12px',
+            border: '1px solid #eaecf0',
+            margin: '0 32px',
+            padding: '60px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px'
+          }}>
+            <Loader2 size={32} color="#4f46e5" className="animate-spin" />
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+              Loading Outreach Conversations...
+            </div>
+            <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+              Connecting to live multi-channel communications inbox
+            </div>
+          </div>
+        ) : (
+          <OutreachConversationView
+            conversations={conversations}
+            activeConversationId={activeConversationId}
+            onSelectConversation={(c) => setActiveConversationId(c.id)}
+            onSendMessage={handleSendMessage}
+            onCreateDealFromOutreach={() => {
+              onNavigate('pipeline');
+            }}
+            onScheduleMeetingFromOutreach={() => {
+              onNavigate('meetings');
+            }}
+            onNavigateToResearch={() => {
+              onNavigate('research');
+            }}
+          />
+        )}
       </div>
 
       {/* New Outreach Modal */}

@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { 
   X, 
   Sparkles, 
-  Calendar 
+  Calendar,
+  Loader2 
 } from 'lucide-react';
 import type { MeetingItem, MeetingType } from '../../types/meetings';
 
 interface ScheduleMeetingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onScheduleMeeting: (meeting: MeetingItem) => void;
+  onScheduleMeeting: (meeting: Partial<MeetingItem>) => Promise<void> | void;
 }
 
 export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
@@ -22,40 +23,34 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
   const [title, setTitle] = useState('');
   const [meetingType, setMeetingType] = useState<MeetingType>('discovery');
   const [scheduledTime, setScheduledTime] = useState('Tomorrow, 2:00 PM (WAT)');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyName.trim() || !contactName.trim()) return;
+    if (!companyName.trim() || !contactName.trim() || isSubmitting) return;
 
-    const newMeeting: MeetingItem = {
-      id: `meet-${Date.now()}`,
-      title: title || `${companyName} Discovery & Solution Walkthrough`,
-      meetingType,
-      companyName,
-      domain: `${companyName.toLowerCase().replace(/\s+/g, '')}.com`,
-      contactName,
-      contactRole: 'VP of Operations',
-      contactAvatarBg: '#dbeafe',
-      contactAvatarColor: '#1e40af',
-      scheduledTime,
-      durationMinutes: 30,
-      meetingUrl: 'https://meet.google.com/hnt-sales-demo',
-      status: 'upcoming',
-      dealValue: 18000,
-      opportunityScore: 94,
-      aiPrepBrief: {
-        keyTakeaway: `${companyName} is expanding headcount rapidly and seeking streamlined vendor onboarding.`,
-        recentSignals: ['38 New job postings in Lagos', 'Pan-African expansion'],
-        suggestedQuestions: ['What are the biggest onboarding challenges for incoming team leads?', 'What is your timeline for decision making?']
-      },
-      agenda: ['Introductions & Context (5m)', 'Discovery & Needs Analysis (15m)', 'Solution Presentation (10m)'],
-      notes: ''
-    };
-
-    onScheduleMeeting(newMeeting);
-    onClose();
+    setIsSubmitting(true);
+    try {
+      await onScheduleMeeting({
+        title: title.trim() || `${companyName.trim()} Discovery & Solution Walkthrough`,
+        meetingType,
+        companyName: companyName.trim(),
+        domain: `${companyName.toLowerCase().replace(/\s+/g, '')}.com`,
+        contactName: contactName.trim(),
+        contactRole: 'Decision Maker',
+        scheduledTime,
+        durationMinutes: 30,
+        dealValue: 18000,
+        opportunityScore: 92
+      });
+      onClose();
+    } catch (err) {
+      console.error('Failed to schedule meeting:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -73,183 +68,220 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
       <div style={{
         backgroundColor: '#ffffff',
         borderRadius: '16px',
-        width: '540px',
+        width: '520px',
         maxWidth: '100%',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-        display: 'flex',
-        flexDirection: 'column',
         overflow: 'hidden'
       }}>
         {/* Header */}
         <div style={{
-          padding: '18px 24px',
-          background: 'linear-gradient(135deg, #090d16 0%, #1e1b4b 100%)',
-          color: '#ffffff',
+          padding: '20px 24px',
+          borderBottom: '1px solid #eaecf0',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          backgroundColor: '#f8fafc'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              backgroundColor: '#eff6ff',
+              color: '#2563eb',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <Sparkles size={16} color="#ffffff" />
+              <Calendar size={18} />
             </div>
             <div>
-              <h3 style={{ fontSize: '15px', fontWeight: 800, margin: 0, color: '#ffffff' }}>
-                Schedule Sales Meeting
+              <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                Schedule Prospect Meeting
               </h3>
-              <p style={{ fontSize: '11px', color: '#a5b4fc', margin: '2px 0 0 0' }}>
-                Automatically generates AI prep briefs & discovery prompts
+              <p style={{ fontSize: '11.5px', color: '#64748b', margin: '2px 0 0 0' }}>
+                Auto-generates AI prep briefing & questions based on company signals
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px' }}
+            disabled={isSubmitting}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#94a3b8',
+              padding: '4px'
+            }}
           >
-            <X size={18} color="#ffffff" />
+            <X size={18} />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <form onSubmit={handleSubmit} style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Company & Contact */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Target Company <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="e.g. Acme Technologies"
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '12.5px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Lead Contact Name <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  placeholder="e.g. Jane Smith"
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '12.5px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Title */}
             <div>
-              <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                Company Name *
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Meeting Title / Focus
               </label>
               <input
                 type="text"
-                placeholder="e.g. Flutterwave, Paystack"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Workforce Enablement & Coaching Architecture Pitch"
                 style={{
                   width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #cbd5e1',
+                  padding: '9px 12px',
                   borderRadius: '8px',
-                  fontSize: '13px',
-                  fontFamily: 'inherit',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                Key Contact Name *
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Jane Smith"
-                value={contactName}
-                onChange={(e) => setContactName(e.target.value)}
-                required
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
                   border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontFamily: 'inherit',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-              Meeting Title / Agenda Focus
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Workforce Strategy & Capability Pitch"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontFamily: 'inherit',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                Meeting Type
-              </label>
-              <select
-                value={meetingType}
-                onChange={(e) => setMeetingType(e.target.value as MeetingType)}
-                style={{
-                  width: '100%',
-                  padding: '8px 10px',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
                   fontSize: '12.5px',
-                  fontFamily: 'inherit'
-                }}
-              >
-                <option value="discovery">Discovery Call</option>
-                <option value="demo">Demo / Pitch</option>
-                <option value="proposal_review">Proposal Review</option>
-                <option value="negotiation">Negotiation Call</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-                Date & Time
-              </label>
-              <input
-                type="text"
-                value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontFamily: 'inherit',
                   outline: 'none',
                   boxSizing: 'border-box'
                 }}
               />
             </div>
+
+            {/* Type & Timing */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Meeting Stage / Type
+                </label>
+                <select
+                  value={meetingType}
+                  onChange={(e) => setMeetingType(e.target.value as MeetingType)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '12.5px',
+                    backgroundColor: '#ffffff',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="discovery">Discovery Call</option>
+                  <option value="demo">Product Demo</option>
+                  <option value="proposal_review">Proposal Review</option>
+                  <option value="negotiation">Negotiation / Close</option>
+                  <option value="checkin">Check-in</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Scheduled Date & Time
+                </label>
+                <input
+                  type="text"
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  placeholder="e.g. Tomorrow, 2:00 PM (WAT)"
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '12.5px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* AI Signal Briefing Notice */}
+            <div style={{
+              padding: '12px 14px',
+              backgroundColor: '#eff6ff',
+              borderRadius: '10px',
+              border: '1px solid #bfdbfe',
+              fontSize: '11.5px',
+              color: '#1e40af',
+              lineHeight: 1.45,
+              display: 'flex',
+              gap: '8px'
+            }}>
+              <Sparkles size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong>Auto-Generated AI Briefing:</strong> Huntiq will cross-reference the company&apos;s latest hiring signals and tech stack to generate key takeaways and suggested questions.
+              </div>
+            </div>
           </div>
 
-          {/* Footer Buttons */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+          {/* Action Footer */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '10px',
+            marginTop: '24px',
+            paddingTop: '16px',
+            borderTop: '1px solid #f1f5f9'
+          }}>
             <button
               type="button"
               onClick={onClose}
+              disabled={isSubmitting}
               style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
+                padding: '8px 16px',
                 borderRadius: '8px',
-                padding: '8px 14px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                color: '#475569',
                 fontSize: '12px',
                 fontWeight: 600,
-                color: '#475569',
                 cursor: 'pointer'
               }}
             >
@@ -258,23 +290,33 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
 
             <button
               type="submit"
+              disabled={!companyName.trim() || !contactName.trim() || isSubmitting}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                backgroundColor: '#4f46e5',
-                color: '#ffffff',
-                border: 'none',
+                padding: '8px 20px',
                 borderRadius: '8px',
-                padding: '8px 18px',
-                fontSize: '12.5px',
+                border: 'none',
+                backgroundColor: companyName.trim() && contactName.trim() && !isSubmitting ? '#4f46e5' : '#a5b4fc',
+                color: '#ffffff',
+                fontSize: '12px',
                 fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)'
+                cursor: companyName.trim() && contactName.trim() && !isSubmitting ? 'pointer' : 'not-allowed',
+                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)'
               }}
             >
-              <Calendar size={14} />
-              <span>Confirm Meeting & Generate Brief</span>
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" />
+                  <span>Scheduling Call...</span>
+                </>
+              ) : (
+                <>
+                  <Calendar size={13} />
+                  <span>Confirm Meeting</span>
+                </>
+              )}
             </button>
           </div>
         </form>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { TasksKpiCards } from './TasksKpiCards';
 import { TasksTable } from './TasksTable';
@@ -6,9 +6,18 @@ import { NewTaskModal } from './NewTaskModal';
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import type { TaskItem, TasksKpiSummary } from '../../types/tasks';
 import { 
+  fetchTasks, 
+  toggleTaskComplete as apiToggleTaskComplete, 
+  createTask as apiCreateTask 
+} from '../../api/tasks';
+import { 
   CheckSquare, 
   Sparkles, 
-  Plus 
+  Plus, 
+  RefreshCw, 
+  AlertCircle, 
+  CheckCircle2, 
+  Loader2 
 } from 'lucide-react';
 
 interface TasksPageProps {
@@ -24,104 +33,74 @@ export const TasksPage: React.FC<TasksPageProps> = ({
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeKpiFilter, setActiveKpiFilter] = useState('due_today');
 
-  // Initial Mock Tasks
-  const [tasks, setTasks] = useState<TaskItem[]>([
-    {
-      id: 't-1',
-      title: 'Send revised contract SLA to Jane Smith',
-      description: 'Negotiate 3-month regional leadership ramp payment terms.',
-      priority: 'Urgent',
-      status: 'todo',
-      dueDate: 'Today, 4:00 PM',
-      dueCategory: 'today',
-      relatedType: 'deal',
-      relatedName: 'Acme Technologies',
-      ownerName: 'Ayoola Ade',
-      ownerAvatarBg: '#eff6ff',
-      ownerAvatarColor: '#1d4ed8'
-    },
-    {
-      id: 't-2',
-      title: 'Prepare demo deck for Paystack discovery call',
-      description: 'Highlight sales enablement & leadership coaching curriculum.',
-      priority: 'High',
-      status: 'todo',
-      dueDate: 'Thursday, 12:00 PM',
-      dueCategory: 'upcoming',
-      relatedType: 'meeting',
-      relatedName: 'Paystack Demo Call',
-      ownerName: 'Ayoola Ade',
-      ownerAvatarBg: '#eff6ff',
-      ownerAvatarColor: '#1d4ed8'
-    },
-    {
-      id: 't-3',
-      title: 'Follow up on Flutterwave proposal executive review',
-      description: 'Check in with Oluwaseun on board approval for 45 compliance hires.',
-      priority: 'High',
-      status: 'todo',
-      dueDate: 'In 2 days',
-      dueCategory: 'upcoming',
-      relatedType: 'deal',
-      relatedName: 'Flutterwave',
-      ownerName: 'Ayoola Ade',
-      ownerAvatarBg: '#eff6ff',
-      ownerAvatarColor: '#1d4ed8'
-    },
-    {
-      id: 't-4',
-      title: 'Re-engage Delta Systems COO regarding stalled proposal',
-      description: 'Proposal viewed 4 times without response in 6 days.',
-      priority: 'Urgent',
-      status: 'todo',
-      dueDate: 'Yesterday (Overdue)',
-      dueCategory: 'overdue',
-      relatedType: 'deal',
-      relatedName: 'Delta Systems',
-      ownerName: 'Ayoola Ade',
-      ownerAvatarBg: '#eff6ff',
-      ownerAvatarColor: '#1d4ed8'
-    },
-    {
-      id: 't-5',
-      title: 'Review new hiring signal alert for Moniepoint',
-      description: '32 new product & commercial openings detected in Lagos.',
-      priority: 'Medium',
-      status: 'completed',
-      dueDate: 'May 16',
-      dueCategory: 'completed',
-      relatedType: 'company',
-      relatedName: 'Moniepoint Inc',
-      ownerName: 'Ayoola Ade',
-      ownerAvatarBg: '#eff6ff',
-      ownerAvatarColor: '#1d4ed8',
-      completedAt: 'May 16, 2:30 PM'
-    }
-  ]);
+  // Live Task State
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [kpiSummary, setKpiSummary] = useState<TasksKpiSummary>({
+    dueToday: 0,
+    overdue: 0,
+    upcoming: 0,
+    completedCount: 0
+  });
 
-  const kpiSummary: TasksKpiSummary = {
-    dueToday: tasks.filter(t => t.dueCategory === 'today').length,
-    overdue: tasks.filter(t => t.dueCategory === 'overdue').length,
-    upcoming: tasks.filter(t => t.dueCategory === 'upcoming').length,
-    completedCount: 124
-  };
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
 
-  const handleToggleTask = (taskId: string) => {
-    setTasks(tasks.map(t => {
-      if (t.id === taskId) {
-        const nextStatus = t.status === 'completed' ? 'todo' : 'completed';
-        return {
-          ...t,
-          status: nextStatus,
-          dueCategory: nextStatus === 'completed' ? 'completed' : t.dueCategory
-        };
+  const loadTasks = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setIsRefreshing(true);
+    else setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetchTasks();
+      setTasks(response.tasks || []);
+      if (response.kpiSummary) {
+        setKpiSummary(response.kpiSummary);
       }
-      return t;
-    }));
+    } catch (err: any) {
+      console.error('Failed to load tasks from API:', err);
+      setErrorMessage(err?.message || 'Unable to connect to live tasks server');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  const handleToggleTask = async (taskId: string) => {
+    try {
+      const updated = await apiToggleTaskComplete(taskId);
+      setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
+      setActionToast(
+        updated.status === 'completed' 
+          ? 'Task marked as complete! 🎉' 
+          : 'Task reopened and moved to To-Do'
+      );
+      setTimeout(() => setActionToast(null), 3000);
+      await loadTasks(true);
+    } catch (err: any) {
+      console.error('Failed to toggle task completion:', err);
+      setActionToast('Failed to update task status');
+      setTimeout(() => setActionToast(null), 3000);
+    }
   };
 
-  const handleCreateTask = (newTask: TaskItem) => {
-    setTasks([newTask, ...tasks]);
+  const handleCreateTask = async (newTaskPayload: Partial<TaskItem>) => {
+    try {
+      const created = await apiCreateTask(newTaskPayload);
+      setTasks(prev => [created, ...prev]);
+      setActionToast(`Action item "${created.title}" created!`);
+      setTimeout(() => setActionToast(null), 3500);
+      await loadTasks(true);
+    } catch (err: any) {
+      console.error('Failed to create task:', err);
+      setActionToast('Failed to create task');
+      setTimeout(() => setActionToast(null), 3000);
+    }
   };
 
   return (
@@ -177,16 +156,52 @@ export const TasksPage: React.FC<TasksPageProps> = ({
               <CheckSquare size={16} color="#2563eb" />
             </div>
             <div>
-              <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                Tasks & Sales Action Items
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                  Sales Tasks & Action Items
+                </h1>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  backgroundColor: '#ecfdf5',
+                  color: '#059669',
+                  border: '1px solid #a7f3d0',
+                  padding: '1px 6px',
+                  borderRadius: '4px'
+                }}>
+                  SYNCED
+                </span>
+              </div>
               <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: 1.2 }}>
-                Stay on top of follow-ups, calls, and actions that accelerate revenue
+                Prioritize deal momentum, follow-ups, contract reviews, and meeting actions
               </p>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Sync Button */}
+            <button
+              onClick={() => loadTasks(true)}
+              disabled={isRefreshing}
+              title="Sync tasks with live backend"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                color: '#475569',
+                cursor: isRefreshing ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+              <span>{isRefreshing ? 'Syncing...' : 'Sync'}</span>
+            </button>
+
             <button
               onClick={() => setIsCopilotOpen(true)}
               style={{
@@ -230,6 +245,63 @@ export const TasksPage: React.FC<TasksPageProps> = ({
           </div>
         </header>
 
+        {/* Action Toast Banner */}
+        {actionToast && (
+          <div style={{
+            margin: '12px 32px 0',
+            padding: '10px 16px',
+            backgroundColor: '#ecfdf5',
+            border: '1px solid #a7f3d0',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '12px',
+            color: '#065f46',
+            fontWeight: 600
+          }}>
+            <CheckCircle2 size={15} color="#059669" />
+            <span>{actionToast}</span>
+          </div>
+        )}
+
+        {/* Error Alert Banner */}
+        {errorMessage && (
+          <div style={{
+            margin: '12px 32px 0',
+            padding: '12px 16px',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            color: '#991b1b',
+            fontWeight: 600
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertCircle size={16} color="#dc2626" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              onClick={() => loadTasks(true)}
+              style={{
+                backgroundColor: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Retry Sync
+            </button>
+          </div>
+        )}
+
         {/* KPI Metrics Row */}
         <div style={{ margin: '20px 0' }}>
           <TasksKpiCards
@@ -239,18 +311,41 @@ export const TasksPage: React.FC<TasksPageProps> = ({
           />
         </div>
 
-        {/* Tasks Table */}
-        <TasksTable
-          tasks={tasks}
-          onToggleTask={handleToggleTask}
-          onCreateTask={() => setIsNewTaskModalOpen(true)}
-          onNavigateToRelated={(type) => {
-            if (type === 'deal') onNavigate('pipeline');
-            else if (type === 'company') onNavigate('research');
-            else if (type === 'meeting') onNavigate('meetings');
-            else onNavigate('contacts');
-          }}
-        />
+        {/* Tasks Table / Loading State */}
+        {isLoading ? (
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '12px',
+            border: '1px solid #eaecf0',
+            margin: '0 32px',
+            padding: '60px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px'
+          }}>
+            <Loader2 size={32} color="#4f46e5" className="animate-spin" />
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+              Loading Action Items...
+            </div>
+            <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+              Retrieving high-priority sales execution tasks and deadlines
+            </div>
+          </div>
+        ) : (
+          <TasksTable
+            tasks={tasks}
+            onToggleTask={handleToggleTask}
+            onCreateTask={() => setIsNewTaskModalOpen(true)}
+            onNavigateToRelated={(type) => {
+              if (type === 'deal') onNavigate('pipeline');
+              else if (type === 'meeting') onNavigate('meetings');
+              else if (type === 'company') onNavigate('companies');
+              else onNavigate('pipeline');
+            }}
+          />
+        )}
       </div>
 
       {/* New Task Modal */}

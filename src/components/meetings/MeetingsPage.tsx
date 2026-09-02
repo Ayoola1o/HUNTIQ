@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { MeetingsKpiCards } from './MeetingsKpiCards';
 import { MeetingsList } from './MeetingsList';
@@ -7,9 +7,17 @@ import { ScheduleMeetingModal } from './ScheduleMeetingModal';
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import type { MeetingItem, MeetingsKpiSummary } from '../../types/meetings';
 import { 
+  fetchMeetings, 
+  scheduleMeeting as apiScheduleMeeting 
+} from '../../api/meetings';
+import { 
   Calendar, 
   Sparkles, 
-  Plus 
+  Plus, 
+  RefreshCw, 
+  AlertCircle, 
+  CheckCircle2, 
+  Loader2 
 } from 'lucide-react';
 
 interface MeetingsPageProps {
@@ -26,98 +34,57 @@ export const MeetingsPage: React.FC<MeetingsPageProps> = ({
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeKpiFilter, setActiveKpiFilter] = useState('upcoming');
 
-  // Initial Mock Meetings
-  const [meetings, setMeetings] = useState<MeetingItem[]>([
-    {
-      id: 'meet-1',
-      title: 'Workforce Enablement & Leadership Framework Pitch',
-      meetingType: 'demo',
-      companyName: 'Acme Technologies',
-      domain: 'acmetech.com',
-      contactName: 'Jane Smith',
-      contactRole: 'Head of People & Culture',
-      contactAvatarBg: '#fbcfe8',
-      contactAvatarColor: '#9d174d',
-      scheduledTime: 'Today, 2:00 PM (WAT)',
-      durationMinutes: 30,
-      meetingUrl: 'https://meet.google.com/hnt-acme-pitch',
-      status: 'upcoming',
-      dealValue: 18000,
-      opportunityScore: 94,
-      aiPrepBrief: {
-        keyTakeaway: 'Jane is facing 38 new openings and wants a 3-month coaching curriculum for 14 incoming team leads.',
-        recentSignals: ['38 New job postings in Lagos', 'Series A funding raised ($4.2M)', 'Promoted 3 team leads to directors'],
-        suggestedQuestions: [
-          'What is your target go-live date for the new team leads?',
-          'How are you currently measuring management velocity during ramp?'
-        ]
-      },
-      agenda: ['Introductions & Context (5m)', 'Curriculum Demo & Scope (15m)', 'Pricing SLA & Next Steps (10m)'],
-      notes: ''
-    },
-    {
-      id: 'meet-2',
-      title: 'FinTech Compliance Team Onboarding Discovery',
-      meetingType: 'discovery',
-      companyName: 'Flutterwave',
-      domain: 'flutterwave.com',
-      contactName: 'Oluwaseun Adewale',
-      contactRole: 'VP People Operations',
-      contactAvatarBg: '#ede9fe',
-      contactAvatarColor: '#5b21b6',
-      scheduledTime: 'Tomorrow, 11:30 AM (WAT)',
-      durationMinutes: 30,
-      meetingUrl: 'https://meet.google.com/hnt-flw-discovery',
-      status: 'upcoming',
-      dealValue: 32000,
-      opportunityScore: 96,
-      aiPrepBrief: {
-        keyTakeaway: 'Flutterwave recently obtained cross-border licensing and is scaling compliance headcount by 45 hires.',
-        recentSignals: ['Ghana and Egypt regulatory approvals', 'Headcount surge +24% in Q1'],
-        suggestedQuestions: [
-          'What are the core jurisdictional frameworks your team leads need to be certified on?',
-          'Would a blended asynchronous + coach model fit your distributed teams?'
-        ]
-      },
-      agenda: ['Licensing Context (5m)', 'Needs Assessment (15m)', 'Capability Fit & Next Steps (10m)'],
-      notes: ''
-    },
-    {
-      id: 'meet-3',
-      title: 'Commercial Team Training Workshop Scope Call',
-      meetingType: 'negotiation',
-      companyName: 'Nimbus Analytics',
-      domain: 'nimbusanalytics.com',
-      contactName: 'Kemi Adebayo',
-      contactRole: 'Chief Commercial Officer',
-      contactAvatarBg: '#fee2e2',
-      contactAvatarColor: '#991b1b',
-      scheduledTime: 'May 16 (Completed)',
-      durationMinutes: 45,
-      meetingUrl: 'https://meet.google.com/hnt-nimbus-close',
-      status: 'completed',
-      dealValue: 9500,
-      opportunityScore: 86,
-      aiPrepBrief: {
-        keyTakeaway: 'Finalized commercial terms for $9,500 kickoff.',
-        recentSignals: ['Deal won and contract signed'],
-        suggestedQuestions: []
-      },
-      agenda: ['Contract Review', 'Sign-off'],
-      notes: 'Deal finalized successfully.'
+  // Live API State
+  const [meetings, setMeetings] = useState<MeetingItem[]>([]);
+  const [kpiSummary, setKpiSummary] = useState<MeetingsKpiSummary>({
+    upcomingMeetings: 0,
+    todayCount: 0,
+    completedThisMonth: 0,
+    bookedFromOutreach: 0
+  });
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+
+  const loadMeetings = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setIsRefreshing(true);
+    else setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetchMeetings();
+      setMeetings(response.meetings || []);
+      if (response.kpiSummary) {
+        setKpiSummary(response.kpiSummary);
+      }
+    } catch (err: any) {
+      console.error('Failed to load meetings from API:', err);
+      setErrorMessage(err?.message || 'Unable to connect to live meetings server');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
-  ]);
+  }, []);
 
-  const kpiSummary: MeetingsKpiSummary = {
-    upcomingMeetings: meetings.filter(m => m.status === 'upcoming').length,
-    todayCount: 1,
-    completedThisMonth: 28,
-    bookedFromOutreach: 75
-  };
+  useEffect(() => {
+    loadMeetings();
+  }, [loadMeetings]);
 
-  const handleScheduleMeeting = (newMeeting: MeetingItem) => {
-    setMeetings([newMeeting, ...meetings]);
-    setSelectedMeeting(newMeeting);
+  const handleScheduleMeeting = async (newMeetingPayload: Partial<MeetingItem>) => {
+    try {
+      const created = await apiScheduleMeeting(newMeetingPayload);
+      setMeetings(prev => [created, ...prev]);
+      setSelectedMeeting(created);
+      setActionToast(`Meeting "${created.title}" scheduled! AI brief ready.`);
+      setTimeout(() => setActionToast(null), 3500);
+      await loadMeetings(true);
+    } catch (err: any) {
+      console.error('Failed to schedule meeting via API:', err);
+      setActionToast('Failed to schedule meeting');
+      setTimeout(() => setActionToast(null), 3000);
+    }
   };
 
   return (
@@ -173,9 +140,22 @@ export const MeetingsPage: React.FC<MeetingsPageProps> = ({
               <Calendar size={16} color="#2563eb" />
             </div>
             <div>
-              <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                Sales Meetings & AI Call Briefs
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                  Sales Meetings & AI Call Briefs
+                </h1>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  backgroundColor: '#ecfdf5',
+                  color: '#059669',
+                  border: '1px solid #a7f3d0',
+                  padding: '1px 6px',
+                  borderRadius: '4px'
+                }}>
+                  SYNCED
+                </span>
+              </div>
               <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: 1.2 }}>
                 Review scheduled demos, leverage AI pre-call briefs, and move deals across pipeline
               </p>
@@ -183,6 +163,29 @@ export const MeetingsPage: React.FC<MeetingsPageProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Sync Button */}
+            <button
+              onClick={() => loadMeetings(true)}
+              disabled={isRefreshing}
+              title="Sync meetings with live backend"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                color: '#475569',
+                cursor: isRefreshing ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+              <span>{isRefreshing ? 'Syncing...' : 'Sync'}</span>
+            </button>
+
             <button
               onClick={() => setIsCopilotOpen(true)}
               style={{
@@ -226,6 +229,63 @@ export const MeetingsPage: React.FC<MeetingsPageProps> = ({
           </div>
         </header>
 
+        {/* Action Toast Banner */}
+        {actionToast && (
+          <div style={{
+            margin: '12px 32px 0',
+            padding: '10px 16px',
+            backgroundColor: '#ecfdf5',
+            border: '1px solid #a7f3d0',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '12px',
+            color: '#065f46',
+            fontWeight: 600
+          }}>
+            <CheckCircle2 size={15} color="#059669" />
+            <span>{actionToast}</span>
+          </div>
+        )}
+
+        {/* Error Alert Banner */}
+        {errorMessage && (
+          <div style={{
+            margin: '12px 32px 0',
+            padding: '12px 16px',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            color: '#991b1b',
+            fontWeight: 600
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertCircle size={16} color="#dc2626" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              onClick={() => loadMeetings(true)}
+              style={{
+                backgroundColor: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Retry Sync
+            </button>
+          </div>
+        )}
+
         {/* KPI Metrics Row */}
         <div style={{ margin: '20px 0' }}>
           <MeetingsKpiCards
@@ -235,17 +295,39 @@ export const MeetingsPage: React.FC<MeetingsPageProps> = ({
           />
         </div>
 
-        {/* Meetings List */}
-        <MeetingsList
-          meetings={meetings}
-          selectedMeetingId={selectedMeeting?.id || null}
-          onSelectMeeting={(m) => setSelectedMeeting(m)}
-          onScheduleMeeting={() => setIsScheduleModalOpen(true)}
-          onNavigateToPipeline={() => onNavigate('pipeline')}
-        />
+        {/* Meetings List / Loading State */}
+        {isLoading ? (
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '12px',
+            border: '1px solid #eaecf0',
+            margin: '0 32px',
+            padding: '60px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px'
+          }}>
+            <Loader2 size={32} color="#4f46e5" className="animate-spin" />
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+              Loading Scheduled Meetings...
+            </div>
+            <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+              Assembling AI prep briefs, agenda points, and market momentum signals
+            </div>
+          </div>
+        ) : (
+          <MeetingsList
+            meetings={meetings}
+            selectedMeetingId={selectedMeeting?.id || null}
+            onSelectMeeting={(m) => setSelectedMeeting(m)}
+            onScheduleMeeting={() => setIsScheduleModalOpen(true)}
+          />
+        )}
       </div>
 
-      {/* Meeting Detail & AI Brief Modal */}
+      {/* Meeting Detail Modal */}
       <MeetingDetailModal
         meeting={selectedMeeting}
         isOpen={Boolean(selectedMeeting)}

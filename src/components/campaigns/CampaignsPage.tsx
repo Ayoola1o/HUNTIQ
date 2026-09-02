@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { CampaignKpiCards } from './CampaignKpiCards';
 import { CampaignsTable } from './CampaignsTable';
@@ -7,9 +7,18 @@ import { CreateCampaignModal } from './CreateCampaignModal';
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import type { CampaignItem, CampaignKpiSummary } from '../../types/campaign';
 import { 
+  fetchCampaigns, 
+  createCampaign as apiCreateCampaign, 
+  toggleCampaignStatus as apiToggleCampaignStatus 
+} from '../../api/campaigns';
+import { 
   Send, 
   Sparkles, 
-  Plus 
+  Plus, 
+  RefreshCw, 
+  AlertCircle, 
+  CheckCircle2, 
+  Loader2 
 } from 'lucide-react';
 
 interface CampaignsPageProps {
@@ -26,173 +35,80 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeKpiFilter, setActiveKpiFilter] = useState('active_campaigns');
 
-  // Initial Mock Campaigns
-  const [campaigns, setCampaigns] = useState<CampaignItem[]>([
-    {
-      id: 'camp-1',
-      name: 'Lagos Tech Hiring Surge Sequence',
-      description: 'Outreach to HR leaders at high-growth tech scaleups expanding headcounts by 20%+',
-      channel: 'multichannel',
-      status: 'active',
-      targetAudienceName: 'Lagos Technology Growth Companies',
-      audienceCount: 184,
-      sentCount: 142,
-      openRate: 68.4,
-      replyRate: 9.2,
-      opportunitiesCount: 12,
-      expectedValue: 74000,
-      createdAt: 'May 10, 2025',
-      lastActivity: '12 new emails dispatched today',
-      sequence: [
-        {
-          id: 'sq-1',
-          stepNumber: 1,
-          channel: 'email',
-          title: 'AI Signal-Based Value Intro',
-          delayDays: 0,
-          contentSnippet: 'I noticed your recent 38 openings and expansion into Ghana... We help scaleups reduce new-hire ramp by 40%.'
-        },
-        {
-          id: 'sq-2',
-          stepNumber: 2,
-          channel: 'linkedin',
-          title: 'LinkedIn InMail Follow-up',
-          delayDays: 3,
-          contentSnippet: 'Saw your rapid headcount growth—wanted to share our workforce scaling framework.'
-        },
-        {
-          id: 'sq-3',
-          stepNumber: 3,
-          channel: 'call',
-          title: 'Cold Call Opener & Meeting Hook',
-          delayDays: 6,
-          contentSnippet: 'Following up on my note regarding management training for your expanding team.'
-        }
-      ],
-      prospects: [
-        {
-          id: 'p-1',
-          contactName: 'Jane Smith',
-          contactRole: 'Head of People',
-          companyName: 'Acme Technologies',
-          domain: 'acmetech.com',
-          email: 'jane@acmetech.com',
-          status: 'replied',
-          opportunityScore: 94,
-          lastTouch: 'Replied yesterday'
-        },
-        {
-          id: 'p-2',
-          contactName: 'Tunde Bakare',
-          contactRole: 'CTO',
-          companyName: 'CloudNova Technologies',
-          domain: 'cloudnova.io',
-          email: 'tunde@cloudnova.io',
-          status: 'opened',
-          opportunityScore: 91,
-          lastTouch: 'Opened email 2h ago'
-        }
-      ]
-    },
-    {
-      id: 'camp-2',
-      name: 'Pan-African FinTech Compliance Outreach',
-      description: 'Engaging VP People & Chief Compliance Officers navigating multi-market central bank licenses.',
-      channel: 'email',
-      status: 'active',
-      targetAudienceName: 'Pan-African FinTech Scaleups',
-      audienceCount: 96,
-      sentCount: 78,
-      openRate: 72.1,
-      replyRate: 8.5,
-      opportunitiesCount: 8,
-      expectedValue: 62000,
-      createdAt: 'May 12, 2025',
-      lastActivity: 'Step 2 sent to 14 contacts',
-      sequence: [
-        {
-          id: 'sq-4',
-          stepNumber: 1,
-          channel: 'email',
-          title: 'Cross-Border Compliance Scaling Intro',
-          delayDays: 0,
-          contentSnippet: 'Congratulations on recent licensing in West Africa. We help FinTechs prepare compliance officers.'
-        },
-        {
-          id: 'sq-5',
-          stepNumber: 2,
-          channel: 'email',
-          title: 'Case Study & Framework Sharing',
-          delayDays: 4,
-          contentSnippet: 'Here is how we helped a top payment scaleup cut compliance onboarding time.'
-        }
-      ],
-      prospects: [
-        {
-          id: 'p-3',
-          contactName: 'Oluwaseun Adewale',
-          contactRole: 'VP People',
-          companyName: 'Flutterwave',
-          domain: 'flutterwave.com',
-          email: 'oluwaseun@flutterwave.com',
-          status: 'replied',
-          opportunityScore: 96,
-          lastTouch: 'Discovery meeting booked'
-        }
-      ]
-    },
-    {
-      id: 'camp-3',
-      name: 'Abuja Public & Commercial Modernization',
-      description: 'Advisory and org design outreach to enterprise operators in Abuja.',
-      channel: 'linkedin',
-      status: 'paused',
-      targetAudienceName: 'Abuja Commercial Enterprise',
-      audienceCount: 54,
-      sentCount: 30,
-      openRate: 54.0,
-      replyRate: 4.8,
-      opportunitiesCount: 4,
-      expectedValue: 48000,
-      createdAt: 'May 04, 2025',
-      lastActivity: 'Campaign paused by user',
-      sequence: [
-        {
-          id: 'sq-6',
-          stepNumber: 1,
-          channel: 'linkedin',
-          title: 'InMail Introduction',
-          delayDays: 0,
-          contentSnippet: 'Connecting regarding enterprise workflow frameworks.'
-        }
-      ],
-      prospects: []
-    }
-  ]);
+  // Live API State
+  const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
+  const [kpiSummary, setKpiSummary] = useState<CampaignKpiSummary>({
+    activeCampaigns: 0,
+    totalAudience: 0,
+    totalReplies: 0,
+    opportunitiesCreated: 0,
+    pipelineGenerated: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
 
-  const kpiSummary: CampaignKpiSummary = {
-    activeCampaigns: campaigns.filter(c => c.status === 'active').length,
-    totalAudience: campaigns.reduce((acc, c) => acc + c.audienceCount, 0),
-    totalReplies: Math.round(campaigns.reduce((acc, c) => acc + (c.sentCount * (c.replyRate / 100)), 0)),
-    opportunitiesCreated: campaigns.reduce((acc, c) => acc + c.opportunitiesCount, 0),
-    pipelineGenerated: campaigns.reduce((acc, c) => acc + c.expectedValue, 0)
-  };
+  const loadCampaigns = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setIsRefreshing(true);
+    else setIsLoading(true);
+    setErrorMessage(null);
 
-  const handleToggleStatus = (campId: string) => {
-    setCampaigns(campaigns.map(c => {
-      if (c.id === campId) {
-        return {
-          ...c,
-          status: c.status === 'active' ? 'paused' : 'active'
-        };
+    try {
+      const response = await fetchCampaigns();
+      setCampaigns(response.campaigns || []);
+      if (response.kpiSummary) {
+        setKpiSummary(response.kpiSummary);
       }
-      return c;
-    }));
+    } catch (err: any) {
+      console.error('Failed to load campaigns from API:', err);
+      setErrorMessage(err?.message || 'Unable to connect to live outreach engine');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCampaigns();
+  }, [loadCampaigns]);
+
+  const handleToggleStatus = async (campId: string) => {
+    try {
+      const updated = await apiToggleCampaignStatus(campId);
+      setCampaigns(prev => prev.map(c => c.id === campId ? updated : c));
+      
+      // Update selected campaign if currently inspecting
+      if (selectedCampaign?.id === campId) {
+        setSelectedCampaign(updated);
+      }
+
+      setActionToast(`Campaign status updated to ${updated.status.toUpperCase()}`);
+      setTimeout(() => setActionToast(null), 3500);
+
+      // Re-calculate KPI metrics
+      const activeCount = campaigns.filter(c => c.id === campId ? updated.status === 'active' : c.status === 'active').length;
+      setKpiSummary(prev => ({ ...prev, activeCampaigns: activeCount }));
+    } catch (err: any) {
+      console.error('Failed to toggle campaign status:', err);
+      setActionToast('Failed to update campaign status');
+      setTimeout(() => setActionToast(null), 3000);
+    }
   };
 
-  const handleCreateCampaign = (newCamp: CampaignItem) => {
-    setCampaigns([newCamp, ...campaigns]);
-    setSelectedCampaign(newCamp);
+  const handleCreateCampaign = async (newCampPayload: Partial<CampaignItem>) => {
+    try {
+      const created = await apiCreateCampaign(newCampPayload);
+      setCampaigns(prev => [created, ...prev]);
+      setSelectedCampaign(created);
+      setActionToast(`Campaign "${created.name}" launched with ${created.sequence.length}-step sequence!`);
+      setTimeout(() => setActionToast(null), 4000);
+      await loadCampaigns(true);
+    } catch (err: any) {
+      console.error('Failed to create campaign via API:', err);
+      setActionToast('Failed to create campaign');
+      setTimeout(() => setActionToast(null), 3000);
+    }
   };
 
   return (
@@ -248,16 +164,52 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({
               <Send size={16} color="#2563eb" />
             </div>
             <div>
-              <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                Outreach Campaigns & Sequences
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                  Outreach Campaigns & Sequences
+                </h1>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  backgroundColor: '#ecfdf5',
+                  color: '#059669',
+                  border: '1px solid #a7f3d0',
+                  padding: '1px 6px',
+                  borderRadius: '4px'
+                }}>
+                  LIVE ENGINE ACTIVE
+                </span>
+              </div>
               <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: 1.2 }}>
-                Build, launch and monitor automated multi-channel sequences
+                Signal-driven multi-channel sequences generated automatically from live market momentum
               </p>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Refresh Button */}
+            <button
+              onClick={() => loadCampaigns(true)}
+              disabled={isRefreshing}
+              title="Refresh campaign metrics and live dispatches"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                color: '#475569',
+                cursor: isRefreshing ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+              <span>{isRefreshing ? 'Syncing...' : 'Sync'}</span>
+            </button>
+
             <button
               onClick={() => setIsCopilotOpen(true)}
               style={{
@@ -301,6 +253,64 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({
           </div>
         </header>
 
+        {/* Action / Sync Toast Banner */}
+        {actionToast && (
+          <div style={{
+            margin: '12px 32px 0',
+            padding: '10px 16px',
+            backgroundColor: '#ecfdf5',
+            border: '1px solid #a7f3d0',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '12px',
+            color: '#065f46',
+            fontWeight: 600,
+            animation: 'fadeIn 0.2s ease-in-out'
+          }}>
+            <CheckCircle2 size={15} color="#059669" />
+            <span>{actionToast}</span>
+          </div>
+        )}
+
+        {/* Error Alert Banner */}
+        {errorMessage && (
+          <div style={{
+            margin: '12px 32px 0',
+            padding: '12px 16px',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            color: '#991b1b',
+            fontWeight: 600
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertCircle size={16} color="#dc2626" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              onClick={() => loadCampaigns(true)}
+              style={{
+                backgroundColor: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Retry Sync
+            </button>
+          </div>
+        )}
+
         {/* KPI Metrics Row */}
         <div style={{ margin: '20px 0' }}>
           <CampaignKpiCards
@@ -310,14 +320,37 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({
           />
         </div>
 
-        {/* Campaigns Table */}
-        <CampaignsTable
-          campaigns={campaigns}
-          selectedCampaignId={selectedCampaign?.id || null}
-          onSelectCampaign={(c) => setSelectedCampaign(c)}
-          onToggleStatus={handleToggleStatus}
-          onCreateCampaign={() => setIsCreateModalOpen(true)}
-        />
+        {/* Campaigns Table / Loading State */}
+        {isLoading ? (
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '12px',
+            border: '1px solid #eaecf0',
+            margin: '0 32px',
+            padding: '60px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px'
+          }}>
+            <Loader2 size={32} color="#4f46e5" className="animate-spin" />
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+              Loading Outreach Campaigns...
+            </div>
+            <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+              Synchronizing multi-channel sequence performance and response analytics
+            </div>
+          </div>
+        ) : (
+          <CampaignsTable
+            campaigns={campaigns}
+            selectedCampaignId={selectedCampaign?.id || null}
+            onSelectCampaign={(c) => setSelectedCampaign(c)}
+            onToggleStatus={handleToggleStatus}
+            onCreateCampaign={() => setIsCreateModalOpen(true)}
+          />
+        )}
       </div>
 
       {/* Campaign Detail Modal */}

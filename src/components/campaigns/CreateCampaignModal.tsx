@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { 
   X, 
-  Sparkles 
+  Sparkles,
+  Loader2 
 } from 'lucide-react';
 import type { CampaignItem, CampaignChannel } from '../../types/campaign';
 
 interface CreateCampaignModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateCampaign: (campaign: CampaignItem) => void;
+  onCreateCampaign: (campaign: Partial<CampaignItem>) => Promise<void> | void;
 }
 
 export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
@@ -19,74 +20,34 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
   const [name, setName] = useState('');
   const [audienceName, setAudienceName] = useState('Lagos Technology Growth Companies');
   const [channel, setChannel] = useState<CampaignChannel>('multichannel');
-  const [audienceCount] = useState('184');
+  const [audienceCount, setAudienceCount] = useState('184');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || isSubmitting) return;
 
-    const count = parseInt(audienceCount) || 150;
+    setIsSubmitting(true);
+    const count = parseInt(audienceCount, 10) || 150;
 
-    const newCampaign: CampaignItem = {
-      id: `camp-${Date.now()}`,
-      name,
-      description: `Targeting decision makers in ${audienceName} with personalized AI outreach sequences.`,
-      channel,
-      status: 'active',
-      targetAudienceName: audienceName,
-      audienceCount: count,
-      sentCount: 0,
-      openRate: 0,
-      replyRate: 0,
-      opportunitiesCount: 0,
-      expectedValue: 36000,
-      createdAt: 'Just now',
-      lastActivity: 'Campaign initialized',
-      sequence: [
-        {
-          id: 'sq-1',
-          stepNumber: 1,
-          channel: 'email',
-          title: 'AI Signal-Based Value Intro',
-          delayDays: 0,
-          contentSnippet: 'I noticed your recent 38 openings and expansion into Ghana... We help scaleups reduce new-hire ramp by 40%.'
-        },
-        {
-          id: 'sq-2',
-          stepNumber: 2,
-          channel: 'linkedin',
-          title: 'LinkedIn InMail Follow-up',
-          delayDays: 3,
-          contentSnippet: 'Saw your rapid headcount growth—wanted to share our workforce scaling framework.'
-        },
-        {
-          id: 'sq-3',
-          stepNumber: 3,
-          channel: 'call',
-          title: 'Cold Call Opener & Meeting Hook',
-          delayDays: 6,
-          contentSnippet: 'Following up on my note regarding management training for your expanding team.'
-        }
-      ],
-      prospects: [
-        {
-          id: 'p-1',
-          contactName: 'Jane Smith',
-          contactRole: 'Head of People',
-          companyName: 'Acme Technologies',
-          domain: 'acmetech.com',
-          email: 'jane@acmetech.com',
-          status: 'pending',
-          opportunityScore: 94,
-          lastTouch: 'Scheduled for sending'
-        }
-      ]
-    };
-
-    onCreateCampaign(newCampaign);
-    onClose();
+    try {
+      await onCreateCampaign({
+        name: name.trim(),
+        description: `Targeting decision makers in ${audienceName} with personalized AI outreach sequences.`,
+        channel,
+        status: 'active',
+        targetAudienceName: audienceName,
+        audienceCount: count,
+        expectedValue: count * 350
+      });
+      onClose();
+    } catch (err) {
+      console.error('Failed to create campaign:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -99,172 +60,195 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '24px'
+      padding: '20px'
     }}>
       <div style={{
         backgroundColor: '#ffffff',
         borderRadius: '16px',
-        width: '580px',
+        width: '540px',
         maxWidth: '100%',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-        display: 'flex',
-        flexDirection: 'column',
         overflow: 'hidden'
       }}>
         {/* Header */}
         <div style={{
-          padding: '18px 24px',
-          background: 'linear-gradient(135deg, #090d16 0%, #1e1b4b 100%)',
-          color: '#ffffff',
+          padding: '20px 24px',
+          borderBottom: '1px solid #eaecf0',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          backgroundColor: '#f8fafc'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              backgroundColor: '#eff6ff',
+              color: '#2563eb',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <Sparkles size={16} color="#ffffff" />
+              <Sparkles size={18} />
             </div>
             <div>
-              <h3 style={{ fontSize: '15px', fontWeight: 800, margin: 0, color: '#ffffff' }}>
-                Launch New Outreach Campaign
+              <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                Create AI Outreach Campaign
               </h3>
-              <p style={{ fontSize: '11px', color: '#a5b4fc', margin: '2px 0 0 0' }}>
-                Automated multi-step sequences powered by buying signals
+              <p style={{ fontSize: '11.5px', color: '#64748b', margin: '2px 0 0 0' }}>
+                Generate automated multi-channel sequences based on live market signals
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px' }}
+            disabled={isSubmitting}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#94a3b8',
+              padding: '4px'
+            }}
           >
-            <X size={18} color="#ffffff" />
+            <X size={18} />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div>
-            <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-              Campaign Name *
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Lagos HR Directors Hiring Surge, Pan-African FinTech Execs"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontFamily: 'inherit',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-              Target Prospect Audience (from Saved Searches)
-            </label>
-            <select
-              value={audienceName}
-              onChange={(e) => setAudienceName(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                fontSize: '12.5px',
-                fontFamily: 'inherit'
-              }}
-            >
-              <option value="Lagos Technology Growth Companies">Lagos Technology Growth Companies (184 prospects)</option>
-              <option value="Pan-African FinTech Scaleups">Pan-African FinTech Scaleups (96 prospects)</option>
-              <option value="Abuja Public & Commercial Enterprise">Abuja Commercial Enterprise (54 prospects)</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
-              Outreach Channels
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => setChannel('multichannel')}
+        <form onSubmit={handleSubmit} style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            {/* Campaign Name */}
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Campaign Name <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Lagos Tech Hiring Surge Outreach"
                 style={{
-                  border: channel === 'multichannel' ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
-                  backgroundColor: channel === 'multichannel' ? '#f5f3ff' : '#ffffff',
-                  padding: '10px',
+                  width: '100%',
+                  padding: '9px 12px',
                   borderRadius: '8px',
-                  cursor: 'pointer',
-                  textAlign: 'left'
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* Target Audience / ICP */}
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Target Audience (ICP / Segment)
+              </label>
+              <select
+                value={audienceName}
+                onChange={(e) => {
+                  setAudienceName(e.target.value);
+                  if (e.target.value.includes('Lagos')) setAudienceCount('184');
+                  else if (e.target.value.includes('FinTech')) setAudienceCount('96');
+                  else setAudienceCount('120');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  backgroundColor: '#ffffff',
+                  outline: 'none',
+                  boxSizing: 'border-box'
                 }}
               >
-                <strong style={{ fontSize: '12px', color: '#4338ca', display: 'block' }}>Multi-Channel AI</strong>
-                <span style={{ fontSize: '10.5px', color: '#64748b' }}>Email + LinkedIn + Call</span>
-              </button>
+                <option value="Lagos Technology Growth Companies">Lagos Technology Growth Companies (184 matches)</option>
+                <option value="Pan-African FinTech Scaleups">Pan-African FinTech Scaleups (96 matches)</option>
+                <option value="Executive Moves & New Leadership ICP">Executive Moves & New Leadership ICP (42 matches)</option>
+                <option value="Commercial Enterprises & Regional Scaleups">Commercial Enterprises & Regional Scaleups (140 matches)</option>
+              </select>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => setChannel('email')}
-                style={{
-                  border: channel === 'email' ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
-                  backgroundColor: channel === 'email' ? '#f5f3ff' : '#ffffff',
-                  padding: '10px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                <strong style={{ fontSize: '12px', color: '#1e293b', display: 'block' }}>Email Only</strong>
-                <span style={{ fontSize: '10.5px', color: '#64748b' }}>3-step cold email</span>
-              </button>
+            {/* Channel Selection */}
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                Outreach Channel Strategy
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                {[
+                  { id: 'multichannel', title: 'Multi-Channel', desc: 'Email + LinkedIn + Call' },
+                  { id: 'email', title: 'Email Only', desc: 'Direct 3-step sequence' },
+                  { id: 'linkedin', title: 'LinkedIn Only', desc: 'InMail + Connection' }
+                ].map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => setChannel(item.id as CampaignChannel)}
+                    style={{
+                      border: channel === item.id ? '2px solid #4f46e5' : '1px solid #e2e8f0',
+                      backgroundColor: channel === item.id ? '#f5f3ff' : '#ffffff',
+                      borderRadius: '10px',
+                      padding: '12px 10px',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: channel === item.id ? '#4f46e5' : '#1e293b' }}>
+                      {item.title}
+                    </div>
+                    <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: '2px' }}>
+                      {item.desc}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => setChannel('linkedin')}
-                style={{
-                  border: channel === 'linkedin' ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
-                  backgroundColor: channel === 'linkedin' ? '#f5f3ff' : '#ffffff',
-                  padding: '10px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                <strong style={{ fontSize: '12px', color: '#1e293b', display: 'block' }}>LinkedIn</strong>
-                <span style={{ fontSize: '10.5px', color: '#64748b' }}>InMail + Connect</span>
-              </button>
+            {/* AI Generator Notice */}
+            <div style={{
+              padding: '12px 14px',
+              backgroundColor: '#eff6ff',
+              borderRadius: '10px',
+              border: '1px solid #bfdbfe',
+              fontSize: '11.5px',
+              color: '#1e40af',
+              lineHeight: 1.45,
+              display: 'flex',
+              gap: '8px'
+            }}>
+              <Sparkles size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong>Signal Engine Automation:</strong> Outreach copy, follow-up cadence, and personalized hooks will be generated automatically based on each company&apos;s real-time hiring, leadership, and expansion signals.
+              </div>
             </div>
           </div>
 
-          {/* Footer Buttons */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+          {/* Actions */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '10px',
+            marginTop: '24px',
+            paddingTop: '16px',
+            borderTop: '1px solid #f1f5f9'
+          }}>
             <button
               type="button"
               onClick={onClose}
+              disabled={isSubmitting}
               style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
+                padding: '8px 16px',
                 borderRadius: '8px',
-                padding: '8px 14px',
-                fontSize: '12px',
-                fontWeight: 600,
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
                 color: '#475569',
+                fontSize: '12.5px',
+                fontWeight: 600,
                 cursor: 'pointer'
               }}
             >
@@ -273,23 +257,33 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
 
             <button
               type="submit"
+              disabled={!name.trim() || isSubmitting}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                backgroundColor: '#4f46e5',
-                color: '#ffffff',
-                border: 'none',
+                padding: '8px 20px',
                 borderRadius: '8px',
-                padding: '8px 18px',
+                border: 'none',
+                backgroundColor: name.trim() && !isSubmitting ? '#4f46e5' : '#a5b4fc',
+                color: '#ffffff',
                 fontSize: '12.5px',
                 fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)'
+                cursor: name.trim() && !isSubmitting ? 'pointer' : 'not-allowed',
+                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)'
               }}
             >
-              <Sparkles size={14} />
-              <span>Launch Campaign Sequence</span>
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Generating Sequences...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} />
+                  <span>Launch Campaign</span>
+                </>
+              )}
             </button>
           </div>
         </form>

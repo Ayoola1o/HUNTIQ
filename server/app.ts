@@ -13,6 +13,10 @@ import { jobsRouter } from './routes/jobs';
 import { contactsRouter } from './routes/contacts';
 import { leadsRouter } from './routes/leads';
 import { savedSearchesRouter } from './routes/savedSearches';
+import { campaignsRouter } from './routes/campaigns';
+import { outreachRouter } from './routes/outreach';
+import { tasksRouter } from './routes/tasks';
+import { meetingsRouter } from './routes/meetings';
 import { registerDefaultJobProviders } from './providers/jobs';
 
 export const createApp = () => {
@@ -40,6 +44,10 @@ export const createApp = () => {
   app.use('/api', contactsRouter);
   app.use('/api', leadsRouter);
   app.use('/api', savedSearchesRouter);
+  app.use('/api', campaignsRouter);
+  app.use('/api', outreachRouter);
+  app.use('/api', tasksRouter);
+  app.use('/api', meetingsRouter);
 
   // Root fallback info
   app.get('/', (_req, res) => {
