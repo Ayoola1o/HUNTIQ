@@ -19,7 +19,7 @@ export const OpportunitiesKpiCards: React.FC<OpportunitiesKpiCardsProps> = ({
   activeFilter,
   onSelectKpi
 }) => {
-  const { companies, pipelineDeals } = useHuntiq();
+  const { companies, pipelineDeals, formatCurrency } = useHuntiq();
 
   const totalOppsCount = companies.length;
   const hotCount = companies.filter(c => (c.opportunityScore || 0) >= 85).length;
@@ -61,7 +61,7 @@ export const OpportunitiesKpiCards: React.FC<OpportunitiesKpiCardsProps> = ({
     {
       id: 'pipeline',
       title: 'Pipeline Value',
-      value: `$${pipelineValueTotal.toLocaleString()}`,
+      value: formatCurrency(pipelineValueTotal),
       change: `${activeDeals.length} active deals`,
       icon: <ShieldCheck size={16} color="#059669" />,
       iconBg: '#ecfdf5'
@@ -69,7 +69,7 @@ export const OpportunitiesKpiCards: React.FC<OpportunitiesKpiCardsProps> = ({
     {
       id: 'expected',
       title: 'Expected Revenue',
-      value: `$${expectedRevenueTotal.toLocaleString()}`,
+      value: formatCurrency(expectedRevenueTotal),
       change: 'Weighted conversion',
       icon: <BarChart3 size={16} color="#2563eb" />,
       iconBg: '#eff6ff'
@@ -77,7 +77,7 @@ export const OpportunitiesKpiCards: React.FC<OpportunitiesKpiCardsProps> = ({
     {
       id: 'deal_size',
       title: 'Avg. Deal Size',
-      value: `$${avgDealSizeVal.toLocaleString()}`,
+      value: formatCurrency(avgDealSizeVal),
       change: 'Per active deal',
       icon: <Tag size={16} color="#8b5cf6" />,
       iconBg: '#faf5ff'

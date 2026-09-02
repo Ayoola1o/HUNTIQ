@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Check } from 'lucide-react';
 import type { WorkspaceConfig } from '../../types/settings';
+import { useHuntiq } from '../../context/HuntiqContext';
+import type { CurrencyCode } from '../../services/currencyService';
 
 interface WorkspaceSettingsPanelProps {
   config: WorkspaceConfig;
@@ -11,11 +13,18 @@ export const WorkspaceSettingsPanel: React.FC<WorkspaceSettingsPanelProps> = ({
   config,
   onSave
 }) => {
-  const [formData, setFormData] = useState<WorkspaceConfig>(config);
+  const { currency, setCurrency } = useHuntiq();
+  const [formData, setFormData] = useState<WorkspaceConfig>(() => ({
+    ...config,
+    defaultCurrency: (currency as any) || config.defaultCurrency
+  }));
   const [isSaved, setIsSaved] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.defaultCurrency) {
+      setCurrency(formData.defaultCurrency as CurrencyCode);
+    }
     onSave(formData);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
@@ -121,8 +130,12 @@ export const WorkspaceSettingsPanel: React.FC<WorkspaceSettingsPanelProps> = ({
                 Default Currency
               </label>
               <select
-                value={formData.defaultCurrency}
-                onChange={(e) => setFormData({ ...formData, defaultCurrency: e.target.value as any })}
+                value={formData.defaultCurrency || currency}
+                onChange={(e) => {
+                  const val = e.target.value as CurrencyCode;
+                  setFormData({ ...formData, defaultCurrency: val as any });
+                  setCurrency(val);
+                }}
                 style={{
                   width: '100%',
                   padding: '8px 10px',

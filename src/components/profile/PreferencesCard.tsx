@@ -1,5 +1,7 @@
 import React from 'react';
 import type { UserPreferencesData } from '../../types/profile';
+import { useHuntiq } from '../../context/HuntiqContext';
+import type { CurrencyCode } from '../../services/currencyService';
 
 interface PreferencesCardProps {
   data: UserPreferencesData;
@@ -10,6 +12,7 @@ export const PreferencesCard: React.FC<PreferencesCardProps> = ({
   data,
   onChange
 }) => {
+  const { currency, setCurrency } = useHuntiq();
   return (
     <div style={{
       backgroundColor: '#ffffff',
@@ -176,8 +179,13 @@ export const PreferencesCard: React.FC<PreferencesCardProps> = ({
             Default Currency
           </label>
           <select
-            value={data.defaultCurrency}
-            onChange={(e) => onChange({ defaultCurrency: e.target.value })}
+            value={currency === 'NGN' ? 'NGN - Nigerian Naira' : currency === 'GBP' ? 'GBP - British Pound' : currency === 'EUR' ? 'EUR - Euro' : 'USD - US Dollar'}
+            onChange={(e) => {
+              const val = e.target.value;
+              const code: CurrencyCode = val.startsWith('NGN') ? 'NGN' : val.startsWith('GBP') ? 'GBP' : val.startsWith('EUR') ? 'EUR' : 'USD';
+              onChange({ defaultCurrency: val });
+              setCurrency(code);
+            }}
             style={{
               width: '100%',
               padding: '8px 12px',

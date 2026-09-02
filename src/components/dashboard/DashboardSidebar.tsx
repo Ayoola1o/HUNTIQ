@@ -26,6 +26,10 @@ import {
   X
 } from 'lucide-react';
 
+import { AuthModal } from '../auth/AuthModal';
+import { getStoredUser, clearStoredSession, type UserAccount } from '../../api/auth';
+import { useHuntiq } from '../../context/HuntiqContext';
+
 interface DashboardSidebarProps {
   activeNav: string;
   onSelectNav: (nav: string) => void;
@@ -37,10 +41,13 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   onSelectNav,
   onGoToOnboarding
 }) => {
+  const { refreshData } = useHuntiq();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileScreen, setIsMobileScreen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getStoredUser());
 
   useEffect(() => {
     const handleResize = () => {
@@ -401,10 +408,10 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
               {(!isCollapsed || isMobileScreen) && (
                 <div style={{ lineHeight: 1.2 }}>
                   <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#ffffff' }}>
-                    Ayoola Ade
+                    {currentUser?.fullName || 'Ayoola Ade'}
                   </div>
-                  <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                    Growth Plan
+                  <div style={{ fontSize: '10.5px', color: '#818cf8' }}>
+                    {currentUser?.companyName || 'Growth Plan'}
                   </div>
                 </div>
               )}
@@ -473,10 +480,68 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
               >
                 <span>Workspace Settings</span>
               </button>
+              <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+              <button
+                onClick={() => {
+                  setIsAuthModalOpen(true);
+                  setIsUserMenuOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 10px',
+                  backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  borderRadius: '6px',
+                  color: '#a5b4fc',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+              >
+                <span>{currentUser ? 'Switch Account' : 'Sign In / Register'}</span>
+              </button>
+              {currentUser && (
+                <button
+                  onClick={() => {
+                    clearStoredSession();
+                    setCurrentUser(null);
+                    setIsUserMenuOpen(false);
+                    refreshData();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '7px 10px',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    color: '#f87171',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                >
+                  <span>Sign Out</span>
+                </button>
+              )}
             </div>
           )}
         </div>
       </aside>
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={(user) => {
+          setCurrentUser(user);
+          refreshData();
+        }}
+      />
     </>
   );
 };

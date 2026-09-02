@@ -19,6 +19,7 @@ import {
   createPipelineDeal,
   updatePipelineDeal
 } from '../api';
+import { currencyService, type CurrencyCode } from '../services/currencyService';
 
 export type AppView = 
   | 'dashboard' 
@@ -74,6 +75,12 @@ interface HuntiqContextType {
   toggleSaveCompany: (companyId: string) => void;
   executeCopilotCommand: (prompt: string) => CopilotExecutionResult;
   captureGeoBusinesses: (businesses: any[]) => void;
+
+  // Multi-Currency Engine
+  currency: CurrencyCode;
+  setCurrency: (currency: CurrencyCode) => void;
+  formatCurrency: (amountInUsd: number, options?: { compact?: boolean; precision?: number }) => string;
+  convertAmount: (amountInUsd: number) => number;
 }
 
 const HuntiqContext = createContext<HuntiqContextType | undefined>(undefined);
@@ -85,6 +92,30 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   const [currentView, setCurrentView] = useState<AppView>(initialView);
   const [isLiveBackend, setIsLiveBackend] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(false);
+
+  // Multi-Currency State
+  const [currency, setCurrencyState] = useState<CurrencyCode>(() => {
+    try {
+      return (localStorage.getItem('huntiq_preferred_currency') as CurrencyCode) || 'USD';
+    } catch {
+      return 'USD';
+    }
+  });
+
+  const setCurrency = useCallback((newCurrency: CurrencyCode) => {
+    setCurrencyState(newCurrency);
+    try {
+      localStorage.setItem('huntiq_preferred_currency', newCurrency);
+    } catch {}
+  }, []);
+
+  const formatCurrency = useCallback((amountInUsd: number, options?: { compact?: boolean; precision?: number }) => {
+    return currencyService.format(amountInUsd, currency, options);
+  }, [currency]);
+
+  const convertAmount = useCallback((amountInUsd: number) => {
+    return currencyService.convertUsdTo(amountInUsd, currency);
+  }, [currency]);
   
   // Data State
   const [companies, setCompanies] = useState<CompanyItem[]>(() => prospectorEngine.getAllCompanies());
@@ -511,7 +542,11 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     updateDealStage,
     toggleSaveCompany,
     executeCopilotCommand,
-    captureGeoBusinesses
+    captureGeoBusinesses,
+    currency,
+    setCurrency,
+    formatCurrency,
+    convertAmount
   }), [
     currentView,
     navigateTo,
@@ -535,7 +570,11 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     updateDealStage,
     toggleSaveCompany,
     executeCopilotCommand,
-    captureGeoBusinesses
+    captureGeoBusinesses,
+    currency,
+    setCurrency,
+    formatCurrency,
+    convertAmount
   ]);
 
   return (

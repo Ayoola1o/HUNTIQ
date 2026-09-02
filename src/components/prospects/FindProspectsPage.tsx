@@ -6,6 +6,7 @@ import { AdvancedFilterForm } from './AdvancedFilterForm';
 import { SearchSummaryPanel } from './SearchSummaryPanel';
 import { SaveSearchModal } from './SaveSearchModal';
 import { MapProspectingRadar } from './MapProspectingRadar';
+import { BusinessNicheDiscovery } from './BusinessNicheDiscovery';
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import { CompanyResearchModal } from '../dashboard/CompanyResearchModal';
 import type { SearchCriteria, QuickTemplate, SearchEstimation } from '../../types/prospectHunter';
@@ -38,7 +39,7 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
-  const [activeTab, setActiveTab] = useState<'ai' | 'advanced' | 'geo-radar'>('ai');
+  const [activeTab, setActiveTab] = useState<'ai' | 'advanced' | 'geo-radar' | 'niche-discovery'>('niche-discovery');
 
   // Search criteria state matching Find Prospects page.png
   const [criteria, setCriteria] = useState<SearchCriteria>({
@@ -602,6 +603,30 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
             width: 'fit-content'
           }}>
             <button
+              onClick={() => setActiveTab('niche-discovery')}
+              style={{
+                padding: '7px 18px',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: activeTab === 'niche-discovery' ? '#ffffff' : 'transparent',
+                color: activeTab === 'niche-discovery' ? '#4f46e5' : '#64748b',
+                fontWeight: activeTab === 'niche-discovery' ? 700 : 500,
+                fontSize: '13px',
+                cursor: 'pointer',
+                boxShadow: activeTab === 'niche-discovery' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.15s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <span>🎯 Business / Niche Discovery</span>
+              <span style={{ fontSize: '10px', backgroundColor: '#eff6ff', color: '#2563eb', padding: '1px 6px', borderRadius: '4px', fontWeight: 800 }}>
+                AI Engine
+              </span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('ai')}
               style={{
                 padding: '7px 18px',
@@ -662,7 +687,9 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
             </button>
           </div>
 
-          {activeTab === 'geo-radar' ? (
+          {activeTab === 'niche-discovery' ? (
+            <BusinessNicheDiscovery onNavigate={onNavigate} />
+          ) : activeTab === 'geo-radar' ? (
             <MapProspectingRadar onNavigateToOpportunities={() => onNavigate('opportunities')} />
           ) : (
             /* 2-Column Main Form + Summary Grid */

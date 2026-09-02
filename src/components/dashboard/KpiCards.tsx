@@ -15,7 +15,7 @@ interface KpiCardsProps {
 }
 
 export const KpiCards: React.FC<KpiCardsProps> = ({ onCardClick }) => {
-  const { companies, signals, pipelineDeals } = useHuntiq();
+  const { companies, signals, pipelineDeals, formatCurrency } = useHuntiq();
 
   // Dynamic real data calculations
   const totalProspectsCount = companies.length;
@@ -72,7 +72,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ onCardClick }) => {
     {
       id: 'pipeline',
       label: 'Pipeline Value',
-      value: `$${pipelineValueTotal.toLocaleString()}`,
+      value: formatCurrency(pipelineValueTotal),
       trend: 'Cumulative volume',
       period: 'active pipeline',
       icon: <DollarSign size={16} color="#16a34a" />,
@@ -81,7 +81,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ onCardClick }) => {
     {
       id: 'revenue',
       label: 'Expected Revenue',
-      value: `$${expectedRevenueTotal.toLocaleString()}`,
+      value: formatCurrency(expectedRevenueTotal),
       trend: 'Weighted forecast',
       period: 'probability weighted',
       icon: <Calculator size={16} color="#0284c7" />,
@@ -90,7 +90,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ onCardClick }) => {
     {
       id: 'avg_deal',
       label: 'Avg. Deal Size',
-      value: `$${avgDealSizeVal.toLocaleString()}`,
+      value: formatCurrency(avgDealSizeVal),
       trend: 'Per active deal',
       period: 'deal average',
       icon: <Tag size={16} color="#9333ea" />,

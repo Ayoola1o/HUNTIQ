@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import type { PipelineKpiSummary } from '../../types/pipeline';
 
+import { useHuntiq } from '../../context/HuntiqContext';
+
 interface PipelineKpiCardsProps {
   summary: PipelineKpiSummary;
   activeFilter: string;
@@ -19,6 +21,8 @@ export const PipelineKpiCards: React.FC<PipelineKpiCardsProps> = ({
   activeFilter,
   onSelectFilter
 }) => {
+  const { formatCurrency } = useHuntiq();
+
   const cards = [
     {
       id: 'active_deals',
@@ -36,26 +40,26 @@ export const PipelineKpiCards: React.FC<PipelineKpiCardsProps> = ({
     {
       id: 'pipeline_value',
       title: 'Pipeline Value',
-      value: `$${summary.pipelineValue.toLocaleString()}`,
+      value: formatCurrency(summary.pipelineValue),
       subtext: 'Gross total deal value',
       icon: <DollarSign size={16} color="#059669" />,
       iconBg: '#ecfdf5',
       sparklineColor: '#10b981',
       sparkPath: 'M0,16 Q25,6 50,14 T90,6 T120,16 T140,4',
-      badge: '+$34k this week',
+      badge: 'Active pipeline',
       badgeColor: '#047857',
       badgeBg: '#d1fae5'
     },
     {
       id: 'expected_revenue',
       title: 'Expected Revenue',
-      value: `$${summary.expectedRevenue.toLocaleString()}`,
+      value: formatCurrency(summary.expectedRevenue),
       subtext: 'Probability-weighted forecast',
       icon: <TrendingUp size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff',
       sparklineColor: '#8b5cf6',
       sparkPath: 'M0,20 Q20,12 45,18 T85,4 T115,12 T140,2',
-      badge: 'Weighted 41%',
+      badge: 'Weighted conversion',
       badgeColor: '#6d28d9',
       badgeBg: '#ede9fe'
     },
@@ -75,7 +79,7 @@ export const PipelineKpiCards: React.FC<PipelineKpiCardsProps> = ({
     {
       id: 'avg_deal_size',
       title: 'Avg Deal Size',
-      value: `$${summary.avgDealSize.toLocaleString()}`,
+      value: formatCurrency(summary.avgDealSize),
       subtext: '31 days average sales cycle',
       icon: <Briefcase size={16} color="#2563eb" />,
       iconBg: '#eff6ff',

@@ -17,6 +17,11 @@ import { campaignsRouter } from './routes/campaigns';
 import { outreachRouter } from './routes/outreach';
 import { tasksRouter } from './routes/tasks';
 import { meetingsRouter } from './routes/meetings';
+import { discoveryRouter } from './routes/discovery';
+import { seoAuditRouter } from './routes/seoAudit';
+import { competitorsRouter } from './routes/competitors';
+import { opportunityScoringRouter } from './routes/opportunityScoring';
+import { authRouter } from './routes/auth';
 import { registerDefaultJobProviders } from './providers/jobs';
 
 export const createApp = () => {
@@ -31,6 +36,10 @@ export const createApp = () => {
 
   // Global Auth / API Key inspector
   app.use(authenticateApiKeyOrJwt);
+
+  // Mount Auth Endpoints
+  app.use('/api/v1/auth', authRouter);
+  app.use('/api/auth', authRouter);
 
   // Mount API Endpoints under /api
   app.use('/api', healthRouter);
@@ -48,6 +57,10 @@ export const createApp = () => {
   app.use('/api', outreachRouter);
   app.use('/api', tasksRouter);
   app.use('/api', meetingsRouter);
+  app.use('/api', discoveryRouter);
+  app.use('/api', seoAuditRouter);
+  app.use('/api', competitorsRouter);
+  app.use('/api', opportunityScoringRouter);
 
   // Root fallback info
   app.get('/', (_req, res) => {

@@ -7,6 +7,7 @@ import {
   Plus
 } from 'lucide-react';
 import type { PipelineDealItem, PipelineStage } from '../../types/pipeline';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface PipelineKanbanBoardProps {
   deals: PipelineDealItem[];
@@ -21,6 +22,7 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
   onMoveDealStage,
   onQuickAddDeal
 }) => {
+  const { formatCurrency } = useHuntiq();
   const columns: { id: PipelineStage; label: string; color: string; bg: string }[] = [
     { id: 'contacted', label: 'Contacted', color: '#2563eb', bg: '#eff6ff' },
     { id: 'meeting', label: 'Meeting Scheduled', color: '#7c3aed', bg: '#f5f3ff' },
@@ -109,7 +111,7 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
                   </span>
                 </div>
                 <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>
-                  ${stageTotalValue.toLocaleString()} volume
+                  {formatCurrency(stageTotalValue)} volume
                 </div>
               </div>
 
@@ -217,7 +219,7 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
                           color: '#059669',
                           marginTop: '4px'
                         }}>
-                          ${deal.dealValue.toLocaleString()}
+                          {formatCurrency(deal.dealValue)}
                           <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', marginLeft: '6px' }}>
                             ({deal.probability}% close prob)
                           </span>
