@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 
 import { useHuntiq } from '../../context/HuntiqContext';
+import { MobileBottomNav } from '../navigation/MobileBottomNav';
 
 interface CompaniesPageProps {
   onNavigate: (nav: string) => void;
@@ -415,19 +416,24 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
         overflow: 'hidden'
       }}>
         {/* Top Header */}
-        <header style={{
-          padding: '16px 32px 14px',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #eaecf0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0
-        }}>
+        <header 
+          className="mobile-header-pad"
+          style={{
+            padding: '16px 32px 14px',
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #eaecf0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            flexShrink: 0
+          }}
+        >
           {/* Title */}
           <div>
             <h1 style={{
-              fontSize: '22px',
+              fontSize: 'clamp(18px, 4vw, 22px)',
               fontWeight: 800,
               color: '#0f172a',
               letterSpacing: '-0.02em',
@@ -441,7 +447,7 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
           </div>
 
           {/* Search, Copilot CTA, Date & Profile */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* Search Input */}
             <div style={{
               display: 'flex',
@@ -451,7 +457,8 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
               borderRadius: '10px',
               padding: '0 12px',
               height: '38px',
-              width: '280px',
+              width: 'min(280px, 100%)',
+              flex: '1 1 180px',
               gap: '8px'
             }}>
               <Search size={15} color="#94a3b8" />
@@ -467,7 +474,7 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
                   width: '100%'
                 }}
               />
-              <span style={{
+              <span className="desktop-only" style={{
                 fontSize: '10.5px',
                 fontWeight: 700,
                 color: '#94a3b8',
@@ -642,14 +649,17 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
         </header>
 
         {/* Scrollable Body Canvas */}
-        <main style={{
-          flex: 1,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          padding: '20px 0 36px'
-        }}>
+        <main 
+          className="mobile-bottom-pad"
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            padding: '20px 0 36px'
+          }}
+        >
           {/* 6 Top Summary KPI Cards */}
           <CompaniesKpiCards
             activeFilter={activeKpiFilter}
@@ -756,6 +766,9 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
         companyName={researchedCompany}
         onClose={() => setResearchedCompany(null)}
       />
+
+      {/* Mobile One-Thumb Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 };

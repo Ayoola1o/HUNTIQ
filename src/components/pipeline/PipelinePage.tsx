@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { useHuntiq } from '../../context/HuntiqContext';
+import { MobileBottomNav } from '../navigation/MobileBottomNav';
 
 interface PipelinePageProps {
   onNavigate: (nav: string) => void;
@@ -292,28 +293,35 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
       />
 
       {/* Main Content Area */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        overflowY: 'auto'
-      }}>
-        {/* Top Header */}
-        <header style={{
-          height: '62px',
-          minHeight: '62px',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #eaecf0',
+      <div 
+        className="mobile-bottom-pad"
+        style={{
+          flex: 1,
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 32px',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          flexDirection: 'column',
+          height: '100vh',
+          overflowY: 'auto'
+        }}
+      >
+        {/* Top Header */}
+        <header 
+          className="mobile-header-pad"
+          style={{
+            minHeight: '62px',
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #eaecf0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '10px',
+            padding: '12px 24px',
+            position: 'sticky',
+            top: 0,
+            zIndex: 10
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <div style={{
               width: '32px',
               height: '32px',
@@ -322,12 +330,13 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              border: '1px solid #dbeafe'
+              border: '1px solid #dbeafe',
+              flexShrink: 0
             }}>
               <Kanban size={16} color="#2563eb" />
             </div>
             <div>
-              <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+              <h1 style={{ fontSize: 'clamp(14px, 3.5vw, 16px)', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                 Sales Pipeline & Deal Forecasting
               </h1>
               <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: 1.2 }}>
@@ -336,7 +345,7 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <button
               onClick={() => setIsCopilotOpen(true)}
               style={{
@@ -568,6 +577,9 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
           onNavigate('research');
         }}
       />
+
+      {/* Mobile One-Thumb Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 };

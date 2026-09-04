@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyJwt, type UserSessionPayload } from '../services/auth.service';
+import { persistentStore, DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID } from '../db/persistentStore';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -20,17 +21,7 @@ export const authenticateApiKeyOrJwt = (
   const authHeader = req.headers.authorization;
   const apiKey = req.headers['x-huntiq-api-key'];
 
-  // Allow public routes
-  if (
-    req.path === '/api/health' || 
-    req.path === '/' || 
-    req.path.startsWith('/api/v1/auth/') ||
-    req.path.startsWith('/api/auth/')
-  ) {
-    return next();
-  }
-
-  // Check Bearer Token
+  // 1. Check Bearer Token
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7).trim();
     const verified = verifyJwt(token);
@@ -47,25 +38,44 @@ export const authenticateApiKeyOrJwt = (
     }
   }
 
-  // Check API Key
-  if (apiKey && typeof apiKey === 'string' && apiKey.startsWith('hnt_live_')) {
-    req.user = {
-      id: '00000000-0000-0000-0000-000000000001',
-      email: 'api-service@huntiq.io',
-      role: 'owner',
-      workspaceId: '00000000-0000-0000-0000-000000000001',
-      defaultCurrency: 'USD'
-    };
+  // 2. Check Programmatic API Key
+  if (apiKey && typeof apiKey === 'string') {
+    const keyMatch = persistentStore.findApiKey(apiKey);
+    if (keyMatch) {
+      req.user = {
+        id: keyMatch.user.id,
+        email: keyMatch.user.email,
+        fullName: keyMatch.user.fullName,
+        role: keyMatch.user.role,
+        workspaceId: keyMatch.user.workspaceId,
+        defaultCurrency: keyMatch.user.defaultCurrency
+      };
+      return next();
+    }
+  }
+
+  // 3. Allow public routes without credentials
+  if (
+    req.path === '/api/health' || 
+    req.path === '/' || 
+    req.path === '/api/v1/auth/login' ||
+    req.path === '/api/v1/auth/signup' ||
+    req.path === '/api/auth/login' ||
+    req.path === '/api/auth/signup'
+  ) {
     return next();
   }
 
-  // Development fallback for unauthenticated calls
+  // Development fallback for unauthenticated calls (points to default demo account)
+  const defaultUser = persistentStore.getUserById(DEFAULT_USER_ID);
   req.user = {
-    id: '00000000-0000-0000-0000-000000000001',
-    email: 'dev-workspace@huntiq.io',
+    id: DEFAULT_USER_ID,
+    email: defaultUser?.email || 'demo@huntiq.io',
+    fullName: defaultUser?.fullName || 'Ayoola Ade',
     role: 'owner',
-    workspaceId: '00000000-0000-0000-0000-000000000001',
-    defaultCurrency: 'USD'
+    workspaceId: DEFAULT_WORKSPACE_ID,
+    defaultCurrency: defaultUser?.defaultCurrency || 'USD'
   };
   return next();
 };
+

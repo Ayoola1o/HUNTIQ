@@ -15,6 +15,7 @@ import {
   updateContact as apiUpdateContact,
   importContacts as apiImportContacts
 } from '../../api';
+import { MobileBottomNav } from '../navigation/MobileBottomNav';
 import { 
   Users, 
   Search, 
@@ -224,18 +225,22 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
         overflow: 'hidden'
       }}>
         {/* Top Header */}
-        <header style={{
-          height: '62px',
-          minHeight: '62px',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #eaecf0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 32px',
-          zIndex: 10
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <header 
+          className="mobile-header-pad"
+          style={{
+            minHeight: '62px',
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #eaecf0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '10px',
+            padding: '12px 24px',
+            zIndex: 10
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <div style={{
               width: '32px',
               height: '32px',
@@ -244,12 +249,13 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              border: '1px solid #dbeafe'
+              border: '1px solid #dbeafe',
+              flexShrink: 0
             }}>
               <Users size={16} color="#2563eb" />
             </div>
             <div>
-              <h1 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+              <h1 style={{ fontSize: 'clamp(14px, 3.5vw, 16px)', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                 Decision Makers & Key Contacts
               </h1>
               <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: 1.2 }}>
@@ -258,7 +264,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* Sync Button */}
             <button
               onClick={loadContacts}
@@ -340,12 +346,15 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
         )}
 
         {/* Scrollable Center View */}
-        <div style={{
-          flex: 1,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
+        <div 
+          className="mobile-bottom-pad"
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
           {/* KPI Metrics Summary Row */}
           <div style={{ margin: '18px 0 14px 0' }}>
             <ContactsKpiCards
@@ -616,6 +625,9 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
           onClose={() => setResearchedCompany(null)}
         />
       )}
+
+      {/* Mobile One-Thumb Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 };

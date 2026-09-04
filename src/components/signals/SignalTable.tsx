@@ -357,10 +357,13 @@ export const SignalTable: React.FC<SignalTableProps> = ({
         </div>
       </div>
 
-      {/* Table Column Headers */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '40px 2.4fr 1.8fr 1fr 1fr 1fr 3fr 70px 30px',
+      {/* Table Content with Horizontal Scroll for Mobile */}
+      <div className="mobile-table-wrapper">
+        <div style={{ minWidth: '780px' }}>
+          {/* Table Column Headers */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '40px 2.4fr 1.8fr 1fr 1fr 1fr 3fr 70px 30px',
         padding: '10px 18px',
         backgroundColor: '#f8fafc',
         borderBottom: '1px solid #eaecf0',
@@ -501,6 +504,8 @@ export const SignalTable: React.FC<SignalTableProps> = ({
             </div>
           );
         })}
+        </div>
+        </div>
       </div>
 
       {/* Pagination Footer */}

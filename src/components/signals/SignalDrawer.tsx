@@ -23,18 +23,25 @@ export const SignalDrawer: React.FC<SignalDrawerProps> = ({
   if (!signal) return null;
 
   return (
-    <div style={{
-      width: '380px',
-      minWidth: '380px',
-      backgroundColor: '#ffffff',
-      borderRadius: '16px',
-      border: '1px solid #eaecf0',
-      boxShadow: '0 2px 12px rgba(16, 24, 40, 0.04)',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden'
-    }}>
-      {/* Drawer Header */}
+    <div className="responsive-drawer-overlay" onClick={onClose}>
+      <div 
+        className="responsive-drawer-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Mobile Drag Indicator */}
+        <div 
+          className="mobile-only"
+          style={{ 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            paddingTop: '8px', 
+            paddingBottom: '2px' 
+          }}
+        >
+          <div style={{ width: '38px', height: '4px', borderRadius: '2px', backgroundColor: '#cbd5e1' }} />
+        </div>
+
+        {/* Drawer Header */}
       <div style={{
         padding: '16px 20px',
         borderBottom: '1px solid #eaecf0',
@@ -287,5 +294,6 @@ export const SignalDrawer: React.FC<SignalDrawerProps> = ({
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 };

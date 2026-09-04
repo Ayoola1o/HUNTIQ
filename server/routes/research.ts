@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import type { ApiResponse } from '../types/api';
 import { researchEngine } from '../../src/engine/researchEngine';
 import { researchService } from '../services/researchService';
+import type { AuthenticatedRequest } from '../middleware/auth';
 
 export const researchRouter = Router();
 
@@ -10,11 +11,16 @@ export const researchRouter = Router();
  * GET /api/research/reports
  * List company research reports with status and search filtering + KPI summary
  */
-researchRouter.get('/research/reports', (req: Request, res: Response) => {
+researchRouter.get('/research/reports', (req: AuthenticatedRequest, res: Response) => {
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const query = typeof req.query.q === 'string' ? req.query.q : (typeof req.query.query === 'string' ? req.query.query : undefined);
 
-  const { reports, kpiSummary } = researchService.listReports({ status, query });
+  const { reports, kpiSummary } = researchService.listReports({
+    status,
+    query,
+    userId: req.user?.id,
+    workspaceId: req.user?.workspaceId
+  });
 
   const response: ApiResponse = {
     success: true,
@@ -35,9 +41,9 @@ researchRouter.get('/research/reports', (req: Request, res: Response) => {
  * GET /api/research/reports/:id
  * Retrieve a specific research report
  */
-researchRouter.get('/research/reports/:id', (req: Request, res: Response) => {
+researchRouter.get('/research/reports/:id', (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const report = researchService.getById(id);
+  const report = researchService.getById(id, req.user?.id);
 
   if (!report) {
     return res.status(404).json({
@@ -58,7 +64,7 @@ researchRouter.get('/research/reports/:id', (req: Request, res: Response) => {
  * POST /api/research/reports
  * Generate a new deep research report for a target company
  */
-researchRouter.post('/research/reports', (req: Request, res: Response) => {
+researchRouter.post('/research/reports', (req: AuthenticatedRequest, res: Response) => {
   const { companyName, domain, industry } = req.body || {};
 
   if (!companyName || typeof companyName !== 'string' || !companyName.trim()) {
@@ -69,7 +75,13 @@ researchRouter.post('/research/reports', (req: Request, res: Response) => {
     });
   }
 
-  const report = researchService.generateReport(companyName.trim(), domain, industry);
+  const report = researchService.generateReport(
+    companyName.trim(),
+    domain,
+    industry,
+    req.user?.id,
+    req.user?.workspaceId
+  );
 
   res.status(201).json({
     success: true,
@@ -82,9 +94,9 @@ researchRouter.post('/research/reports', (req: Request, res: Response) => {
  * POST /api/research/reports/:id/refresh
  * Re-scan and refresh a research report
  */
-researchRouter.post('/research/reports/:id/refresh', (req: Request, res: Response) => {
+researchRouter.post('/research/reports/:id/refresh', (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const refreshed = researchService.refreshReport(id);
+  const refreshed = researchService.refreshReport(id, req.user?.id, req.user?.workspaceId);
 
   if (!refreshed) {
     return res.status(404).json({
@@ -105,9 +117,10 @@ researchRouter.post('/research/reports/:id/refresh', (req: Request, res: Respons
  * PATCH /api/research/reports/:id
  * Update report status or details
  */
-researchRouter.patch('/research/reports/:id', (req: Request, res: Response) => {
+researchRouter.patch('/research/reports/:id', (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const updated = researchService.updateReport(id, req.body || {});
+  const updated = researchService.updateReport(id, req.body || {}, req.user?.id, req.user?.workspaceId);
+
 
   if (!updated) {
     return res.status(404).json({

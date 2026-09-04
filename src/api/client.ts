@@ -42,6 +42,15 @@ export class ApiClient {
       headers['X-HUNTIQ-API-KEY'] = this.apiKey;
     }
 
+    // Attach user auth session token if available
+    try {
+      const storedToken = localStorage.getItem('huntiq_auth_token');
+      if (storedToken && !headers['Authorization']) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+      }
+    } catch {}
+
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 

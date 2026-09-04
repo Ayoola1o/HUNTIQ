@@ -4,7 +4,7 @@ import type { ApiResponse } from '../types/api';
 import { prospectorEngine } from '../../src/engine/prospectorEngine';
 import { geoProspectingEngine } from '../engine/geo/geoProspectingEngine';
 import { DigitalAuditEngine } from '../engine/audit/digitalAuditEngine';
-import { pipelineDealsDb } from './pipeline';
+import { persistentStore, DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID } from '../db/persistentStore';
 
 export const prospectsRouter = Router();
 
@@ -108,7 +108,11 @@ prospectsRouter.post('/prospects/capture', (req: Request, res: Response) => {
     // Optional pipeline promotion
     if (destination === 'PIPELINE' || destination === 'ALL') {
       const stage = pipelineStage || (gapScore >= 80 ? 'discovery' : 'contacted');
-      pipelineDealsDb.unshift({
+      const uId = (req as any).user?.id || DEFAULT_USER_ID;
+      const wId = (req as any).user?.workspaceId || DEFAULT_WORKSPACE_ID;
+      const ownerName = (req as any).user?.fullName || 'Ayoola Ade';
+
+      persistentStore.savePipelineDeal(uId, wId, {
         id: `deal-geo-${b.id || Math.random().toString(36).substring(2, 9)}`,
         companyName: b.name,
         domain: b.domain || 'company.com',
@@ -120,7 +124,7 @@ prospectsRouter.post('/prospects/capture', (req: Request, res: Response) => {
         stage: stage as any,
         stageEnteredAt: 'Just now',
         expectedCloseDate: 'Next 30 Days',
-        ownerName: 'Ayoola Ade',
+        ownerName,
         contactName: b.decisionMakers?.[0]?.name || 'Business Owner',
         contactRole: b.decisionMakers?.[0]?.role || 'Managing Director',
         contactAvatarBg: isDigitalGap ? '#fee2e2' : '#eff6ff',
@@ -136,7 +140,7 @@ prospectsRouter.post('/prospects/capture', (req: Request, res: Response) => {
             title: 'Prospect Captured',
             description: `Captured from Geo Radar with gap score ${gapScore}/100.`,
             timestamp: 'Just now',
-            user: 'HUNTIQ Radar'
+            user: ownerName
           }
         ]
       });

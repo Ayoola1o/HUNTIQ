@@ -20,7 +20,9 @@ contactsRouter.get('/contacts', (req: AuthenticatedRequest, res: Response) => {
     seniority,
     department,
     role,
-    search: search || q
+    search: search || q,
+    userId: req.user?.id,
+    workspaceId: req.user?.workspaceId
   });
 
   const response: ApiResponse = {
@@ -44,7 +46,7 @@ contactsRouter.get('/contacts', (req: AuthenticatedRequest, res: Response) => {
  */
 contactsRouter.get('/contacts/:id', (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const contact = contactService.getById(id);
+  const contact = contactService.getById(id, req.user?.id);
 
   if (!contact) {
     return res.status(404).json({
@@ -67,7 +69,7 @@ contactsRouter.get('/contacts/:id', (req: AuthenticatedRequest, res: Response) =
  */
 contactsRouter.post('/contacts', (req: AuthenticatedRequest, res: Response) => {
   try {
-    const newContact = contactService.createContact(req.body || {});
+    const newContact = contactService.createContact(req.body || {}, req.user?.id, req.user?.workspaceId);
 
     res.status(201).json({
       success: true,
@@ -98,7 +100,7 @@ contactsRouter.post('/contacts/import', (req: AuthenticatedRequest, res: Respons
     });
   }
 
-  const imported = contactService.importContacts(contacts);
+  const imported = contactService.importContacts(contacts, req.user?.id, req.user?.workspaceId);
 
   res.status(201).json({
     success: true,
@@ -116,7 +118,7 @@ contactsRouter.post('/contacts/import', (req: AuthenticatedRequest, res: Respons
  */
 contactsRouter.patch('/contacts/:id', (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const updated = contactService.updateContact(id, req.body || {});
+  const updated = contactService.updateContact(id, req.body || {}, req.user?.id, req.user?.workspaceId);
 
   if (!updated) {
     return res.status(404).json({
@@ -139,7 +141,8 @@ contactsRouter.patch('/contacts/:id', (req: AuthenticatedRequest, res: Response)
  */
 contactsRouter.delete('/contacts/:id', (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const deleted = contactService.deleteContact(id);
+  const deleted = contactService.deleteContact(id, req.user?.id);
+
 
   if (!deleted) {
     return res.status(404).json({

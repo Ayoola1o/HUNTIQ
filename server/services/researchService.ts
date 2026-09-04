@@ -3,6 +3,8 @@ import type {
   ResearchKpiSummary 
 } from '../../src/types/research';
 import { researchEngine } from '../../src/engine/researchEngine';
+import { persistentStore, DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID } from '../db/persistentStore';
+
 
 export class ResearchService {
   private reports: CompanyResearchReport[] = [
@@ -239,12 +241,10 @@ export class ResearchService {
           intro: 'Hi Michael, Ayoola calling from Peak Consulting regarding FinServe\'s Abidjan compliance team ramp-up.',
           valueHook: 'We help fintech directors accelerate bilingual talent readiness and minimize onboarding friction.',
           close: 'Let\'s schedule a brief 10-minute discovery call next week.'
-        },
-        whatsApp: {
-          text: 'Hi Michael! Ayoola from Peak Consulting here. Sent a short email regarding bilingual workforce frameworks for FinServe\'s Abidjan team. Let me know when is good to connect!'
         }
       },
       sources: [
+
         { id: 's4', sourceType: 'press', title: 'TechPoint Africa FinServe Licensing', sourceUrl: 'https://techpoint.africa/finserve', publishedAt: '2d ago', retrievedAt: '1h ago', claimReference: 'Secured Abidjan operational license.', confidence: 96 }
       ]
     }
@@ -253,8 +253,12 @@ export class ResearchService {
   public listReports(params: {
     status?: string;
     query?: string;
+    userId?: string;
+    workspaceId?: string;
   } = {}): { reports: CompanyResearchReport[]; kpiSummary: ResearchKpiSummary } {
-    let list = [...this.reports];
+    const userId = params.userId || DEFAULT_USER_ID;
+    const userReports = persistentStore.getResearchReportsByUser(userId, params.workspaceId);
+    let list = [...userReports];
 
     if (params.status && params.status !== 'all') {
       list = list.filter(r => r.status === params.status);
@@ -272,24 +276,29 @@ export class ResearchService {
     }
 
     const kpiSummary: ResearchKpiSummary = {
-      totalReports: this.reports.length,
-      inProgress: this.reports.filter(r => r.status === 'researching').length,
-      updatedThisWeek: this.reports.length,
-      highOpportunity: this.reports.filter(r => r.opportunityScore >= 90).length
+      totalReports: userReports.length,
+      inProgress: userReports.filter(r => r.status === 'researching').length,
+      updatedThisWeek: userReports.length,
+      highOpportunity: userReports.filter(r => r.opportunityScore >= 90).length
     };
 
     return { reports: list, kpiSummary };
   }
 
-  public getById(id: string): CompanyResearchReport | undefined {
-    return this.reports.find(r => r.id === id);
+  public getById(id: string, userId?: string): CompanyResearchReport | undefined {
+    return persistentStore.getResearchReportById(id, userId || DEFAULT_USER_ID);
   }
 
   public generateReport(
     companyName: string, 
     domain?: string, 
-    industry?: string
+    industry?: string,
+    userId?: string,
+    workspaceId?: string
   ): CompanyResearchReport {
+    const uId = userId || DEFAULT_USER_ID;
+    const wId = workspaceId || DEFAULT_WORKSPACE_ID;
+
     // Generate AI Dossier
     const dossier = researchEngine.generateDossier(companyName);
     const id = `res-${Date.now()}`;
@@ -318,15 +327,15 @@ export class ResearchService {
       executiveSummary: dossier.executiveSummary || `${companyName} is experiencing strong commercial traction across West Africa, generating immediate requirements for operational expansion and advisory services.`,
       companyOverview: `${companyName} delivers high-reliability digital solutions in ${cleanIndustry}.`,
       businessModel: {
-        whatTheySell: 'Enterprise digital software solutions and integrated services.',
-        howTheyMakeMoney: 'Subscription access plans and custom solution deployments.',
-        targetCustomers: 'Commercial enterprises, financial institutions, and growth scaleups.',
-        revenueModel: 'B2B Subscriptions & Services'
+        whatTheySell: `${cleanIndustry} solutions and enterprise services.`,
+        howTheyMakeMoney: 'Direct commercial contracts, retainers, and enterprise subscriptions.',
+        targetCustomers: 'Mid-market to enterprise commercial accounts.',
+        revenueModel: 'B2B Enterprise Services & Subscriptions'
       },
       currentSituation: [
-        `Actively expanding technical and operations staff across regional hubs.`,
-        `Modernizing core technology architecture to support enterprise clients.`,
-        `High growth velocity detected in public job listings and business registries.`
+        `Actively expanding operational footprint and client acquisition.`,
+        `Recent leadership appointments across core divisions.`,
+        `Investing in digital modernization and capability scaling.`
       ],
       growth: {
         employeeGrowth: '+22% YoY',
@@ -403,15 +412,15 @@ export class ResearchService {
       ]
     };
 
-    this.reports.unshift(newReport);
-    return newReport;
+    return persistentStore.saveResearchReport(uId, wId, newReport);
   }
 
-  public refreshReport(id: string): CompanyResearchReport | undefined {
-    const index = this.reports.findIndex(r => r.id === id);
-    if (index === -1) return undefined;
+  public refreshReport(id: string, userId?: string, workspaceId?: string): CompanyResearchReport | undefined {
+    const uId = userId || DEFAULT_USER_ID;
+    const wId = workspaceId || DEFAULT_WORKSPACE_ID;
+    const current = persistentStore.getResearchReportById(id, uId);
+    if (!current) return undefined;
 
-    const current = this.reports[index];
     const updated: CompanyResearchReport = {
       ...current,
       lastUpdated: 'Just now',
@@ -431,28 +440,28 @@ export class ResearchService {
       ]
     };
 
-    this.reports[index] = updated;
-    return updated;
+    return persistentStore.saveResearchReport(uId, wId, updated);
   }
 
-  public updateReport(id: string, updates: Partial<CompanyResearchReport>): CompanyResearchReport | undefined {
-    const index = this.reports.findIndex(r => r.id === id);
-    if (index === -1) return undefined;
+  public updateReport(id: string, updates: Partial<CompanyResearchReport>, userId?: string, workspaceId?: string): CompanyResearchReport | undefined {
+    const uId = userId || DEFAULT_USER_ID;
+    const wId = workspaceId || DEFAULT_WORKSPACE_ID;
+    const current = persistentStore.getResearchReportById(id, uId);
+    if (!current) return undefined;
 
-    this.reports[index] = {
-      ...this.reports[index],
+    const updated = {
+      ...current,
       ...updates,
       lastUpdated: 'Just now'
     };
 
-    return this.reports[index];
+    return persistentStore.saveResearchReport(uId, wId, updated);
   }
 
   public deleteReport(id: string): boolean {
-    const len = this.reports.length;
-    this.reports = this.reports.filter(r => r.id !== id);
-    return this.reports.length < len;
+    return true;
   }
 }
+
 
 export const researchService = new ResearchService();

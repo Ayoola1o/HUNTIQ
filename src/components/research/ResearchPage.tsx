@@ -66,10 +66,10 @@ export const ResearchPage: React.FC<ResearchPageProps> = ({
       }
 
       // If viewing a report, update its reference
-      if (selectedReport) {
-        const found = list.find(r => r.id === selectedReport.id);
-        if (found) setSelectedReport(found);
-      }
+      setSelectedReport(prev => {
+        if (!prev) return null;
+        return list.find(r => r.id === prev.id) || prev;
+      });
     } catch (err: any) {
       console.error('Failed to fetch research reports:', err);
       setIsError(true);
@@ -77,11 +77,12 @@ export const ResearchPage: React.FC<ResearchPageProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, selectedReport]);
+  }, [searchQuery]);
 
   useEffect(() => {
     loadReports();
   }, [loadReports]);
+
 
   // Filter reports by active KPI filter
   const filteredReports = useMemo(() => {

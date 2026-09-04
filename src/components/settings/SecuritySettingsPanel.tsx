@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Copy, 
@@ -6,35 +6,78 @@ import {
   Plus, 
   Trash2 
 } from 'lucide-react';
+
 import type { ApiKeyItem } from '../../types/settings';
+import { fetchUserApiKeys, createUserApiKey, deleteUserApiKey } from '../../api/auth';
 
 export const SecuritySettingsPanel: React.FC = () => {
-  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([
-    { id: 'k1', name: 'Production CRM Webhook Key', keyPrefix: 'hnt_live_89f...4a1', createdAt: 'Aug 10, 2026', lastUsed: '5 mins ago' },
-    { id: 'k2', name: 'Zapier Automation Integration', keyPrefix: 'hnt_live_32a...98e', createdAt: 'Aug 14, 2026', lastUsed: '1 hour ago' }
-  ]);
+  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
 
-  const handleCopy = (id: string) => {
+  const loadKeys = async () => {
+    setIsLoading(true);
+    try {
+      const keys = await fetchUserApiKeys();
+      if (keys && keys.length > 0) {
+        setApiKeys(keys.map((k: any) => ({
+          id: k.id,
+          name: k.name,
+          keyPrefix: k.keyPrefix,
+          createdAt: k.createdAt ? new Date(k.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently',
+          lastUsed: k.lastUsed || 'Never'
+        })));
+      } else {
+        setApiKeys([]);
+      }
+    } catch {
+      // Fallback
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    Promise.resolve().then(() => loadKeys());
+  }, []);
+
+  const handleCopy = (id: string, textToCopy?: string) => {
+    if (textToCopy) {
+      navigator.clipboard.writeText(textToCopy);
+    }
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleCreateKey = () => {
-    const newKey: ApiKeyItem = {
-      id: `k-${Date.now()}`,
-      name: 'New Custom Integration Key',
-      keyPrefix: `hnt_live_${Math.random().toString(36).substring(2, 6)}...${Math.random().toString(36).substring(2, 5)}`,
-      createdAt: 'Just now',
-      lastUsed: 'Never'
-    };
-    setApiKeys([...apiKeys, newKey]);
+  const handleCreateKey = async () => {
+    const keyName = window.prompt('Enter a label for this API key (e.g. "Zapier Webhook Key"):', 'Custom Integration Key');
+    if (!keyName) return;
+
+    try {
+      const created = await createUserApiKey(keyName);
+      if (created?.secretKey) {
+        setNewlyCreatedKey(created.secretKey);
+      }
+      await loadKeys();
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate key.');
+    }
   };
 
-  const handleDeleteKey = (id: string) => {
-    setApiKeys(apiKeys.filter(k => k.id !== id));
+  const handleDeleteKey = async (id: string) => {
+    if (!window.confirm('Are you sure you want to revoke this API key? Applications using it will lose access immediately.')) {
+      return;
+    }
+    try {
+      await deleteUserApiKey(id);
+      await loadKeys();
+    } catch (err: any) {
+      alert(err.message || 'Failed to revoke key.');
+    }
   };
+
 
   return (
     <div style={{ maxWidth: '720px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -104,6 +147,55 @@ export const SecuritySettingsPanel: React.FC = () => {
         </button>
       </div>
 
+      {/* Newly Created Key Banner */}
+      {newlyCreatedKey && (
+        <div style={{
+          backgroundColor: '#ecfdf5',
+          border: '1px solid #a7f3d0',
+          borderRadius: '12px',
+          padding: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#065f46' }}>
+              🔑 API Key Generated! Copy your secret key now:
+            </span>
+            <button
+              onClick={() => setNewlyCreatedKey(null)}
+              style={{ background: 'none', border: 'none', color: '#047857', cursor: 'pointer', fontSize: '11px', fontWeight: 700 }}
+            >
+              Dismiss
+            </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <code style={{ flex: 1, backgroundColor: '#ffffff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1fae5', fontSize: '12px', color: '#0f172a', wordBreak: 'break-all' }}>
+              {newlyCreatedKey}
+            </code>
+            <button
+              onClick={() => handleCopy('new-secret', newlyCreatedKey)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '8px 12px',
+                backgroundColor: '#059669',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              {copiedId === 'new-secret' ? <Check size={14} /> : <Copy size={14} />}
+              <span>{copiedId === 'new-secret' ? 'Copied' : 'Copy Key'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* API Keys Table Card */}
       <div style={{
         backgroundColor: '#ffffff',
@@ -159,51 +251,60 @@ export const SecuritySettingsPanel: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {apiKeys.map((k) => (
-              <tr key={k.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '12px 16px', fontWeight: 700, color: '#0f172a' }}>{k.name}</td>
-                <td style={{ padding: '12px 16px' }}>
-                  <code style={{ backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', color: '#334155' }}>
-                    {k.keyPrefix}
-                  </code>
-                </td>
-                <td style={{ padding: '12px 16px', color: '#64748b' }}>{k.createdAt}</td>
-                <td style={{ padding: '12px 16px', color: '#64748b' }}>{k.lastUsed}</td>
-                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                    <button
-                      onClick={() => handleCopy(k.id)}
-                      style={{
-                        background: 'none',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '6px',
-                        padding: '4px 6px',
-                        cursor: 'pointer',
-                        color: copiedId === k.id ? '#059669' : '#64748b'
-                      }}
-                    >
-                      {copiedId === k.id ? <Check size={12} /> : <Copy size={12} />}
-                    </button>
-
-                    <button
-                      onClick={() => handleDeleteKey(k.id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#dc2626',
-                        cursor: 'pointer',
-                        padding: '4px'
-                      }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
+            {apiKeys.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
+                  {isLoading ? 'Loading programmatic credentials...' : 'No active API keys found. Click "Generate New Key" to create your first key.'}
                 </td>
               </tr>
-            ))}
+            ) : (
+              apiKeys.map((k) => (
+                <tr key={k.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '12px 16px', fontWeight: 700, color: '#0f172a' }}>{k.name}</td>
+                  <td style={{ padding: '12px 16px' }}>
+                    <code style={{ backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', color: '#334155' }}>
+                      {k.keyPrefix}
+                    </code>
+                  </td>
+                  <td style={{ padding: '12px 16px', color: '#64748b' }}>{k.createdAt}</td>
+                  <td style={{ padding: '12px 16px', color: '#64748b' }}>{k.lastUsed}</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                      <button
+                        onClick={() => handleCopy(k.id, k.keyPrefix)}
+                        style={{
+                          background: 'none',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          padding: '4px 6px',
+                          cursor: 'pointer',
+                          color: copiedId === k.id ? '#059669' : '#64748b'
+                        }}
+                      >
+                        {copiedId === k.id ? <Check size={12} /> : <Copy size={12} />}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteKey(k.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#dc2626',
+                          cursor: 'pointer',
+                          padding: '4px'
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
+
     </div>
   );
 };

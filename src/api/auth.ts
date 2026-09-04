@@ -122,3 +122,81 @@ export async function fetchCurrentUser(): Promise<UserAccount | null> {
     return getStoredUser();
   }
 }
+
+export async function fetchUserApiKeys(): Promise<any[]> {
+  const token = getStoredToken();
+  if (!token) return [];
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/api-keys`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function createUserApiKey(name: string): Promise<any> {
+  const token = getStoredToken();
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/api-keys`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ name })
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.message || 'Failed to create API key');
+  return body.data;
+}
+
+export async function deleteUserApiKey(id: string): Promise<boolean> {
+  const token = getStoredToken();
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/api-keys/${id}`, {
+    method: 'DELETE',
+    headers: {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    }
+  });
+  return res.ok;
+}
+
+export async function fetchUserActivityLogs(): Promise<any[]> {
+  const token = getStoredToken();
+  if (!token) return [];
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/activity`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function updateUserProfile(updates: { fullName?: string; companyName?: string; defaultCurrency?: string }): Promise<UserAccount> {
+  const token = getStoredToken();
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(updates)
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.message || 'Failed to update profile');
+  const user = body.data;
+  if (token && user) {
+    setStoredSession(token, user);
+  }
+  return user;
+}
+

@@ -55,20 +55,23 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   ];
 
   return (
-    <header style={{
-      padding: '16px 24px 14px',
-      backgroundColor: '#f4f6fa',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '14px',
-    }}>
+    <header 
+      className="mobile-header-pad"
+      style={{
+        padding: '16px 24px 14px',
+        backgroundColor: '#f4f6fa',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '14px',
+      }}
+    >
       {/* Top Main Row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         {/* Left Greeting */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <h1 style={{
-              fontSize: '24px',
+              fontSize: 'clamp(18px, 4vw, 24px)',
               fontWeight: 800,
               color: '#0f172a',
               margin: '0 0 3px 0',
@@ -99,7 +102,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </div>
           </div>
           <p style={{
-            fontSize: '13.5px',
+            fontSize: '13px',
             color: '#64748b',
             margin: 0,
             fontWeight: 400
@@ -109,7 +112,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         </div>
 
         {/* Right Search, Copilot, Notifications, Profile */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {/* Search Box */}
           <div style={{
             display: 'flex',
@@ -118,7 +121,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             border: '1px solid #e2e8f0',
             borderRadius: '10px',
             padding: '0 12px',
-            width: '280px',
+            width: 'min(280px, 100%)',
+            flex: '1 1 200px',
             height: '38px',
             boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
           }}>
@@ -140,7 +144,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 backgroundColor: 'transparent'
               }}
             />
-            <kbd style={{
+            <kbd className="desktop-only" style={{
               fontSize: '11px',
               fontWeight: 600,
               backgroundColor: '#f1f5f9',
@@ -238,7 +242,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       </div>
 
       {/* Global Filter Bar (Dates & Teams) */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '10px' }}>
         {/* Date Filter Dropdown */}
         <div style={{ position: 'relative' }}>
           <button

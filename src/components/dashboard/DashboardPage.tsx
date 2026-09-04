@@ -10,6 +10,7 @@ import { SignalsByTypeCard } from './SignalsByTypeCard';
 import { RecentActivityCard } from './RecentActivityCard';
 import { AiCopilotModal } from './AiCopilotModal';
 import { CompanyResearchModal } from './CompanyResearchModal';
+import { MobileBottomNav } from '../navigation/MobileBottomNav';
 
 interface DashboardPageProps {
   onNavigate?: (nav: string) => void;
@@ -78,14 +79,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onGoTo
         />
 
         {/* Scrollable Dashboard Body */}
-        <main style={{
-          flex: 1,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          paddingBottom: '32px'
-        }}>
+        <main 
+          className="mobile-bottom-pad"
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            paddingBottom: '32px'
+          }}
+        >
           {/* KPI Summary Cards */}
           <KpiCards onCardClick={() => {}} />
 
@@ -135,6 +139,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onGoTo
         companyName={researchedCompany}
         onClose={() => setResearchedCompany(null)}
       />
+
+      {/* Mobile One-Thumb Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 };

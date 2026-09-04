@@ -92,12 +92,7 @@ export const PipelineKpiCards: React.FC<PipelineKpiCardsProps> = ({
   ];
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(5, 1fr)',
-      gap: '14px',
-      padding: '0 32px'
-    }}>
+    <div className="kpi-grid-5">
       {cards.map((card) => {
         const isSelected = activeFilter === card.id;
 
@@ -109,12 +104,13 @@ export const PipelineKpiCards: React.FC<PipelineKpiCardsProps> = ({
               backgroundColor: '#ffffff',
               borderRadius: '14px',
               border: isSelected ? '1.5px solid #6366f1' : '1px solid #eaecf0',
-              padding: '16px 14px',
+              padding: '14px 14px',
               boxShadow: '0 2px 8px rgba(16, 24, 40, 0.03)',
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
+              minHeight: '94px',
               transition: 'all 0.15s ease',
               overflow: 'hidden'
             }}

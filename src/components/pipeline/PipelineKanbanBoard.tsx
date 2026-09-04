@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   ArrowRight, 
   ArrowLeft, 
@@ -53,32 +53,97 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
     }
   };
 
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(5, minmax(280px, 1fr))',
-      gap: '16px',
-      padding: '0 32px 32px 32px',
-      overflowX: 'auto',
-      alignItems: 'flex-start'
-    }}>
-      {columns.map((col) => {
-        const stageDeals = getStageDeals(col.id);
-        const stageTotalValue = stageDeals.reduce((sum, d) => sum + d.dealValue, 0);
+  const [mobileActiveStage, setMobileActiveStage] = useState<'all' | PipelineStage>('all');
 
-        return (
-          <div
-            key={col.id}
-            style={{
-              backgroundColor: '#f8fafc',
-              borderRadius: '14px',
-              border: '1px solid #eaecf0',
-              display: 'flex',
-              flexDirection: 'column',
-              maxHeight: 'calc(100vh - 270px)',
-              overflow: 'hidden'
-            }}
-          >
+  const displayedColumns = mobileActiveStage === 'all' 
+    ? columns 
+    : columns.filter(c => c.id === mobileActiveStage);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+      {/* Mobile Stage Selector Filter Pills */}
+      <div 
+        className="mobile-only"
+        style={{
+          padding: '0 16px 14px 16px',
+          overflowX: 'auto',
+          gap: '8px',
+          boxSizing: 'border-box',
+          WebkitOverflowScrolling: 'touch'
+        }}
+      >
+        <button
+          onClick={() => setMobileActiveStage('all')}
+          style={{
+            padding: '6px 12px',
+            borderRadius: '20px',
+            border: mobileActiveStage === 'all' ? '1.5px solid #4f46e5' : '1px solid #cbd5e1',
+            backgroundColor: mobileActiveStage === 'all' ? '#eef2ff' : '#ffffff',
+            color: mobileActiveStage === 'all' ? '#4f46e5' : '#475569',
+            fontSize: '11.5px',
+            fontWeight: 700,
+            whiteSpace: 'nowrap',
+            cursor: 'pointer'
+          }}
+        >
+          All Stages ({deals.length})
+        </button>
+        {columns.map((col) => {
+          const count = getStageDeals(col.id).length;
+          const isSelected = mobileActiveStage === col.id;
+          return (
+            <button
+              key={col.id}
+              onClick={() => setMobileActiveStage(col.id)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '20px',
+                border: isSelected ? `1.5px solid ${col.color}` : '1px solid #cbd5e1',
+                backgroundColor: isSelected ? col.bg : '#ffffff',
+                color: isSelected ? col.color : '#475569',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                cursor: 'pointer'
+              }}
+            >
+              {col.label} ({count})
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Kanban Columns Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: displayedColumns.length === 1 
+          ? '1fr' 
+          : `repeat(${displayedColumns.length}, minmax(280px, 1fr))`,
+        gap: '16px',
+        padding: '0 20px 32px 20px',
+        overflowX: 'auto',
+        alignItems: 'flex-start',
+        scrollSnapType: 'x mandatory',
+        WebkitOverflowScrolling: 'touch'
+      }}>
+        {displayedColumns.map((col) => {
+          const stageDeals = getStageDeals(col.id);
+          const stageTotalValue = stageDeals.reduce((sum, d) => sum + d.dealValue, 0);
+
+          return (
+            <div
+              key={col.id}
+              style={{
+                backgroundColor: '#f8fafc',
+                borderRadius: '14px',
+                border: '1px solid #eaecf0',
+                display: 'flex',
+                flexDirection: 'column',
+                maxHeight: 'calc(100vh - 270px)',
+                overflow: 'hidden',
+                scrollSnapAlign: 'start'
+              }}
+            >
             {/* Column Header */}
             <div style={{
               padding: '14px 16px',
@@ -343,6 +408,7 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
           </div>
         );
       })}
+      </div>
     </div>
   );
 };

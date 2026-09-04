@@ -363,18 +363,23 @@ export const OpportunityTable: React.FC<OpportunityTableProps> = ({
         </div>
       </div>
 
-      {/* Table Header */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '40px 2.2fr 1.1fr 1fr 2.8fr 1fr 1.1fr 1fr 30px',
-        padding: '10px 18px',
-        backgroundColor: '#f8fafc',
-        borderBottom: '1px solid #eaecf0',
-        fontSize: '11.5px',
-        fontWeight: 700,
-        color: '#64748b',
-        alignItems: 'center'
-      }}>
+      {/* Table Content with Horizontal Scroll for Mobile */}
+      <div className="mobile-table-wrapper">
+
+        <div style={{ minWidth: '780px' }}>
+          {/* Table Column Headers */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '40px 2.2fr 1.1fr 1fr 2.8fr 1fr 1.1fr 1fr 30px',
+            padding: '10px 18px',
+            backgroundColor: '#f8fafc',
+            borderBottom: '1px solid #eaecf0',
+            fontSize: '11.5px',
+            fontWeight: 700,
+            color: '#64748b',
+            alignItems: 'center'
+          }}>
+
         <div>
           <input
             type="checkbox"
@@ -542,6 +547,8 @@ export const OpportunityTable: React.FC<OpportunityTableProps> = ({
             </div>
           );
         })}
+        </div>
+        </div>
       </div>
 
       {/* Pagination Footer */}

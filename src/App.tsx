@@ -299,10 +299,12 @@ function AppContent() {
       fontFamily: 'var(--font-primary)'
     }}>
       {/* Left Sidebar */}
-      <Sidebar
-        currentStep={currentStep}
-        onSelectStep={handleSelectStep}
-      />
+      <div className="desktop-only" style={{ height: '100vh', flexShrink: 0 }}>
+        <Sidebar
+          currentStep={currentStep}
+          onSelectStep={handleSelectStep}
+        />
+      </div>
 
       {/* Main Content Area */}
       <div style={{
@@ -320,14 +322,18 @@ function AppContent() {
         />
 
         {/* Scrollable Center Body: Form + Summary */}
-        <main style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '24px 32px',
-          display: 'flex',
-          gap: '24px',
-          alignItems: 'flex-start'
-        }}>
+        <main 
+          className="mobile-bottom-pad"
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '24px clamp(12px, 3vw, 32px)',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '24px',
+            alignItems: 'flex-start'
+          }}
+        >
           {/* Active Step Form Card Container */}
           <div style={{
             flex: 1,

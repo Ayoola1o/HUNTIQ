@@ -104,20 +104,21 @@ export const GoogleProspectingMap: React.FC<GoogleProspectingMapProps> = ({
   const mapInstanceRef = useRef<any>(null);
   const circleRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(() => Boolean(typeof window !== 'undefined' && (window as any).google?.maps));
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const activeApiKey = apiKey || (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
+  const effectiveError = !activeApiKey
+    ? 'No Google Maps API Key provided. Enter key above or set VITE_GOOGLE_MAPS_API_KEY.'
+    : loadError;
 
   // 1. Dynamic Google Maps Script Loader
   useEffect(() => {
     if (!activeApiKey) {
-      setLoadError('No Google Maps API Key provided. Enter key above or set VITE_GOOGLE_MAPS_API_KEY.');
       return;
     }
 
     if ((window as any).google?.maps) {
-      setIsLoaded(true);
       return;
     }
 
@@ -178,7 +179,7 @@ export const GoogleProspectingMap: React.FC<GoogleProspectingMapProps> = ({
     } catch (err) {
       console.error('Error initializing Google Map:', err);
     }
-  }, [isLoaded, center.lat, center.lng]);
+  }, [isLoaded, center, radiusKm]);
 
   // 3. Update Radius Circle
   useEffect(() => {
@@ -284,9 +285,9 @@ export const GoogleProspectingMap: React.FC<GoogleProspectingMapProps> = ({
         markersRef.current.push(marker);
       }
     });
-  }, [isLoaded, businesses, selectedBusinessId]);
+  }, [isLoaded, businesses, selectedBusinessId, onSelectBusiness]);
 
-  if (loadError) {
+  if (effectiveError) {
     return (
       <div style={{
         height: '100%',
@@ -318,7 +319,7 @@ export const GoogleProspectingMap: React.FC<GoogleProspectingMapProps> = ({
           Google Maps Key Required
         </h4>
         <p style={{ fontSize: '12px', color: '#94a3b8', maxWidth: '360px', margin: 0 }}>
-          {loadError}
+          {effectiveError}
         </p>
       </div>
     );

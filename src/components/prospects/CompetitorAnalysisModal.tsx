@@ -31,13 +31,23 @@ export const CompetitorAnalysisModal: React.FC<CompetitorAnalysisModalProps> = (
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    let active = true;
     if (isOpen && targetPayload) {
-      setIsLoading(true);
+      Promise.resolve().then(() => {
+        if (active) setIsLoading(true);
+      });
       analyzeCompetitors(targetPayload)
-        .then(res => setAnalysis(res))
+        .then(res => {
+          if (active) setAnalysis(res);
+        })
         .catch(err => console.error('Competitor analysis error:', err))
-        .finally(() => setIsLoading(false));
+        .finally(() => {
+          if (active) setIsLoading(false);
+        });
     }
+    return () => {
+      active = false;
+    };
   }, [isOpen, targetPayload]);
 
   if (!isOpen || !targetPayload) return null;

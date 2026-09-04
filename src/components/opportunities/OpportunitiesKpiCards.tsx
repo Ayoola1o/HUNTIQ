@@ -85,12 +85,7 @@ export const OpportunitiesKpiCards: React.FC<OpportunitiesKpiCardsProps> = ({
   ];
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(6, 1fr)',
-      gap: '14px',
-      padding: '0 32px'
-    }}>
+    <div className="kpi-grid-6">
       {kpis.map((k) => {
         const isSelected = activeFilter === k.id;
         return (
@@ -101,7 +96,7 @@ export const OpportunitiesKpiCards: React.FC<OpportunitiesKpiCardsProps> = ({
               backgroundColor: '#ffffff',
               borderRadius: '14px',
               border: isSelected ? '1.5px solid #6366f1' : '1px solid #eaecf0',
-              padding: '16px 18px',
+              padding: '14px 14px',
               boxShadow: isSelected 
                 ? '0 6px 16px -2px rgba(99, 102, 241, 0.15)' 
                 : '0 1px 3px rgba(16, 24, 40, 0.04)',
@@ -109,7 +104,7 @@ export const OpportunitiesKpiCards: React.FC<OpportunitiesKpiCardsProps> = ({
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              minHeight: '100px',
+              minHeight: '94px',
               transition: 'all 0.18s ease'
             }}
             onMouseEnter={(e) => {

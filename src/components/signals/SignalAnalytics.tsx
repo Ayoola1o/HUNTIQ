@@ -41,12 +41,8 @@ export const SignalAnalytics: React.FC = () => {
   ];
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr 1fr',
-      gap: '18px',
-      padding: '0 32px'
-    }}>
+    <div className="kpi-grid-3">
+
       {/* 1. Signals by Type */}
       <div style={{
         backgroundColor: '#ffffff',

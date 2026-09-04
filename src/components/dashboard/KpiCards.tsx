@@ -101,9 +101,9 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ onCardClick }) => {
   return (
     <div className="responsive-container" style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))',
-      gap: '12px',
-      padding: '0 24px',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+      gap: '10px',
+      padding: '0 clamp(12px, 3vw, 24px)',
     }}>
       {kpis.map((kpi) => (
         <div

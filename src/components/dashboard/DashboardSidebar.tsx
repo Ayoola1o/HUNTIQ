@@ -27,8 +27,10 @@ import {
 } from 'lucide-react';
 
 import { AuthModal } from '../auth/AuthModal';
-import { getStoredUser, clearStoredSession, type UserAccount } from '../../api/auth';
+import { clearStoredSession } from '../../api/auth';
 import { useHuntiq } from '../../context/HuntiqContext';
+
+
 
 interface DashboardSidebarProps {
   activeNav: string;
@@ -41,25 +43,26 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   onSelectNav,
   onGoToOnboarding
 }) => {
-  const { refreshData } = useHuntiq();
+  const { refreshData, isMobileSidebarOpen, setIsMobileSidebarOpen, currentUser, setCurrentUser } = useHuntiq();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileScreen, setIsMobileScreen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getStoredUser());
+
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobileScreen(window.innerWidth <= 768);
-      if (window.innerWidth > 768) {
-        setIsMobileOpen(false);
+      const mobile = window.innerWidth <= 768;
+      setIsMobileScreen(mobile);
+      if (!mobile) {
+        setIsMobileSidebarOpen(false);
       }
     };
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [setIsMobileSidebarOpen]);
+
 
   const navSections = [
     {
@@ -112,51 +115,51 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const handleItemClick = (id: string) => {
     onSelectNav(id);
     if (isMobileScreen) {
-      setIsMobileOpen(false);
+      setIsMobileSidebarOpen(false);
     }
   };
 
   return (
     <>
       {/* Mobile Floating Hamburger Trigger Button */}
-      {isMobileScreen && !isMobileOpen && (
+      {isMobileScreen && !isMobileSidebarOpen && (
         <button
-          onClick={() => setIsMobileOpen(true)}
+          onClick={() => setIsMobileSidebarOpen(true)}
           aria-label="Open Navigation"
           style={{
             position: 'fixed',
             top: '12px',
             left: '12px',
             zIndex: 990,
-            width: '38px',
-            height: '38px',
-            borderRadius: '10px',
+            width: '40px',
+            height: '40px',
+            borderRadius: '11px',
             backgroundColor: '#090d16',
             color: '#ffffff',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
-            backdropFilter: 'blur(8px)'
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(10px)'
           }}
         >
-          <Menu size={18} color="#818cf8" />
+          <Menu size={20} color="#818cf8" />
         </button>
       )}
 
       {/* Backdrop for mobile drawer */}
-      {isMobileOpen && (
+      {isMobileSidebarOpen && (
         <div
           className="mobile-sidebar-backdrop"
-          onClick={() => setIsMobileOpen(false)}
+          onClick={() => setIsMobileSidebarOpen(false)}
         />
       )}
 
       {/* Main Sidebar Container */}
       <aside
-        className={`sidebar-container ${isMobileOpen ? 'mobile-open' : ''}`}
+        className={`sidebar-container ${isMobileSidebarOpen ? 'mobile-open' : ''}`}
         style={{
           width: isCollapsed && !isMobileScreen ? '68px' : '230px',
           minWidth: isCollapsed && !isMobileScreen ? '68px' : '230px',
@@ -232,27 +235,27 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             <button
               onClick={() => {
                 if (isMobileScreen) {
-                  setIsMobileOpen(false);
+                  setIsMobileSidebarOpen(false);
                 } else {
                   setIsCollapsed(!isCollapsed);
                 }
               }}
               title={isMobileScreen ? 'Close Navigation' : isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
               style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '6px',
-                width: '28px',
-                height: '28px',
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.14)',
+                borderRadius: '8px',
+                width: isMobileScreen ? '32px' : '28px',
+                height: isMobileScreen ? '32px' : '28px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#94a3b8',
+                color: isMobileScreen ? '#ffffff' : '#94a3b8',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
-              {isMobileScreen ? <X size={15} /> : <Menu size={15} />}
+              {isMobileScreen ? <X size={17} /> : <Menu size={15} />}
             </button>
           </div>
 

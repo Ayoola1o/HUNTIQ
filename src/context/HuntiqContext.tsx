@@ -20,6 +20,8 @@ import {
   updatePipelineDeal
 } from '../api';
 import { currencyService, type CurrencyCode } from '../services/currencyService';
+import { getStoredUser, fetchUserActivityLogs, type UserAccount } from '../api/auth';
+
 
 export type AppView = 
   | 'dashboard' 
@@ -81,7 +83,19 @@ interface HuntiqContextType {
   setCurrency: (currency: CurrencyCode) => void;
   formatCurrency: (amountInUsd: number, options?: { compact?: boolean; precision?: number }) => string;
   convertAmount: (amountInUsd: number) => number;
+
+  // Mobile Navigation & Drawer State
+  isMobileSidebarOpen: boolean;
+  setIsMobileSidebarOpen: (open: boolean) => void;
+  toggleMobileSidebar: () => void;
+
+  // Active User & Authentication State
+  currentUser: UserAccount | null;
+  setCurrentUser: (user: UserAccount | null) => void;
+  userActivityLogs: any[];
+  refreshActivityLogs: () => Promise<void>;
 }
+
 
 const HuntiqContext = createContext<HuntiqContextType | undefined>(undefined);
 
@@ -92,6 +106,16 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   const [currentView, setCurrentView] = useState<AppView>(initialView);
   const [isLiveBackend, setIsLiveBackend] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // User Session & Activity State
+  const [currentUser, setCurrentUserState] = useState<UserAccount | null>(() => getStoredUser());
+  const [userActivityLogs, setUserActivityLogs] = useState<any[]>([]);
+
+  const toggleMobileSidebar = useCallback(() => {
+    setIsMobileSidebarOpen((prev) => !prev);
+  }, []);
+
 
   // Multi-Currency State
   const [currency, setCurrencyState] = useState<CurrencyCode>(() => {
@@ -109,6 +133,20 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     } catch {}
   }, []);
 
+  const setCurrentUser = useCallback((user: UserAccount | null) => {
+    setCurrentUserState(user);
+    if (user?.defaultCurrency) {
+      setCurrency(user.defaultCurrency as CurrencyCode);
+    }
+  }, [setCurrency]);
+
+  const refreshActivityLogs = useCallback(async () => {
+    try {
+      const logs = await fetchUserActivityLogs();
+      setUserActivityLogs(logs || []);
+    } catch {}
+  }, []);
+
   const formatCurrency = useCallback((amountInUsd: number, options?: { compact?: boolean; precision?: number }) => {
     return currencyService.format(amountInUsd, currency, options);
   }, [currency]);
@@ -116,6 +154,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   const convertAmount = useCallback((amountInUsd: number) => {
     return currencyService.convertUsdTo(amountInUsd, currency);
   }, [currency]);
+
   
   // Data State
   const [companies, setCompanies] = useState<CompanyItem[]>(() => prospectorEngine.getAllCompanies());
@@ -265,6 +304,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
 
   // Optimized Navigation Handler
   const navigateTo = useCallback((nav: string) => {
+    setIsMobileSidebarOpen(false);
     const clean = nav.toLowerCase().replace('_', '-');
     if (clean === 'dashboard') setCurrentView('dashboard');
     else if (clean === 'copilot') {
@@ -338,19 +378,21 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
       if (liveSignals.status === 'fulfilled' && liveSignals.value && liveSignals.value.length > 0) {
         setSignals(liveSignals.value);
       }
-      if (liveDeals.status === 'fulfilled' && liveDeals.value && liveDeals.value.length > 0) {
+      if (liveDeals.status === 'fulfilled' && Array.isArray(liveDeals.value)) {
         setPipelineDeals(liveDeals.value);
       }
-    } catch (_err) {
+      refreshActivityLogs();
+    } catch {
       // Graceful local engine fallback
     } finally {
       setIsDataLoading(false);
     }
-  }, []);
+  }, [refreshActivityLogs]);
 
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    Promise.resolve().then(() => refreshData());
+  }, [refreshData, currentUser]);
+
 
   // Deal Management
   const addDealToPipeline = useCallback(async (deal: Partial<PipelineDealItem>) => {
@@ -382,7 +424,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
 
     try {
       await createPipelineDeal(newDeal);
-    } catch (_err) {
+    } catch {
       // Optimistic update retained
     }
   }, []);
@@ -394,7 +436,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
 
     try {
       await updatePipelineDeal(dealId, { stage: newStage });
-    } catch (_err) {
+    } catch {
       // Optimistic update retained
     }
   }, []);
@@ -546,7 +588,14 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     currency,
     setCurrency,
     formatCurrency,
-    convertAmount
+    convertAmount,
+    isMobileSidebarOpen,
+    setIsMobileSidebarOpen,
+    toggleMobileSidebar,
+    currentUser,
+    setCurrentUser,
+    userActivityLogs,
+    refreshActivityLogs
   }), [
     currentView,
     navigateTo,
@@ -574,8 +623,17 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     currency,
     setCurrency,
     formatCurrency,
-    convertAmount
+    convertAmount,
+    isMobileSidebarOpen,
+    setIsMobileSidebarOpen,
+    toggleMobileSidebar,
+    currentUser,
+    setCurrentUser,
+    userActivityLogs,
+    refreshActivityLogs
   ]);
+
+
 
   return (
     <HuntiqContext.Provider value={value}>

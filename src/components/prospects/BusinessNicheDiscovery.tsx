@@ -86,8 +86,12 @@ export const BusinessNicheDiscovery: React.FC<BusinessNicheDiscoveryProps> = ({
   // Initial load
   useEffect(() => {
     getDiscoveryTemplates().then(t => setTemplates(t)).catch(() => {});
-    handleExecuteSearch('local_business', 'Lekki, Lagos', 'Dental Clinics');
+    const timer = setTimeout(() => {
+      handleExecuteSearch('local_business', 'Lekki, Lagos', 'Dental Clinics');
+    }, 0);
+    return () => clearTimeout(timer);
   }, [handleExecuteSearch]);
+
 
   const handleApplyTemplate = (tmpl: NicheTemplate) => {
     setMode(tmpl.mode);

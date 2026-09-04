@@ -23,6 +23,7 @@ import {
 
 import { useHuntiq } from '../../context/HuntiqContext';
 import { syncCompanyJobs, autoQualifyLeads } from '../../api';
+import { MobileBottomNav } from '../navigation/MobileBottomNav';
 
 interface OpportunitiesPageProps {
   onNavigate: (nav: string) => void;
@@ -166,20 +167,25 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
         overflow: 'hidden'
       }}>
         {/* Top Header */}
-        <header style={{
-          padding: '16px 32px 14px',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #eaecf0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0
-        }}>
+        <header 
+          className="mobile-header-pad"
+          style={{
+            padding: '16px 32px 14px',
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #eaecf0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            flexShrink: 0
+          }}
+        >
           {/* Title, Star, and Live Status Badge */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <h1 style={{
-                fontSize: '22px',
+                fontSize: 'clamp(18px, 4vw, 22px)',
                 fontWeight: 800,
                 color: '#0f172a',
                 letterSpacing: '-0.02em',
@@ -227,7 +233,7 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
           </div>
 
           {/* Search, Live Sync, Copilot CTA, Date & Profile */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* Quick Live ATS Sync Button */}
             <button
               onClick={handleQuickLiveSync}
@@ -266,7 +272,8 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
               borderRadius: '10px',
               padding: '0 12px',
               height: '38px',
-              width: '240px',
+              width: 'min(240px, 100%)',
+              flex: '1 1 180px',
               gap: '8px'
             }}>
               <Search size={15} color="#94a3b8" />
@@ -282,7 +289,7 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
                   width: '100%'
                 }}
               />
-              <span style={{
+              <span className="desktop-only" style={{
                 fontSize: '10.5px',
                 fontWeight: 700,
                 color: '#94a3b8',
@@ -413,14 +420,17 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
         </header>
 
         {/* Scrollable Body Canvas */}
-        <main style={{
-          flex: 1,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          padding: '20px 0 36px'
-        }}>
+        <main 
+          className="mobile-bottom-pad"
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            padding: '20px 0 36px'
+          }}
+        >
           {/* Live Ingestion Feedback Toast */}
           {syncToast && (
             <div style={{
@@ -550,6 +560,9 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
         companyName={researchedCompany}
         onClose={() => setResearchedCompany(null)}
       />
+
+      {/* Mobile One-Thumb Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 };

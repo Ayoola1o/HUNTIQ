@@ -9,6 +9,7 @@ import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import { CompanyResearchModal } from '../dashboard/CompanyResearchModal';
 import type { SignalItem } from '../../types/signal';
 import { useHuntiq } from '../../context/HuntiqContext';
+import { MobileBottomNav } from '../navigation/MobileBottomNav';
 import { 
   Radio, 
   Search, 
@@ -96,20 +97,25 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
         overflow: 'hidden'
       }}>
         {/* Top Header */}
-        <header style={{
-          padding: '16px 32px 14px',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #eaecf0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0
-        }}>
+        <header 
+          className="mobile-header-pad"
+          style={{
+            padding: '16px 32px 14px',
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #eaecf0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            flexShrink: 0
+          }}
+        >
           {/* Title & Antenna Icon */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <h1 style={{
-                fontSize: '22px',
+                fontSize: 'clamp(18px, 4vw, 22px)',
                 fontWeight: 800,
                 color: '#0f172a',
                 letterSpacing: '-0.02em',
@@ -131,7 +137,7 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
           </div>
 
           {/* Search, Copilot CTA, Date & Profile */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* Search Input */}
             <div style={{
               display: 'flex',
@@ -141,7 +147,8 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
               borderRadius: '10px',
               padding: '0 12px',
               height: '38px',
-              width: '280px',
+              width: 'min(280px, 100%)',
+              flex: '1 1 180px',
               gap: '8px'
             }}>
               <Search size={15} color="#94a3b8" />
@@ -159,7 +166,7 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
                   width: '100%'
                 }}
               />
-              <span style={{
+              <span className="desktop-only" style={{
                 fontSize: '10.5px',
                 fontWeight: 700,
                 color: '#94a3b8',
@@ -290,14 +297,17 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
         </header>
 
         {/* Scrollable Body Canvas */}
-        <main style={{
-          flex: 1,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          padding: '20px 0 36px'
-        }}>
+        <main 
+          className="mobile-bottom-pad"
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            padding: '20px 0 36px'
+          }}
+        >
           {/* 6 Top Summary KPI Cards */}
           <SignalsKpiCards
             activeFilter={activeKpiFilter}
@@ -355,6 +365,9 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
         companyName={researchedCompany}
         onClose={() => setResearchedCompany(null)}
       />
+
+      {/* Mobile One-Thumb Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 };

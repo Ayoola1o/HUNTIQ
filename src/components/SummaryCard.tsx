@@ -116,7 +116,9 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({ data, currentStep }) =
   return (
     <div style={{
       width: '320px',
-      minWidth: '320px',
+      maxWidth: '100%',
+      minWidth: 0,
+      flex: '1 1 300px',
       backgroundColor: '#ffffff',
       borderRadius: '16px',
       border: '1px solid #eaecf0',
