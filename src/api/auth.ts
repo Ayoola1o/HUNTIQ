@@ -13,6 +13,15 @@ export interface UserAccount {
   workspaceId: string;
   role: string;
   defaultCurrency: string;
+  avatarUrl?: string;
+  phone?: string;
+  jobTitle?: string;
+  department?: string;
+  bio?: string;
+  location?: string;
+  websiteUrl?: string;
+  linkedinUrl?: string;
+  twitterUrl?: string;
 }
 
 export interface AuthSuccessPayload {
@@ -181,7 +190,20 @@ export async function fetchUserActivityLogs(): Promise<any[]> {
   }
 }
 
-export async function updateUserProfile(updates: { fullName?: string; companyName?: string; defaultCurrency?: string }): Promise<UserAccount> {
+export async function updateUserProfile(updates: { 
+  fullName?: string; 
+  companyName?: string; 
+  defaultCurrency?: string;
+  avatarUrl?: string;
+  phone?: string;
+  jobTitle?: string;
+  department?: string;
+  bio?: string;
+  location?: string;
+  websiteUrl?: string;
+  linkedinUrl?: string;
+  twitterUrl?: string;
+}): Promise<UserAccount> {
   const token = getStoredToken();
   const res = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
     method: 'PATCH',
@@ -198,5 +220,86 @@ export async function updateUserProfile(updates: { fullName?: string; companyNam
     setStoredSession(token, user);
   }
   return user;
+}
+
+export async function uploadUserAvatar(avatarUrl: string): Promise<string> {
+  const token = getStoredToken();
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/avatar`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ avatarUrl })
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.message || 'Failed to update avatar photo');
+  const user = getStoredUser();
+  if (user && token) {
+    user.avatarUrl = body.data?.avatarUrl || avatarUrl;
+    setStoredSession(token, user);
+  }
+  return body.data?.avatarUrl || avatarUrl;
+}
+
+export async function fetchUserOnboarding(): Promise<any | null> {
+  const token = getStoredToken();
+  const user = getStoredUser();
+  const cacheKey = user ? `huntiq_onboarding_${user.id}` : 'huntiq_onboarding_default';
+
+  if (token) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/onboarding`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const body = await res.json();
+        if (body.data) {
+          try { localStorage.setItem(cacheKey, JSON.stringify(body.data)); } catch {}
+          return body.data;
+        }
+      }
+    } catch {}
+  }
+
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    return cached ? JSON.parse(cached) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveUserOnboarding(data: any): Promise<any> {
+  const token = getStoredToken();
+  const user = getStoredUser();
+  const cacheKey = user ? `huntiq_onboarding_${user.id}` : 'huntiq_onboarding_default';
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(data));
+    localStorage.setItem('huntiq_onboarding_completed', 'true');
+    if (user && data.workspaceName) {
+      user.companyName = data.workspaceName;
+      if (token) setStoredSession(token, user);
+    }
+  } catch {}
+
+  if (token) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/onboarding`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        const body = await res.json();
+        return body.data;
+      }
+    } catch {}
+  }
+  return data;
 }
 

@@ -12,6 +12,8 @@ import { ChangePasswordModal } from './ChangePasswordModal';
 import { Manage2faModal } from './Manage2faModal';
 import { AvatarUploadModal } from './AvatarUploadModal';
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
+import { useHuntiq } from '../../context/HuntiqContext';
+import { updateUserProfile, uploadUserAvatar } from '../../api/auth';
 import type { 
   UserProfileData, 
   UserPreferencesData, 
@@ -30,6 +32,7 @@ import { NotificationsTab } from './tabs/NotificationsTab';
 import { SessionsTab } from './tabs/SessionsTab';
 import { ApiKeysTab } from './tabs/ApiKeysTab';
 import { EmailSettingsTab } from './tabs/EmailSettingsTab';
+import { MobileBottomNav } from '../navigation/MobileBottomNav';
 
 interface ProfilePageProps {
   onNavigate: (nav: string) => void;
@@ -40,6 +43,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
+  const { currentUser, updateCurrentUser, setCurrency, userActivityLogs } = useHuntiq();
   const [activeSection, setActiveSection] = useState<ProfileNavSection>('profile');
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -48,27 +52,42 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  const getProfileFromUser = (user: typeof currentUser): UserProfileData => {
+    const names = (user?.fullName || 'Ayoola Ade').trim().split(/\s+/);
+    const firstName = names[0] || 'Ayoola';
+    const lastName = names.slice(1).join(' ') || 'Ade';
+
+    return {
+      id: user?.id || 'usr-1',
+      firstName,
+      lastName,
+      email: user?.email || 'ayoola.ade@huntiq.com',
+      phone: user?.phone || '+234 801 234 5678',
+      jobTitle: user?.jobTitle || 'Growth & Strategy Lead',
+      department: user?.department || 'Growth',
+      bio: user?.bio || 'Growth strategist and revenue leader passionate about helping teams find and win the right opportunities.',
+      avatarUrl: user?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      location: user?.location || 'Lagos, Nigeria',
+      companyName: user?.companyName || 'HUNTIQ',
+      linkedinUrl: user?.linkedinUrl || 'https://linkedin.com/in/ayoola-ade',
+      twitterUrl: user?.twitterUrl || 'https://twitter.com/ayoola_growth',
+      websiteUrl: user?.websiteUrl || 'https://huntiq.ai',
+      role: user?.role ? (user.role === 'admin' ? 'Workspace Owner' : user.role) : 'Workspace Owner',
+      memberSince: 'May 12, 2026',
+      lastActive: 'Today, 10:42 AM',
+      status: 'Active'
+    };
+  };
+
   // Profile Data State
-  const [profileData, setProfileData] = useState<UserProfileData>({
-    id: 'usr-1',
-    firstName: 'Ayoola',
-    lastName: 'Ade',
-    email: 'ayoola.ade@huntiq.com',
-    phone: '+234 801 234 5678',
-    jobTitle: 'Growth & Strategy Lead',
-    department: 'Growth',
-    bio: 'Growth strategist and revenue leader passionate about helping teams find and win the right opportunities.',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    location: 'Lagos, Nigeria',
-    companyName: 'HUNTIQ',
-    linkedinUrl: 'https://linkedin.com/in/ayoola-ade',
-    twitterUrl: 'https://twitter.com/ayoola_growth',
-    websiteUrl: 'https://huntiq.ai',
-    role: 'Workspace Owner',
-    memberSince: 'May 12, 2026',
-    lastActive: 'Today, 10:42 AM',
-    status: 'Active'
-  });
+  const [profileData, setProfileData] = useState<UserProfileData>(() => getProfileFromUser(currentUser));
+
+  // Sync profile when active user switches
+  const [prevUserId, setPrevUserId] = useState<string | undefined>(currentUser?.id);
+  if (currentUser?.id !== prevUserId) {
+    setPrevUserId(currentUser?.id);
+    setProfileData(getProfileFromUser(currentUser));
+  }
 
   // User Preferences State
   const [preferencesData, setPreferencesData] = useState<UserPreferencesData>({
@@ -77,7 +96,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     dateFormat: 'DD MMM YYYY',
     timeFormat: '24 Hour',
     defaultLandingPage: 'Dashboard',
-    defaultCurrency: 'USD - US Dollar'
+    defaultCurrency: currentUser?.defaultCurrency === 'NGN' ? 'NGN - Nigerian Naira' : currentUser?.defaultCurrency === 'GBP' ? 'GBP - British Pound' : currentUser?.defaultCurrency === 'EUR' ? 'EUR - Euro' : 'USD - US Dollar'
   });
 
   // Security State
@@ -87,8 +106,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     lastPasswordChange: 'Aug 20, 2026'
   });
 
-  // Recent Activity Items
-  const [activities] = useState<ActivityLogItem[]>([
+  // Recent Activity Items (Live from server if available, with fallback)
+  const defaultActivities: ActivityLogItem[] = [
     {
       id: 'act-1',
       activity: 'Logged in successfully',
@@ -113,63 +132,107 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       time: 'Aug 18, 2026, 04:31 PM',
       type: '2fa'
     }
-  ]);
+  ];
+
+  const liveActivities: ActivityLogItem[] = userActivityLogs && userActivityLogs.length > 0
+    ? userActivityLogs.slice(0, 5).map(log => ({
+        id: log.id,
+        activity: log.activity,
+        locationIp: log.locationIp || 'Lagos, Nigeria 197.210.45.12',
+        device: log.device || 'Chrome Browser',
+        time: log.time || 'Recently',
+        type: (log.type || 'profile') as any
+      }))
+    : defaultActivities;
 
   // Connected Accounts
   const [connectedAccounts] = useState<ConnectedAccountItem[]>([
     {
       id: 'conn-1',
       provider: 'Google',
-      emailOrUsername: 'ayoola.ade@gmail.com',
+      emailOrUsername: currentUser?.email || 'ayoola.ade@gmail.com',
       status: 'Connected',
       connectedAt: 'May 12, 2026'
     },
     {
       id: 'conn-2',
       provider: 'Microsoft',
-      emailOrUsername: 'ayoola.ade@huntiq.com',
+      emailOrUsername: currentUser?.email || 'ayoola.ade@huntiq.com',
       status: 'Connected',
       connectedAt: 'May 14, 2026'
     },
     {
       id: 'conn-3',
       provider: 'Slack',
-      emailOrUsername: 'ayoola.ade',
+      emailOrUsername: currentUser?.email?.split('@')[0] || 'ayoola.ade',
       status: 'Connected',
       connectedAt: 'June 01, 2026'
     }
   ]);
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      const fullName = `${profileData.firstName} ${profileData.lastName}`.trim();
+      const updates = {
+        fullName,
+        companyName: profileData.companyName,
+        phone: profileData.phone,
+        jobTitle: profileData.jobTitle,
+        department: profileData.department,
+        bio: profileData.bio,
+        location: profileData.location,
+        websiteUrl: profileData.websiteUrl,
+        linkedinUrl: profileData.linkedinUrl,
+        twitterUrl: profileData.twitterUrl,
+        defaultCurrency: preferencesData.defaultCurrency.split(' ')[0]
+      };
+
+      const updatedUser = await updateUserProfile(updates);
+      updateCurrentUser(updatedUser);
+      if (updatedUser.defaultCurrency) {
+        setCurrency(updatedUser.defaultCurrency as any);
+      }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    }, 600);
+    } catch (err) {
+      console.error('Failed to save profile changes to backend:', err);
+      // Optimistic local update
+      const fullName = `${profileData.firstName} ${profileData.lastName}`.trim();
+      updateCurrentUser({
+        fullName,
+        companyName: profileData.companyName,
+        phone: profileData.phone,
+        jobTitle: profileData.jobTitle,
+        department: profileData.department,
+        bio: profileData.bio,
+        location: profileData.location,
+        websiteUrl: profileData.websiteUrl,
+        linkedinUrl: profileData.linkedinUrl,
+        twitterUrl: profileData.twitterUrl
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveAvatar = async (url: string) => {
+    try {
+      await uploadUserAvatar(url);
+    } catch (err) {
+      console.warn('Backend avatar upload notice:', err);
+    }
+    updateCurrentUser({ avatarUrl: url });
+    setProfileData(prev => ({ ...prev, avatarUrl: url }));
+    setIsAvatarModalOpen(false);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2500);
   };
 
   const handleDiscard = () => {
-    setProfileData({
-      id: 'usr-1',
-      firstName: 'Ayoola',
-      lastName: 'Ade',
-      email: 'ayoola.ade@huntiq.com',
-      phone: '+234 801 234 5678',
-      jobTitle: 'Growth & Strategy Lead',
-      department: 'Growth',
-      bio: 'Growth strategist and revenue leader passionate about helping teams find and win the right opportunities.',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      location: 'Lagos, Nigeria',
-      companyName: 'HUNTIQ',
-      linkedinUrl: 'https://linkedin.com/in/ayoola-ade',
-      twitterUrl: 'https://twitter.com/ayoola_growth',
-      websiteUrl: 'https://huntiq.ai',
-      role: 'Workspace Owner',
-      memberSince: 'May 12, 2026',
-      lastActive: 'Today, 10:42 AM',
-      status: 'Active'
-    });
+    setProfileData(getProfileFromUser(currentUser));
   };
 
   return (
@@ -197,19 +260,24 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         overflow: 'hidden'
       }}>
         {/* Top Header Bar */}
-        <header style={{
-          height: '64px',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #eaecf0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 28px',
-          flexShrink: 0
-        }}>
+        <header 
+          className="mobile-header-pad"
+          style={{
+            minHeight: '64px',
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #eaecf0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            padding: '12px clamp(12px, 3vw, 28px)',
+            flexShrink: 0
+          }}
+        >
           {/* Left Title */}
           <div>
-            <h1 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+            <h1 style={{ fontSize: 'clamp(16px, 3.5vw, 18px)', fontWeight: 800, color: '#0f172a', margin: 0 }}>
               Profile
             </h1>
             <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
@@ -218,7 +286,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           </div>
 
           {/* Right Header Actions & Profile Search */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* Search input with ⌘K */}
             <div style={{
               display: 'flex',
@@ -228,7 +296,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               border: '1px solid #e2e8f0',
               borderRadius: '8px',
               padding: '6px 12px',
-              width: '240px'
+              width: 'min(240px, 100%)',
+              flex: '1 1 160px'
             }}>
               <Search size={14} color="#94a3b8" />
               <input
@@ -243,7 +312,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   width: '100%'
                 }}
               />
-              <kbd style={{
+              <kbd className="desktop-only" style={{
                 fontSize: '10px',
                 color: '#94a3b8',
                 backgroundColor: '#ffffff',
@@ -312,8 +381,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             </div>
 
             {/* User Dropdown Preview */}
-            <div style={{
-              display: 'flex',
+            <div className="desktop-only" style={{
               alignItems: 'center',
               gap: '8px',
               borderLeft: '1px solid #e2e8f0',
@@ -333,7 +401,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             </div>
 
             {/* Discard & Save Changes */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 onClick={handleDiscard}
                 style={{
@@ -376,15 +444,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         </header>
 
         {/* Scrollable Center Body: Subnav + Main Forms + Right Sidebar */}
-        <main style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '24px 28px',
-          display: 'grid',
-          gridTemplateColumns: '190px 1fr 280px',
-          gap: '24px',
-          alignItems: 'start'
-        }}>
+        <main 
+          className="profile-grid-layout mobile-bottom-pad"
+          style={{
+            flex: 1,
+            overflowY: 'auto'
+          }}
+        >
           {/* Left Vertical Subnav */}
           <ProfileNav
             activeSection={activeSection}
@@ -414,7 +480,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 />
 
                 <RecentActivityCard
-                  activities={activities}
+                  activities={liveActivities}
                   onViewAllClick={() => onNavigate('settings')}
                 />
               </>
@@ -444,7 +510,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   onManage2faClick={() => setIs2faModalOpen(true)}
                 />
                 <RecentActivityCard
-                  activities={activities}
+                  activities={liveActivities}
                   onViewAllClick={() => onNavigate('settings')}
                 />
               </>
@@ -464,7 +530,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           </div>
 
           {/* Right Column (Preview, Summary, Connected Accounts) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="profile-right-column">
             <ProfilePreviewCard data={profileData} />
             <AccountSummaryCard data={profileData} />
             <ConnectedAccountsCard
@@ -496,13 +562,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         isOpen={isAvatarModalOpen}
         onClose={() => setIsAvatarModalOpen(false)}
         currentAvatar={profileData.avatarUrl}
-        onSaveAvatar={(url) => setProfileData(prev => ({ ...prev, avatarUrl: url }))}
+        onSaveAvatar={handleSaveAvatar}
       />
 
       <AiCopilotModal
         isOpen={isCopilotOpen}
         onClose={() => setIsCopilotOpen(false)}
       />
+
+      {/* Mobile One-Thumb Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 };

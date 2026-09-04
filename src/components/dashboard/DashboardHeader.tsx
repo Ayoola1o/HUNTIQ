@@ -26,7 +26,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onChangeTeam,
   onSearch
 }) => {
-  const { isLiveBackend } = useHuntiq();
+  const { isLiveBackend, currentUser, navigateTo } = useHuntiq();
   const [searchQuery, setSearchQuery] = useState('');
   const [isDateOpen, setIsDateOpen] = useState(false);
   const [isTeamOpen, setIsTeamOpen] = useState(false);
@@ -222,21 +222,36 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </span>
           </div>
 
-          {/* User Initials Avatar */}
-          <div style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '10px',
-            backgroundColor: '#e0e7ff',
-            color: '#4338ca',
-            fontSize: '13px',
-            fontWeight: 800,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '1px solid #c7d2fe'
-          }}>
-            AA
+          {/* User Avatar */}
+          <div 
+            onClick={() => navigateTo('profile')}
+            title="View Profile"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              backgroundColor: '#e0e7ff',
+              color: '#4338ca',
+              fontSize: '13px',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid #c7d2fe',
+              cursor: 'pointer',
+              overflow: 'hidden',
+              flexShrink: 0
+            }}
+          >
+            {currentUser?.avatarUrl ? (
+              <img
+                src={currentUser.avatarUrl}
+                alt={currentUser.fullName || 'User avatar'}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              (currentUser?.fullName ? currentUser.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'AA')
+            )}
           </div>
         </div>
       </div>

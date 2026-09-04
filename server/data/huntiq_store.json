@@ -7,11 +7,15 @@
       "email": "demo@huntiq.io",
       "passwordHash": "ddc9afffcd72ce655dd38173316be78a:25e86355575ec3c6a5aba3cd7a993878665beb01165308a417518bccbec5369b01d426f863bcb5790a9f36a30302bde1034e76eb9963347b9d3879849ab4a694",
       "fullName": "Ayoola Ade",
-      "companyName": "HUNTIQ Ventures",
+      "companyName": "Acme Enterprise Ventures",
       "role": "owner",
-      "defaultCurrency": "USD",
+      "defaultCurrency": "NGN",
       "createdAt": "2026-08-01T00:00:00.000Z",
-      "updatedAt": "2026-08-01T00:00:00.000Z"
+      "updatedAt": "2026-09-04T17:29:58.375Z",
+      "avatarUrl": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP...sampleCustomAvatarDataUrl",
+      "phone": "+234 801 999 8888",
+      "jobTitle": "Head of Growth Engineering",
+      "bio": "Leading autonomous B2B intelligence hunting at HUNTIQ."
     },
     {
       "id": "user-ayoola-002",
@@ -53,10 +57,36 @@
   "workspaces": [
     {
       "id": "ws-default-001",
-      "name": "HUNTIQ Ventures Workspace",
+      "name": "Acme Enterprise Ventures",
       "slug": "huntiq-ventures",
       "ownerId": "user-default-001",
-      "createdAt": "2026-08-01T00:00:00.000Z"
+      "createdAt": "2026-08-01T00:00:00.000Z",
+      "onboardingData": {
+        "workspaceName": "Acme Enterprise Ventures",
+        "businessModel": "B2B Enterprise",
+        "icpTarget": {
+          "industries": [
+            "Fintech",
+            "SaaS",
+            "Healthtech"
+          ],
+          "locations": [
+            "Nigeria",
+            "Kenya",
+            "United Kingdom"
+          ],
+          "companySizes": [
+            "50-200",
+            "201-500"
+          ]
+        },
+        "signals": {
+          "hiringSpikes": true,
+          "geoExpansion": true,
+          "techStackChanges": true
+        },
+        "aiHuntingSpeed": "aggressive"
+      }
     },
     {
       "id": "ws-ayoola-002",
@@ -103,6 +133,78 @@
     }
   ],
   "activityLogs": [
+    {
+      "id": "log-1788542998424-6bea",
+      "userId": "user-default-001",
+      "workspaceId": "ws-default-001",
+      "action": "Workspace Configured",
+      "entityType": "settings",
+      "details": "Onboarding completed for workspace \"Acme Enterprise Ventures\". Target criteria and hunting radar calibrated.",
+      "timestamp": "2026-09-04T17:29:58.424Z"
+    },
+    {
+      "id": "log-1788542998375-177b",
+      "userId": "user-default-001",
+      "workspaceId": "ws-default-001",
+      "action": "Profile Updated",
+      "entityType": "settings",
+      "details": "Updated profile information.",
+      "timestamp": "2026-09-04T17:29:58.375Z"
+    },
+    {
+      "id": "log-1788542998347-b01c",
+      "userId": "user-default-001",
+      "workspaceId": "ws-default-001",
+      "action": "Profile Updated",
+      "entityType": "settings",
+      "details": "Updated user avatar photo and profile settings.",
+      "timestamp": "2026-09-04T17:29:58.347Z"
+    },
+    {
+      "id": "log-1788542998243-6dab",
+      "userId": "user-default-001",
+      "workspaceId": "ws-default-001",
+      "action": "User Signed In",
+      "entityType": "auth",
+      "details": "Session authenticated for demo@huntiq.io.",
+      "timestamp": "2026-09-04T17:29:58.243Z"
+    },
+    {
+      "id": "log-1788542909831-686f",
+      "userId": "user-default-001",
+      "workspaceId": "ws-default-001",
+      "action": "Workspace Configured",
+      "entityType": "settings",
+      "details": "Onboarding completed for workspace \"Acme Enterprise Ventures\". Target criteria and hunting radar calibrated.",
+      "timestamp": "2026-09-04T17:28:29.831Z"
+    },
+    {
+      "id": "log-1788542909816-4104",
+      "userId": "user-default-001",
+      "workspaceId": "ws-default-001",
+      "action": "Profile Updated",
+      "entityType": "settings",
+      "details": "Updated profile information.",
+      "timestamp": "2026-09-04T17:28:29.816Z"
+    },
+    {
+      "id": "log-1788542909768-f78d",
+      "userId": "user-default-001",
+      "workspaceId": "ws-default-001",
+      "action": "Profile Updated",
+      "entityType": "settings",
+      "details": "Updated user avatar photo and profile settings.",
+      "timestamp": "2026-09-04T17:28:29.768Z"
+    },
+    {
+      "id": "log-1788542909723-2a4c",
+      "userId": "user-default-001",
+      "workspaceId": "ws-default-001",
+      "action": "User Signed In",
+      "entityType": "auth",
+      "details": "Session authenticated for demo@huntiq.io.",
+      "timestamp": "2026-09-04T17:28:29.723Z"
+    },
     {
       "id": "log-1788540524635-f1bb",
       "userId": "usr-1788540524586-88bc34",

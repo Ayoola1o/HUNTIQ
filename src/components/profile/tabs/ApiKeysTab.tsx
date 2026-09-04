@@ -112,8 +112,8 @@ export const ApiKeysTab: React.FC = () => {
       </div>
 
       {/* Keys Table */}
-      <div style={{ overflowX: 'auto', border: '1px solid #f1f5f9', borderRadius: '10px' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+      <div className="mobile-table-wrapper" style={{ overflowX: 'auto', border: '1px solid #f1f5f9', borderRadius: '10px' }}>
+        <table style={{ width: '100%', minWidth: '540px', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
               <th style={{ padding: '12px 16px', fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>TOKEN NAME</th>

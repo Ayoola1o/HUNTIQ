@@ -318,11 +318,35 @@ export class AuthService {
   /**
    * Update user profile settings
    */
-  public async updateProfile(userId: string, updates: { fullName?: string; companyName?: string; defaultCurrency?: string }): Promise<any> {
+  public async updateProfile(userId: string, updates: { 
+    fullName?: string; 
+    companyName?: string; 
+    defaultCurrency?: string;
+    avatarUrl?: string;
+    phone?: string;
+    jobTitle?: string;
+    department?: string;
+    bio?: string;
+    location?: string;
+    websiteUrl?: string;
+    linkedinUrl?: string;
+    twitterUrl?: string;
+  }): Promise<any> {
     const updated = persistentStore.updateUserProfile(userId, updates);
     if (!updated) throw new Error('User not found.');
     const { passwordHash: _hash, ...safe } = updated;
     return safe;
+  }
+
+  /**
+   * Onboarding Data Management
+   */
+  public getOnboarding(workspaceId: string) {
+    return persistentStore.getWorkspaceOnboarding(workspaceId);
+  }
+
+  public saveOnboarding(userId: string, workspaceId: string, data: any) {
+    return persistentStore.saveWorkspaceOnboarding(userId, workspaceId, data);
   }
 
   /**

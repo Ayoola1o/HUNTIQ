@@ -59,12 +59,7 @@ export const PersonalInformationCard: React.FC<PersonalInformationCardProps> = (
       </div>
 
       {/* Avatar & Input Fields Layout */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '120px 1fr',
-        gap: '24px',
-        alignItems: 'start'
-      }}>
+      <div className="personal-info-grid">
         {/* Avatar with Camera Badge */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div 
@@ -111,11 +106,7 @@ export const PersonalInformationCard: React.FC<PersonalInformationCardProps> = (
         </div>
 
         {/* 2-Column Fields Grid */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '14px 16px'
-        }}>
+        <div className="personal-info-fields">
           {/* First Name */}
           <div>
             <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#344054', display: 'block', marginBottom: '4px' }}>

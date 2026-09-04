@@ -14,6 +14,15 @@ export interface DbUserRecord {
   companyName?: string;
   role: string;
   defaultCurrency: string;
+  avatarUrl?: string;
+  phone?: string;
+  jobTitle?: string;
+  department?: string;
+  bio?: string;
+  location?: string;
+  websiteUrl?: string;
+  linkedinUrl?: string;
+  twitterUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -23,6 +32,7 @@ export interface DbWorkspaceRecord {
   name: string;
   slug: string;
   ownerId: string;
+  onboardingData?: any;
   createdAt: string;
 }
 
@@ -124,6 +134,10 @@ export class PersistentStore {
           companyName: 'HUNTIQ Ventures',
           role: 'owner',
           defaultCurrency: 'USD',
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          jobTitle: 'Growth & Strategy Lead',
+          phone: '+234 801 234 5678',
+          bio: 'Growth strategist and revenue leader passionate about helping teams find and win the right opportunities.',
           createdAt: '2026-08-01T00:00:00.000Z',
           updatedAt: '2026-08-01T00:00:00.000Z'
         },
@@ -136,6 +150,10 @@ export class PersistentStore {
           companyName: 'Apex Growth Labs',
           role: 'owner',
           defaultCurrency: 'USD',
+          avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+          jobTitle: 'Managing Partner',
+          phone: '+234 802 345 6789',
+          bio: 'Partner at Apex Growth Labs specializing in B2B enterprise client acquisition.',
           createdAt: '2026-08-01T00:00:00.000Z',
           updatedAt: '2026-08-01T00:00:00.000Z'
         }
@@ -567,17 +585,79 @@ export class PersistentStore {
     return { user, workspace };
   }
 
-  public updateUserProfile(userId: string, updates: Partial<Pick<DbUserRecord, 'fullName' | 'companyName' | 'defaultCurrency'>>): DbUserRecord | undefined {
+  public updateUserProfile(
+    userId: string, 
+    updates: Partial<Omit<DbUserRecord, 'id' | 'passwordHash' | 'createdAt' | 'updatedAt'>>
+  ): DbUserRecord | undefined {
     const user = this.data.users.find(u => u.id === userId);
     if (!user) return undefined;
 
     if (updates.fullName !== undefined) user.fullName = updates.fullName;
     if (updates.companyName !== undefined) user.companyName = updates.companyName;
     if (updates.defaultCurrency !== undefined) user.defaultCurrency = updates.defaultCurrency;
+    if (updates.avatarUrl !== undefined) user.avatarUrl = updates.avatarUrl;
+    if (updates.phone !== undefined) user.phone = updates.phone;
+    if (updates.jobTitle !== undefined) user.jobTitle = updates.jobTitle;
+    if (updates.department !== undefined) user.department = updates.department;
+    if (updates.bio !== undefined) user.bio = updates.bio;
+    if (updates.location !== undefined) user.location = updates.location;
+    if (updates.websiteUrl !== undefined) user.websiteUrl = updates.websiteUrl;
+    if (updates.linkedinUrl !== undefined) user.linkedinUrl = updates.linkedinUrl;
+    if (updates.twitterUrl !== undefined) user.twitterUrl = updates.twitterUrl;
     user.updatedAt = new Date().toISOString();
+
+    this.logActivity({
+      userId,
+      workspaceId: user.workspaceId,
+      action: 'Profile Updated',
+      entityType: 'settings',
+      details: updates.avatarUrl ? 'Updated user avatar photo and profile settings.' : 'Updated profile information.'
+    });
 
     this.queueSave();
     return user;
+  }
+
+  // ==================== WORKSPACE & ONBOARDING ====================
+
+  public getWorkspaceOnboarding(workspaceId: string): any | undefined {
+    const ws = this.data.workspaces.find(w => w.id === workspaceId);
+    return ws?.onboardingData;
+  }
+
+  public saveWorkspaceOnboarding(userId: string, workspaceId: string, onboardingData: any): DbWorkspaceRecord | undefined {
+    let ws = this.data.workspaces.find(w => w.id === workspaceId);
+    if (!ws) {
+      ws = {
+        id: workspaceId,
+        name: onboardingData.workspaceName || 'My Workspace',
+        slug: (onboardingData.workspaceName || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        ownerId: userId,
+        createdAt: new Date().toISOString()
+      };
+      this.data.workspaces.push(ws);
+    }
+
+    ws.onboardingData = onboardingData;
+    if (onboardingData.workspaceName) {
+      ws.name = onboardingData.workspaceName;
+      // Sync company name on user
+      const user = this.data.users.find(u => u.id === userId);
+      if (user) {
+        user.companyName = onboardingData.workspaceName;
+      }
+    }
+
+    this.logActivity({
+      userId,
+      workspaceId,
+      action: 'Workspace Configured',
+      entityType: 'settings',
+      details: `Onboarding completed for workspace "${ws.name}". Target criteria and hunting radar calibrated.`
+    });
+
+    this.queueSave();
+    return ws;
   }
 
   // ==================== API KEYS ====================

@@ -379,3 +379,114 @@ input, textarea, select, button {
   }
 }
 
+/* ==========================================================================
+   Profile Page Responsive Design System
+   ========================================================================== */
+.profile-grid-layout {
+  display: grid;
+  grid-template-columns: 190px 1fr 280px;
+  gap: 24px;
+  align-items: start;
+  padding: 24px 28px;
+}
+
+.profile-nav-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 190px;
+  min-width: 190px;
+}
+
+.profile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.profile-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.personal-info-grid {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.personal-info-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+
+/* Tablet: 769px - 1100px */
+@media (max-width: 1100px) and (min-width: 769px) {
+  .profile-grid-layout {
+    grid-template-columns: 180px 1fr !important;
+    gap: 20px !important;
+    padding: 20px 20px !important;
+  }
+  .profile-right-column {
+    grid-column: 2;
+  }
+}
+
+/* Mobile Viewports (<= 768px) */
+@media (max-width: 768px) {
+  .profile-grid-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    padding: 16px 12px 88px 12px !important;
+  }
+
+  .profile-nav-container {
+    flex-direction: row !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    gap: 6px !important;
+    padding: 4px 2px 10px 2px !important;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .profile-nav-container::-webkit-scrollbar {
+    display: none;
+  }
+
+  .profile-nav-item {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    padding: 7px 14px !important;
+    font-size: 12px !important;
+    border-radius: 20px !important;
+  }
+
+  .profile-right-column {
+    width: 100% !important;
+  }
+
+  .personal-info-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+    justify-items: center;
+  }
+
+  .personal-info-fields {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+}
+

@@ -92,6 +92,7 @@ interface HuntiqContextType {
   // Active User & Authentication State
   currentUser: UserAccount | null;
   setCurrentUser: (user: UserAccount | null) => void;
+  updateCurrentUser: (updates: Partial<UserAccount>) => void;
   userActivityLogs: any[];
   refreshActivityLogs: () => Promise<void>;
 }
@@ -138,6 +139,20 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     if (user?.defaultCurrency) {
       setCurrency(user.defaultCurrency as CurrencyCode);
     }
+  }, [setCurrency]);
+
+  const updateCurrentUser = useCallback((updates: Partial<UserAccount>) => {
+    setCurrentUserState((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...updates };
+      try {
+        localStorage.setItem('huntiq_user_profile', JSON.stringify(updated));
+      } catch {}
+      if (updates.defaultCurrency) {
+        setCurrency(updates.defaultCurrency as CurrencyCode);
+      }
+      return updated;
+    });
   }, [setCurrency]);
 
   const refreshActivityLogs = useCallback(async () => {
@@ -594,6 +609,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     toggleMobileSidebar,
     currentUser,
     setCurrentUser,
+    updateCurrentUser,
     userActivityLogs,
     refreshActivityLogs
   }), [
@@ -629,6 +645,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     toggleMobileSidebar,
     currentUser,
     setCurrentUser,
+    updateCurrentUser,
     userActivityLogs,
     refreshActivityLogs
   ]);

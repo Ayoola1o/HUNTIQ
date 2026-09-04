@@ -69,8 +69,8 @@ export const RecentActivityCard: React.FC<RecentActivityCardProps> = ({
       </div>
 
       {/* Activity Table */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+      <div className="mobile-table-wrapper" style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: '480px', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
               <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>

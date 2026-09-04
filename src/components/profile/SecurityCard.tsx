@@ -31,7 +31,7 @@ export const SecurityCard: React.FC<SecurityCardProps> = ({
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '20px'
       }}>
         {/* Password Row */}
@@ -39,9 +39,9 @@ export const SecurityCard: React.FC<SecurityCardProps> = ({
           <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#344054', display: 'block', marginBottom: '8px' }}>
             Password
           </label>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-            <span style={{ fontSize: '16px', letterSpacing: '2px', color: '#101828', fontWeight: 600 }}>
-              ••••••••••••••••••••
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '15px', letterSpacing: '2px', color: '#101828', fontWeight: 600 }}>
+              ••••••••••••
             </span>
             <button
               onClick={onChangePasswordClick}

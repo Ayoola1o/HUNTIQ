@@ -402,7 +402,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                 height: '32px',
                 borderRadius: '50%',
                 backgroundColor: '#4f46e5',
-                backgroundImage: 'url("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80")',
+                backgroundImage: `url("${currentUser?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}")`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 border: '1.5px solid #818cf8',

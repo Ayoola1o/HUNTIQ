@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { SummaryCard } from './components/SummaryCard';
@@ -29,19 +29,49 @@ import { IntegrationsPage } from './components/integrations/IntegrationsPage';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { ProfilePage } from './components/profile/ProfilePage';
 import { HuntiqProvider, useHuntiq } from './context/HuntiqContext';
+import { fetchUserOnboarding, saveUserOnboarding } from './api/auth';
 import type { OnboardingData } from './types/onboarding';
 import { initialOnboardingData } from './types/onboarding';
 
 function AppContent() {
-  const { currentView, navigateTo } = useHuntiq();
+  const { currentView, navigateTo, currentUser, updateCurrentUser } = useHuntiq();
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<OnboardingData>(initialOnboardingData);
 
+  // Hydrate saved onboarding choices from server or disk
+  useEffect(() => {
+    let isMounted = true;
+    fetchUserOnboarding()
+      .then((saved) => {
+        if (isMounted && saved) {
+          setFormData((prev) => ({
+            ...prev,
+            ...saved,
+            workspaceName: saved.workspaceName || currentUser?.companyName || prev.workspaceName
+          }));
+        } else if (isMounted && currentUser?.companyName) {
+          setFormData((prev) => ({
+            ...prev,
+            workspaceName: currentUser.companyName || prev.workspaceName
+          }));
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load onboarding data:', err);
+      });
+    return () => { isMounted = false; };
+  }, [currentUser?.id]);
+
   const handleDataChange = (updates: Partial<OnboardingData>) => {
-    setFormData((prev) => ({ ...prev, ...updates }));
+    setFormData((prev) => {
+      const next = { ...prev, ...updates };
+      saveUserOnboarding(next).catch(() => {});
+      return next;
+    });
   };
 
   const handleNext = () => {
+    saveUserOnboarding(formData).catch(() => {});
     setCurrentStep((prev) => Math.min(prev + 1, 6));
   };
 
@@ -50,10 +80,19 @@ function AppContent() {
   };
 
   const handleSelectStep = (step: number) => {
+    saveUserOnboarding(formData).catch(() => {});
     setCurrentStep(step);
   };
 
-  const handleStartHunting = () => {
+  const handleStartHunting = async () => {
+    try {
+      await saveUserOnboarding(formData);
+      if (formData.workspaceName) {
+        updateCurrentUser({ companyName: formData.workspaceName });
+      }
+    } catch (err) {
+      console.error('Failed to persist onboarding on start hunting:', err);
+    }
     navigateTo('dashboard');
   };
 
