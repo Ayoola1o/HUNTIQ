@@ -1,43 +1,20 @@
 {
-  "name": "huntiq",
-  "private": true,
+  "name": "workspace",
   "version": "0.0.0",
-  "type": "module",
+  "license": "MIT",
   "scripts": {
-    "dev": "vite",
-    "server": "tsx watch server/index.ts",
-    "dev:all": "npx concurrently \"npm run server\" \"npm run dev\"",
-    "start": "npx concurrently \"npm run server\" \"npm run dev\"",
-    "db:migrate": "tsx server/database/migrate.ts",
-    "test": "tsx server/tests/email_scraper_integration.test.ts && tsx server/tests/api_key_management.test.ts && tsx server/tests/production_hardening.test.ts",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
+  "private": true,
   "dependencies": {
-    "@types/canvas-confetti": "^1.9.0",
-    "@types/pg": "^8.23.1",
-    "canvas-confetti": "^1.9.4",
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "lucide-react": "^1.33.0",
-    "maplibre-gl": "^6.6.0",
-    "nodemailer": "^10.0.1",
-    "pg": "^8.23.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "@replit/connectors-sdk": "^0.4.1"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "^24.13.3",
-    "@types/nodemailer": "^8.0.1",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.4",
-    "oxlint": "^1.75.0",
-    "tsx": "^4.23.12",
-    "typescript": "~6.0.2",
-    "vite": "^8.2.0"
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3"
+>>>>>>> d8a6829 (Apply pnpm_workspace migration scaffold)
   }
 }
