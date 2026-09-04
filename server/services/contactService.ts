@@ -1,10 +1,13 @@
-import { db } from '../db/memoryStore';
-import { persistentStore, DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID } from '../db/persistentStore';
+import { createContactRepository } from '../repositories/contacts';
+import { DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID } from '../middleware/auth';
 import type { DbContact } from '../db/types';
 import type { ContactItem, ContactsKpiData } from '../../src/types/contact';
+import { db } from '../db/memoryStore';
 
 export class ContactService {
-  public listContacts(params: {
+  private repository = createContactRepository();
+
+  public async listContacts(params: {
     tab?: string;
     search?: string;
     seniority?: string;
@@ -13,9 +16,10 @@ export class ContactService {
     companyId?: string;
     userId?: string;
     workspaceId?: string;
-  } = {}): { contacts: ContactItem[]; kpiSummary: ContactsKpiData } {
+  } = {}): Promise<{ contacts: ContactItem[]; kpiSummary: ContactsKpiData }> {
     const userId = params.userId || DEFAULT_USER_ID;
-    const userContacts = persistentStore.getContactsByUser(userId, params.workspaceId);
+    const workspaceId = params.workspaceId || DEFAULT_WORKSPACE_ID;
+    const userContacts = await this.repository.listByUser(userId, workspaceId);
     let list = [...userContacts];
 
     if (params.tab && params.tab !== 'all') {
@@ -69,84 +73,30 @@ export class ContactService {
     return { contacts: list, kpiSummary };
   }
 
-  public getById(id: string, userId?: string): ContactItem | undefined {
-    return persistentStore.getContactById(id, userId || DEFAULT_USER_ID);
+  public async getById(id: string, userId?: string, workspaceId?: string): Promise<ContactItem | null> {
+    return this.repository.getById(id, userId || DEFAULT_USER_ID, workspaceId || DEFAULT_WORKSPACE_ID);
   }
 
-  public createContact(input: Partial<ContactItem>, userId?: string, workspaceId?: string): ContactItem {
+  public async createContact(input: Partial<ContactItem>, userId?: string, workspaceId?: string): Promise<ContactItem> {
     const uId = userId || DEFAULT_USER_ID;
     const wId = workspaceId || DEFAULT_WORKSPACE_ID;
-    const id = input.id || `cont-${Date.now()}`;
-    const name = input.name || 'Unknown Contact';
-    const company = input.companyName || 'Target Company';
-    const role = input.role || 'Executive';
-
-    const newContact: ContactItem = {
-      id,
-      name,
-      email: input.email || `${name.toLowerCase().replace(/\s+/g, '.')}@${company.toLowerCase().replace(/\s+/g, '')}.com`,
-      avatarUrl: input.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-      verificationStatus: input.verificationStatus || 'verified',
-      companyName: company,
-      companyLocation: input.companyLocation || 'Lagos, Nigeria',
-      companyIndustry: input.companyIndustry || 'Technology',
-      companyEmployees: input.companyEmployees || '100-500 employees',
-      role,
-      decisionRole: input.decisionRole || (role.toLowerCase().includes('head') || role.toLowerCase().includes('director') || role.toLowerCase().includes('vp') ? 'Decision Maker' : 'Influencer'),
-      influenceScore: input.influenceScore || 88,
-      influenceLevel: input.influenceLevel || 'High',
-      opportunityFitScore: input.opportunityFitScore || 90,
-      opportunityFitLevel: input.opportunityFitLevel || 'Excellent',
-      lastActivity: 'Contact added',
-      lastActivityTime: 'Just now',
-      source: input.source || 'manual',
-      isBookmarked: input.isBookmarked || false,
-      phone: input.phone || '+234 800 000 0000',
-      location: input.location || input.companyLocation || 'Lagos, Nigeria',
-      localTime: '10:30 AM (WAT)',
-      about: input.about || `${role} at ${company}.`,
-      aiInsights: input.aiInsights || [
-        `Key contact at ${company}`,
-        'High potential alignment with executive initiatives'
-      ],
-      tags: input.tags || ['Verified', 'Contact'],
-      opportunities: input.opportunities || [
-        {
-          id: `opp-${Date.now()}`,
-          title: `${company} Engagement`,
-          value: '$20,000',
-          score: 88,
-          scoreLevel: 'High'
-        }
-      ],
-      linkedinUrl: input.linkedinUrl
-    };
-
-    return persistentStore.saveContact(uId, wId, newContact);
+    return this.repository.create(uId, wId, input);
   }
 
-  public updateContact(id: string, updates: Partial<ContactItem>, userId?: string, workspaceId?: string): ContactItem | undefined {
+  public async updateContact(id: string, updates: Partial<ContactItem>, userId?: string, workspaceId?: string): Promise<ContactItem | null> {
     const uId = userId || DEFAULT_USER_ID;
     const wId = workspaceId || DEFAULT_WORKSPACE_ID;
-    const existing = persistentStore.getContactById(id, uId);
-    if (!existing) return undefined;
-
-    const merged = {
-      ...existing,
-      ...updates
-    };
-
-    return persistentStore.saveContact(uId, wId, merged);
+    return this.repository.update(id, uId, wId, updates);
   }
 
-  public deleteContact(id: string, userId?: string): boolean {
-    return persistentStore.deleteContact(userId || DEFAULT_USER_ID, id);
+  public async deleteContact(id: string, userId?: string, workspaceId?: string): Promise<boolean> {
+    return this.repository.delete(id, userId || DEFAULT_USER_ID, workspaceId || DEFAULT_WORKSPACE_ID);
   }
 
-  public importContacts(importedList: Partial<ContactItem>[], userId?: string, workspaceId?: string): ContactItem[] {
+  public async importContacts(importedList: Partial<ContactItem>[], userId?: string, workspaceId?: string): Promise<ContactItem[]> {
     const added: ContactItem[] = [];
     for (const item of importedList) {
-      const created = this.createContact({
+      const created = await this.createContact({
         ...item,
         source: 'import'
       }, userId, workspaceId);

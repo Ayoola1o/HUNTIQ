@@ -174,28 +174,7 @@ export class PersistentStore {
           createdAt: '2026-08-01T00:00:00.000Z'
         }
       ],
-      apiKeys: [
-        {
-          id: 'key-demo-1',
-          userId: DEFAULT_USER_ID,
-          workspaceId: DEFAULT_WORKSPACE_ID,
-          name: 'Production CRM Webhook Key',
-          keyPrefix: 'hnt_live_89f4a1',
-          secretKey: 'hnt_live_89f4a19b8c2d4e1f7a0b3c5d6e8f9a2b',
-          createdAt: '2026-08-10T14:30:00.000Z',
-          lastUsed: '10 mins ago'
-        },
-        {
-          id: 'key-demo-2',
-          userId: DEFAULT_USER_ID,
-          workspaceId: DEFAULT_WORKSPACE_ID,
-          name: 'Zapier Automation Integration',
-          keyPrefix: 'hnt_live_32a98e',
-          secretKey: 'hnt_live_32a98e4d1f7c8b0a9e2d3f4a5b6c7d8e',
-          createdAt: '2026-08-14T09:15:00.000Z',
-          lastUsed: '1 hour ago'
-        }
-      ],
+      apiKeys: [],
       activityLogs: [
         {
           id: 'log-seed-1',
@@ -471,29 +450,36 @@ export class PersistentStore {
   }
 
   private loadOrCreate(): HuntiqStoreData {
-    try {
-      const dir = path.dirname(this.filePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-
-      if (fs.existsSync(this.filePath)) {
-        const raw = fs.readFileSync(this.filePath, 'utf-8');
-        const parsed = JSON.parse(raw) as HuntiqStoreData;
-        if (parsed && Array.isArray(parsed.users)) {
-          return parsed;
+    if (process.env.HUNTIQ_FILE_PERSISTENCE === 'true') {
+      try {
+        const dir = path.dirname(this.filePath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
         }
+
+        if (fs.existsSync(this.filePath)) {
+          const raw = fs.readFileSync(this.filePath, 'utf-8');
+          const parsed = JSON.parse(raw) as HuntiqStoreData;
+          if (parsed && Array.isArray(parsed.users)) {
+            return parsed;
+          }
+        }
+      } catch (err) {
+        console.warn('[PersistentStore] Error loading disk file, initializing fresh store:', err);
       }
-    } catch (err) {
-      console.warn('[PersistentStore] Error loading disk file, initializing fresh store:', err);
     }
 
     const defaultData = this.getDefaultData();
-    this.saveImmediate(defaultData);
+    if (process.env.HUNTIQ_FILE_PERSISTENCE === 'true') {
+      this.saveImmediate(defaultData);
+    }
     return defaultData;
   }
 
   private saveImmediate(dataToSave: HuntiqStoreData): void {
+    if (process.env.HUNTIQ_FILE_PERSISTENCE !== 'true') {
+      return; // In-memory mode: do not write to disk
+    }
     try {
       const dir = path.dirname(this.filePath);
       if (!fs.existsSync(dir)) {

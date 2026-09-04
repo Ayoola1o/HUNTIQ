@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
-import { postgresPool } from '../database/postgres';
 import { config } from '../config/env';
+import { createUserRepository } from '../repositories/users';
+import { createApiKeyRepository } from '../repositories/api-keys';
+import { createActivityLogRepository } from '../repositories/activity-logs';
 
 export interface UserSessionPayload {
   userId: string;
@@ -20,6 +22,7 @@ export interface AuthResponse {
     workspaceId: string;
     role: string;
     defaultCurrency: string;
+    avatarUrl?: string;
   };
   token: string;
 }
@@ -71,11 +74,31 @@ export function verifyJwt(token: string): UserSessionPayload | null {
   }
 }
 
-import { hashPassword, verifyPassword, persistentStore } from '../db/persistentStore';
-export { hashPassword, verifyPassword, persistentStore };
+/**
+ * PBKDF2 Password Hashing helper (constant-time verification)
+ */
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+  return `${salt}:${hash}`;
+}
 
+export function verifyPassword(password: string, storedHash: string): boolean {
+  try {
+    const [salt, hash] = storedHash.split(':');
+    if (!salt || !hash) return false;
+    const verify = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(verify));
+  } catch {
+    return false;
+  }
+}
 
 export class AuthService {
+  private userRepository = createUserRepository();
+  private apiKeyRepository = createApiKeyRepository();
+  private activityLogRepository = createActivityLogRepository();
+
   /**
    * Register a new user with dedicated workspace
    */
@@ -88,91 +111,30 @@ export class AuthService {
   }): Promise<AuthResponse> {
     const normalizedEmail = params.email.trim().toLowerCase();
     const currency = params.defaultCurrency || 'USD';
-    const workspaceName = params.companyName?.trim() || `${params.fullName}'s Workspace`;
-    const workspaceSlug = `${workspaceName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now().toString(36)}`;
 
-    const passwordHash = hashPassword(params.password);
-
-    if (postgresPool) {
-      try {
-        const client = await postgresPool.connect();
-        try {
-          await client.query('BEGIN');
-
-          // Check if user exists
-          const existing = await client.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
-          if (existing.rows.length > 0) {
-            throw new Error('An account with this email address already exists.');
-          }
-
-          // Create Workspace
-          const wsResult = await client.query(
-            'INSERT INTO workspaces (name, slug) VALUES ($1, $2) RETURNING id, name',
-            [workspaceName, workspaceSlug]
-          );
-          const workspace = wsResult.rows[0];
-
-          // Create User
-          const userResult = await client.query(
-            `INSERT INTO users (workspace_id, email, password_hash, full_name, company_name, role, default_currency)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             RETURNING id, email, full_name, company_name, workspace_id, role, default_currency`,
-            [workspace.id, normalizedEmail, passwordHash, params.fullName, params.companyName, 'owner', currency]
-          );
-          const user = userResult.rows[0];
-
-          // Associate workspace owner
-          await client.query('UPDATE workspaces SET owner_id = $1 WHERE id = $2', [user.id, workspace.id]);
-
-          await client.query('COMMIT');
-
-          const token = signJwt({
-            userId: user.id,
-            workspaceId: user.workspace_id,
-            email: user.email,
-            fullName: user.full_name,
-            role: user.role,
-            defaultCurrency: user.default_currency
-          });
-
-          return {
-            user: {
-              id: user.id,
-              email: user.email,
-              fullName: user.full_name,
-              companyName: user.company_name,
-              workspaceId: user.workspace_id,
-              role: user.role,
-              defaultCurrency: user.default_currency
-            },
-            token
-          };
-        } catch (err: any) {
-          await client.query('ROLLBACK');
-          throw err;
-        } finally {
-          client.release();
-        }
-      } catch (err: any) {
-        if (err.message === 'An account with this email address already exists.') {
-          throw err;
-        }
-        // Connection failure -> fall through to persistentStore
-      }
-    }
-
-    // Persistent Store Fallback (persists to server/data/huntiq_store.json)
-    const existing = persistentStore.getUserByEmail(normalizedEmail);
+    // Check if user already exists
+    const existing = await this.userRepository.findByEmail(normalizedEmail);
     if (existing) {
       throw new Error('An account with this email address already exists.');
     }
 
-    const { user, workspace } = persistentStore.createUser({
+    const passwordHash = hashPassword(params.password);
+
+    const { user, workspace } = await this.userRepository.createWithWorkspace({
       email: normalizedEmail,
       passwordHash,
       fullName: params.fullName,
       companyName: params.companyName,
-      defaultCurrency: currency
+      defaultCurrency: currency,
+      role: 'owner'
+    });
+
+    await this.activityLogRepository.log({
+      userId: user.id,
+      workspaceId: workspace.id,
+      action: 'Account Created',
+      entityType: 'auth',
+      details: `Registered account ${user.email} with workspace ${workspace.name}.`
     });
 
     const token = signJwt({
@@ -192,7 +154,8 @@ export class AuthService {
         companyName: user.companyName,
         workspaceId: workspace.id,
         role: user.role,
-        defaultCurrency: user.defaultCurrency
+        defaultCurrency: user.defaultCurrency,
+        avatarUrl: user.avatarUrl
       },
       token
     };
@@ -204,65 +167,17 @@ export class AuthService {
   public async login(params: { email: string; password: string }): Promise<AuthResponse> {
     const normalizedEmail = params.email.trim().toLowerCase();
 
-    if (postgresPool) {
-      try {
-        const res = await postgresPool.query(
-          `SELECT id, email, password_hash, full_name, company_name, workspace_id, role, default_currency
-           FROM users WHERE email = $1`,
-          [normalizedEmail]
-        );
-        if (res.rows.length === 0) {
-          throw new Error('Invalid email or password credentials.');
-        }
-
-        const user = res.rows[0];
-        const valid = verifyPassword(params.password, user.password_hash);
-        if (!valid) {
-          throw new Error('Invalid email or password credentials.');
-        }
-
-        // Update last login
-        await postgresPool.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]);
-
-        const token = signJwt({
-          userId: user.id,
-          workspaceId: user.workspace_id,
-          email: user.email,
-          fullName: user.full_name,
-          role: user.role,
-          defaultCurrency: user.default_currency
-        });
-
-        return {
-          user: {
-            id: user.id,
-            email: user.email,
-            fullName: user.full_name,
-            companyName: user.company_name,
-            workspaceId: user.workspace_id,
-            role: user.role,
-            defaultCurrency: user.default_currency
-          },
-          token
-        };
-      } catch (err: any) {
-        if (err.message === 'Invalid email or password credentials.') {
-          throw err;
-        }
-        // Connection failure -> fall through to persistentStore
-      }
-    }
-
-    const user = persistentStore.getUserByEmail(normalizedEmail);
+    const user = await this.userRepository.findByEmail(normalizedEmail);
     if (!user) {
       throw new Error('Invalid email or password credentials.');
     }
+
     const valid = verifyPassword(params.password, user.passwordHash);
     if (!valid) {
       throw new Error('Invalid email or password credentials.');
     }
 
-    persistentStore.logActivity({
+    await this.activityLogRepository.log({
       userId: user.id,
       workspaceId: user.workspaceId,
       action: 'User Signed In',
@@ -287,7 +202,8 @@ export class AuthService {
         companyName: user.companyName,
         workspaceId: user.workspaceId,
         role: user.role,
-        defaultCurrency: user.defaultCurrency
+        defaultCurrency: user.defaultCurrency,
+        avatarUrl: user.avatarUrl
       },
       token
     };
@@ -297,21 +213,9 @@ export class AuthService {
    * Get user profile by userId
    */
   public async getProfile(userId: string): Promise<any> {
-    if (postgresPool) {
-      try {
-        const res = await postgresPool.query(
-          `SELECT id, email, full_name, company_name, workspace_id, role, default_currency, created_at
-           FROM users WHERE id = $1`,
-          [userId]
-        );
-        return res.rows[0] || null;
-      } catch {
-        // Fall through to persistentStore
-      }
-    }
-    const u = persistentStore.getUserById(userId);
-    if (!u) return null;
-    const { passwordHash: _hash, ...safe } = u;
+    const user = await this.userRepository.findById(userId);
+    if (!user) return null;
+    const { passwordHash: _hash, ...safe } = user;
     return safe;
   }
 
@@ -323,16 +227,13 @@ export class AuthService {
     companyName?: string; 
     defaultCurrency?: string;
     avatarUrl?: string;
-    phone?: string;
-    jobTitle?: string;
-    department?: string;
-    bio?: string;
-    location?: string;
-    websiteUrl?: string;
-    linkedinUrl?: string;
-    twitterUrl?: string;
   }): Promise<any> {
-    const updated = persistentStore.updateUserProfile(userId, updates);
+    let updated;
+    if (updates.avatarUrl) {
+      updated = await this.userRepository.updateAvatar(userId, updates.avatarUrl);
+    } else {
+      updated = await this.userRepository.updateProfile(userId, updates);
+    }
     if (!updated) throw new Error('User not found.');
     const { passwordHash: _hash, ...safe } = updated;
     return safe;
@@ -341,36 +242,60 @@ export class AuthService {
   /**
    * Onboarding Data Management
    */
-  public getOnboarding(workspaceId: string) {
-    return persistentStore.getWorkspaceOnboarding(workspaceId);
+  public async getOnboarding(workspaceId: string, userId: string) {
+    return this.userRepository.getOnboarding(userId, workspaceId);
   }
 
-  public saveOnboarding(userId: string, workspaceId: string, data: any) {
-    return persistentStore.saveWorkspaceOnboarding(userId, workspaceId, data);
+  public async saveOnboarding(userId: string, workspaceId: string, data: any) {
+    return this.userRepository.saveOnboarding(userId, workspaceId, data);
   }
 
   /**
    * API Keys Management
    */
-  public listApiKeys(userId: string) {
-    return persistentStore.getApiKeysByUser(userId);
+  public async listApiKeys(userId: string) {
+    return this.apiKeyRepository.listByUser(userId);
   }
 
-  public createApiKey(userId: string, name: string) {
-    return persistentStore.createApiKey(userId, name);
+  public async createApiKey(userId: string, workspaceId: string, name: string) {
+    const randomHex = crypto.randomBytes(16).toString('hex');
+    const secretKey = `hnt_live_${randomHex}`;
+    const keyPrefix = secretKey.substring(0, 13);
+    const keyHash = crypto.createHash('sha256').update(secretKey).digest('hex');
+
+    const record = await this.apiKeyRepository.create({
+      userId,
+      workspaceId,
+      name,
+      keyPrefix,
+      keyHash
+    });
+
+    await this.activityLogRepository.log({
+      userId,
+      workspaceId,
+      action: 'API Key Created',
+      entityType: 'api_key',
+      entityId: record.id,
+      details: `Generated live API key '${name}' with prefix '${keyPrefix}'.`
+    });
+
+    return {
+      ...record,
+      apiKey: secretKey
+    };
   }
 
-  public deleteApiKey(userId: string, keyId: string) {
-    return persistentStore.deleteApiKey(userId, keyId);
+  public async deleteApiKey(userId: string, keyId: string) {
+    return this.apiKeyRepository.delete(keyId, userId);
   }
 
   /**
    * Activity / Audit Logs
    */
-  public getActivityLogs(userId: string, limit = 50) {
-    return persistentStore.getActivityLogsByUser(userId, limit);
+  public async getActivityLogs(userId: string, limit = 50) {
+    return this.activityLogRepository.listByUser(userId, limit);
   }
 }
 
 export const authService = new AuthService();
-

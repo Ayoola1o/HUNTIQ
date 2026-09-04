@@ -3,37 +3,31 @@ import type { Response } from 'express';
 import type { ApiResponse } from '../types/api';
 import type { PipelineDealItem } from '../../src/types/pipeline';
 import type { AuthenticatedRequest } from '../middleware/auth';
-import { persistentStore, DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID } from '../db/persistentStore';
+import { createPipelineRepository } from '../repositories/pipeline';
+import { DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID } from '../middleware/auth';
 
 export const pipelineRouter = Router();
+const pipelineRepository = createPipelineRepository();
 
 // Backward compatibility bridge for autonomous engines
 export const pipelineDealsDb: any = new Proxy([] as any[], {
   get(target, prop) {
-    const deals = persistentStore.getPipelineDealsByUser(DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID);
     if (prop === 'unshift' || prop === 'push') {
       return (deal: any) => {
-        return persistentStore.savePipelineDeal(DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID, deal);
+        return pipelineRepository.create(DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID, deal);
       };
     }
-    if (prop === 'length') {
-      return deals.length;
-    }
-    if (typeof prop === 'string' && !isNaN(Number(prop))) {
-      return deals[Number(prop)];
-    }
-    const val = Reflect.get(deals, prop);
-    return typeof val === 'function' ? val.bind(deals) : val;
+    return Reflect.get(target, prop);
   }
 });
 
-pipelineRouter.get('/pipeline', (req: AuthenticatedRequest, res: Response) => {
+pipelineRouter.get('/pipeline', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user?.id || DEFAULT_USER_ID;
   const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID;
-  const userDeals = persistentStore.getPipelineDealsByUser(userId, workspaceId);
+  const userDeals = await pipelineRepository.listByUser(userId, workspaceId);
 
   const totalValue = userDeals.reduce((acc, d) => acc + (d.dealValue || 0), 0);
-  const weightedValue = userDeals.reduce((acc, d) => acc + (d.dealValue * (d.probability / 100)), 0);
+  const weightedValue = userDeals.reduce((acc, d) => acc + ((d.dealValue || 0) * ((d.probability || 50) / 100)), 0);
   const activeDeals = userDeals.filter(d => d.stage !== 'won' && d.stage !== 'lost').length;
 
   const response: ApiResponse = {
@@ -57,10 +51,10 @@ pipelineRouter.get('/pipeline', (req: AuthenticatedRequest, res: Response) => {
   res.status(200).json(response);
 });
 
-pipelineRouter.get('/pipeline/deals', (req: AuthenticatedRequest, res: Response) => {
+pipelineRouter.get('/pipeline/deals', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user?.id || DEFAULT_USER_ID;
   const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID;
-  const userDeals = persistentStore.getPipelineDealsByUser(userId, workspaceId);
+  const userDeals = await pipelineRepository.listByUser(userId, workspaceId);
 
   const response: ApiResponse = {
     success: true,
@@ -73,36 +67,43 @@ pipelineRouter.get('/pipeline/deals', (req: AuthenticatedRequest, res: Response)
   res.status(200).json(response);
 });
 
-pipelineRouter.post('/pipeline/deals', (req: AuthenticatedRequest, res: Response) => {
+pipelineRouter.post('/pipeline/deals', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user?.id || DEFAULT_USER_ID;
   const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID;
-  const ownerName = req.user?.fullName || 'Pipeline Lead';
 
-  const newDeal: PipelineDealItem = {
-    id: req.body.id || `deal-${Date.now()}`,
-    companyName: req.body.companyName || 'Target Account',
+  const dealPayload: Partial<PipelineDealItem> = {
+    id: req.body.id,
+    company: req.body.company || req.body.companyName || 'Target Account',
+    companyName: req.body.companyName || req.body.company || 'Target Account',
     domain: req.body.domain || 'domain.com',
-    dealTitle: req.body.dealTitle || 'Strategic Opportunity',
-    serviceName: req.body.serviceName || 'Consulting',
+    title: req.body.title || req.body.dealTitle || 'Strategic Opportunity',
+    dealTitle: req.body.dealTitle || req.body.title || 'Strategic Opportunity',
     dealValue: Number(req.body.dealValue) || 20000,
     probability: Number(req.body.probability) || 50,
-    opportunityScore: Number(req.body.opportunityScore) || 85,
-    stage: req.body.stage || 'contacted',
-    stageEnteredAt: 'Just now',
-    expectedCloseDate: req.body.expectedCloseDate || 'In 30 days',
-    ownerName: req.body.ownerName || ownerName,
+    priority: req.body.priority || 'Medium',
+    stage: req.body.stage || 'Discovery',
     contactName: req.body.contactName || 'Executive Lead',
     contactRole: req.body.contactRole || 'Decision Maker',
-    contactAvatarBg: '#eff6ff',
-    contactAvatarColor: '#1d4ed8',
-    lastActivity: 'Added via HUNTIQ Backend API',
-    nextAction: 'Send introductory message',
-    nextActionDueDate: 'Tomorrow',
-    priority: 'High',
-    activities: []
+    contactEmail: req.body.contactEmail || 'contact@prospect.com',
+    expectedCloseDate: req.body.expectedCloseDate || 'In 30 days',
+    lastActivity: req.body.lastActivity || 'Added via HUNTIQ Backend API',
+    lastActivityType: req.body.lastActivityType || 'signal',
+    nextAction: req.body.nextAction || 'Send introductory message',
+    nextActionDueDate: req.body.nextActionDueDate || 'Tomorrow',
+    notes: req.body.notes || '',
+    website: req.body.website,
+    revenue: req.body.revenue,
+    linkedInUrl: req.body.linkedInUrl,
+    source: req.body.source || 'AI_RADAR',
+    opportunityType: req.body.opportunityType || 'HIGH_GROWTH',
+    digitalGapScore: req.body.digitalGapScore,
+    digitalAudit: req.body.digitalAudit,
+    scoreFactors: req.body.scoreFactors,
+    signals: req.body.signals || [],
+    activities: req.body.activities || []
   };
 
-  const saved = persistentStore.savePipelineDeal(userId, workspaceId, newDeal);
+  const saved = await pipelineRepository.create(userId, workspaceId, dealPayload);
 
   res.status(201).json({
     success: true,
@@ -111,12 +112,12 @@ pipelineRouter.post('/pipeline/deals', (req: AuthenticatedRequest, res: Response
   });
 });
 
-pipelineRouter.patch('/pipeline/deals/:id', (req: AuthenticatedRequest, res: Response) => {
+pipelineRouter.patch('/pipeline/deals/:id', async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const userId = req.user?.id || DEFAULT_USER_ID;
   const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID;
 
-  const existing = persistentStore.getPipelineDealById(id, userId);
+  const existing = await pipelineRepository.getById(id, userId, workspaceId);
   if (!existing) {
     return res.status(404).json({
       success: false,
@@ -125,13 +126,7 @@ pipelineRouter.patch('/pipeline/deals/:id', (req: AuthenticatedRequest, res: Res
     });
   }
 
-  const updated: PipelineDealItem = {
-    ...existing,
-    ...req.body,
-    stageEnteredAt: req.body.stage && req.body.stage !== existing.stage ? 'Just now' : existing.stageEnteredAt
-  };
-
-  const saved = persistentStore.savePipelineDeal(userId, workspaceId, updated);
+  const saved = await pipelineRepository.update(id, userId, workspaceId, req.body);
 
   res.status(200).json({
     success: true,
@@ -140,11 +135,12 @@ pipelineRouter.patch('/pipeline/deals/:id', (req: AuthenticatedRequest, res: Res
   });
 });
 
-pipelineRouter.delete('/pipeline/deals/:id', (req: AuthenticatedRequest, res: Response) => {
+pipelineRouter.delete('/pipeline/deals/:id', async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const userId = req.user?.id || DEFAULT_USER_ID;
+  const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID;
 
-  const deleted = persistentStore.deletePipelineDeal(userId, id);
+  const deleted = await pipelineRepository.delete(id, userId, workspaceId);
   if (!deleted) {
     return res.status(404).json({
       success: false,

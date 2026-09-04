@@ -12,10 +12,10 @@ export const contactsRouter = Router();
  * GET /api/contacts
  * Query contacts with tab, role, seniority, and search filters, returning live list & KPI data
  */
-contactsRouter.get('/contacts', (req: AuthenticatedRequest, res: Response) => {
+contactsRouter.get('/contacts', async (req: AuthenticatedRequest, res: Response) => {
   const { tab, seniority, department, role, search, q } = req.query as Record<string, string | undefined>;
 
-  const { contacts, kpiSummary } = contactService.listContacts({
+  const { contacts, kpiSummary } = await contactService.listContacts({
     tab,
     seniority,
     department,
@@ -44,9 +44,9 @@ contactsRouter.get('/contacts', (req: AuthenticatedRequest, res: Response) => {
  * GET /api/contacts/:id
  * Retrieve a specific contact
  */
-contactsRouter.get('/contacts/:id', (req: AuthenticatedRequest, res: Response) => {
+contactsRouter.get('/contacts/:id', async (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const contact = contactService.getById(id, req.user?.id);
+  const contact = await contactService.getById(id, req.user?.id, req.user?.workspaceId);
 
   if (!contact) {
     return res.status(404).json({
@@ -67,9 +67,9 @@ contactsRouter.get('/contacts/:id', (req: AuthenticatedRequest, res: Response) =
  * POST /api/contacts
  * Manually add a verified contact
  */
-contactsRouter.post('/contacts', (req: AuthenticatedRequest, res: Response) => {
+contactsRouter.post('/contacts', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const newContact = contactService.createContact(req.body || {}, req.user?.id, req.user?.workspaceId);
+    const newContact = await contactService.createContact(req.body || {}, req.user?.id, req.user?.workspaceId);
 
     res.status(201).json({
       success: true,
@@ -89,7 +89,7 @@ contactsRouter.post('/contacts', (req: AuthenticatedRequest, res: Response) => {
  * POST /api/contacts/import
  * Bulk import contacts from CSV / file
  */
-contactsRouter.post('/contacts/import', (req: AuthenticatedRequest, res: Response) => {
+contactsRouter.post('/contacts/import', async (req: AuthenticatedRequest, res: Response) => {
   const { contacts } = req.body || {};
 
   if (!Array.isArray(contacts)) {
@@ -100,7 +100,7 @@ contactsRouter.post('/contacts/import', (req: AuthenticatedRequest, res: Respons
     });
   }
 
-  const imported = contactService.importContacts(contacts, req.user?.id, req.user?.workspaceId);
+  const imported = await contactService.importContacts(contacts, req.user?.id, req.user?.workspaceId);
 
   res.status(201).json({
     success: true,
@@ -116,9 +116,9 @@ contactsRouter.post('/contacts/import', (req: AuthenticatedRequest, res: Respons
  * PATCH /api/contacts/:id
  * Update contact details / bookmark status / role
  */
-contactsRouter.patch('/contacts/:id', (req: AuthenticatedRequest, res: Response) => {
+contactsRouter.patch('/contacts/:id', async (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const updated = contactService.updateContact(id, req.body || {}, req.user?.id, req.user?.workspaceId);
+  const updated = await contactService.updateContact(id, req.body || {}, req.user?.id, req.user?.workspaceId);
 
   if (!updated) {
     return res.status(404).json({
@@ -139,10 +139,9 @@ contactsRouter.patch('/contacts/:id', (req: AuthenticatedRequest, res: Response)
  * DELETE /api/contacts/:id
  * Delete contact
  */
-contactsRouter.delete('/contacts/:id', (req: AuthenticatedRequest, res: Response) => {
+contactsRouter.delete('/contacts/:id', async (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const deleted = contactService.deleteContact(id, req.user?.id);
-
+  const deleted = await contactService.deleteContact(id, req.user?.id, req.user?.workspaceId);
 
   if (!deleted) {
     return res.status(404).json({
