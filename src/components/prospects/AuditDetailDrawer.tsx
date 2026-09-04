@@ -9,6 +9,7 @@ import {
   Zap 
 } from 'lucide-react';
 import type { GeoScrapedBusiness } from '../../engine/geoScraperEngine';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface AuditDetailDrawerProps {
   business: GeoScrapedBusiness | null;
@@ -23,6 +24,7 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({
   onCaptureOpportunity,
   onPushToPipeline
 }) => {
+  const { startPitchForProspect } = useHuntiq();
   const [activeTab, setActiveTab] = useState<'audit' | 'pitch' | 'score'>('audit');
   const [pitchChannel, setPitchChannel] = useState<'email' | 'linkedin' | 'call'>('email');
   const [copied, setCopied] = useState(false);
@@ -368,7 +370,7 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({
                 <span>{copied ? 'Copied!' : 'Copy'}</span>
               </button>
 
-              <p style={{ fontSize: '12px', color: '#1e293b', fontStyle: 'italic', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-line', paddingRight: '40px' }}>
+                <p style={{ fontSize: '12px', color: '#1e293b', fontStyle: 'italic', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-line', paddingRight: '40px' }}>
                 {pitchChannel === 'email'
                   ? audit.pitchAngles.emailPitch
                   : pitchChannel === 'linkedin'
@@ -376,6 +378,49 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({
                   : audit.pitchAngles.salesCallOpener}
               </p>
             </div>
+
+            <button
+              onClick={() => {
+                const cleanDomain = business?.domain || business?.website?.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] || `${audit.businessName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+                startPitchForProspect({
+                  companyName: business?.name || audit.businessName,
+                  domain: cleanDomain,
+                  district: business?.district || 'Commercial District',
+                  phone: business?.phone,
+                  contactName: business?.decisionMakers?.[0]?.name || 'Managing Director / Business Owner',
+                  contactRole: business?.decisionMakers?.[0]?.role || 'Managing Director / Owner',
+                  email: business?.decisionMakers?.[0]?.email || `contact@${cleanDomain}`,
+                  opportunityScore: business?.opportunityScore || (100 - audit.gapScore),
+                  seoScore: audit.gapScore,
+                  commercialIntentKeywords: audit.issuesDetected?.map(i => i.title) || [],
+                  identifiedGaps: audit.issuesDetected?.map(i => i.description) || [],
+                  recommendedPackage: audit.recommendedPackage?.packageName || 'Digital Modernization Suite',
+                  estimatedValue: audit.recommendedPackage?.estimatedValue?.max || 18000,
+                  pitchSource: 'geo-radar'
+                });
+                onClose();
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                backgroundColor: '#4f46e5',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '9px 14px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                marginTop: '12px',
+                width: '100%',
+                boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
+              }}
+            >
+              <Send size={13} />
+              <span>Launch Pitch in Outreach (Carries All Intel)</span>
+            </button>
           </div>
         )}
       </div>

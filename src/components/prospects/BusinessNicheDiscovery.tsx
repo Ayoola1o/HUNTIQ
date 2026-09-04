@@ -25,6 +25,8 @@ import { discoverBusinesses, getDiscoveryTemplates } from '../../api/discovery';
 import { SeoAuditModal } from './SeoAuditModal';
 import { CompetitorAnalysisModal } from './CompetitorAnalysisModal';
 import { OpportunityScoreModal } from './OpportunityScoreModal';
+import { useHuntiq } from '../../context/HuntiqContext';
+import type { ProspectPitchPayload } from '../../types/outreach';
 
 interface BusinessNicheDiscoveryProps {
   onNavigate: (nav: string) => void;
@@ -35,7 +37,35 @@ export const BusinessNicheDiscovery: React.FC<BusinessNicheDiscoveryProps> = ({
   onNavigate,
   onSelectBusinessForAudit
 }) => {
+  const { startPitchForProspect } = useHuntiq();
   const [mode, setMode] = useState<DiscoveryMode>('local_business');
+
+  const handlePitchProspect = (biz: DiscoveredBusiness) => {
+    const cleanDomain = biz.website 
+      ? biz.website.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] 
+      : `${biz.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+
+    const payload: ProspectPitchPayload = {
+      companyName: biz.name,
+      domain: cleanDomain,
+      phone: biz.phone,
+      address: biz.address,
+      district: biz.location,
+      contactName: 'Managing Director / Owner',
+      contactRole: 'Managing Director / Business Owner',
+      email: `contact@${cleanDomain}`,
+      opportunityScore: biz.seoOpportunityScore,
+      seoScore: biz.seoOpportunityScore,
+      commercialIntentKeywords: biz.commercialIntentKeywords || [],
+      topCompetitors: biz.topCompetitors?.map((c) => ({ name: c.name, rank: String(c.rank), domain: c.domain })),
+      identifiedGaps: biz.identifiedGaps || [],
+      recommendedPackage: biz.recommendedService || 'Turnkey Search Modernization Suite',
+      estimatedValue: 18000,
+      leadMagnet: biz.leadMagnetTitle ? { title: biz.leadMagnetTitle, type: biz.leadMagnetType } : undefined,
+      pitchSource: 'niche-discovery'
+    };
+    startPitchForProspect(payload);
+  };
   const [locationInput, setLocationInput] = useState('Lekki, Lagos');
   const [nicheInput, setNicheInput] = useState('Dental Clinics');
   const [radiusKm, setRadiusKm] = useState(10);
@@ -730,7 +760,7 @@ export const BusinessNicheDiscovery: React.FC<BusinessNicheDiscoveryProps> = ({
                       </button>
 
                       <button
-                        onClick={() => onNavigate('outreach')}
+                        onClick={() => handlePitchProspect(biz)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -1023,7 +1053,10 @@ export const BusinessNicheDiscovery: React.FC<BusinessNicheDiscoveryProps> = ({
             location: selectedAuditBusiness.location,
             niche: selectedAuditBusiness.category || selectedAuditBusiness.industry
           }}
-          onNavigateToOutreach={() => onNavigate('outreach')}
+          onNavigateToOutreach={() => {
+            handlePitchProspect(selectedAuditBusiness);
+            setSelectedAuditBusiness(null);
+          }}
         />
       )}
 
@@ -1039,7 +1072,10 @@ export const BusinessNicheDiscovery: React.FC<BusinessNicheDiscoveryProps> = ({
             location: selectedCompetitorBusiness.location,
             niche: selectedCompetitorBusiness.category || selectedCompetitorBusiness.industry
           }}
-          onNavigateToOutreach={() => onNavigate('outreach')}
+          onNavigateToOutreach={() => {
+            handlePitchProspect(selectedCompetitorBusiness);
+            setSelectedCompetitorBusiness(null);
+          }}
         />
       )}
 
@@ -1056,7 +1092,10 @@ export const BusinessNicheDiscovery: React.FC<BusinessNicheDiscoveryProps> = ({
             niche: selectedScoringBusiness.category || selectedScoringBusiness.industry,
             hasWebsite: selectedScoringBusiness.hasWebsite
           }}
-          onNavigateToOutreach={() => onNavigate('outreach')}
+          onNavigateToOutreach={() => {
+            handlePitchProspect(selectedScoringBusiness);
+            setSelectedScoringBusiness(null);
+          }}
         />
       )}
     </div>

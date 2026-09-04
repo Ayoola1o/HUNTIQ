@@ -38,3 +38,26 @@ export interface OutreachKpiSummary {
   needsAttention: number;
   responseRate: number; // percentage
 }
+
+export interface ProspectPitchPayload {
+  companyName: string;
+  domain?: string;
+  phone?: string;
+  address?: string;
+  district?: string;
+  contactName?: string;
+  contactRole?: string;
+  email?: string;
+  opportunityScore?: number;
+  seoScore?: number;
+  competitorGapScore?: number;
+  commercialIntentKeywords?: string[];
+  topCompetitors?: Array<{ name: string; rank: string; domain?: string }>;
+  identifiedGaps?: string[];
+  recommendedPackage?: string;
+  estimatedValue?: number;
+  leadMagnet?: { title: string; type: string };
+  suggestedSubject?: string;
+  suggestedBody?: string;
+  pitchSource?: 'niche-discovery' | 'seo-audit' | 'competitor-analysis' | 'opportunity-score' | 'geo-radar';
+}

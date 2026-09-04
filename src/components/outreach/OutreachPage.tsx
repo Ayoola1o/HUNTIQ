@@ -19,6 +19,7 @@ import {
   CheckCircle2, 
   Loader2 
 } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface OutreachPageProps {
   onNavigate: (nav: string) => void;
@@ -29,9 +30,17 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
+  const { activePitchDraft, clearActivePitchDraft, addDealToPipeline } = useHuntiq();
   const [isNewOutreachModalOpen, setIsNewOutreachModalOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeKpiFilter, setActiveKpiFilter] = useState('due_today');
+
+  // Auto-open modal when redirected here from a prospect pitch
+  useEffect(() => {
+    if (activePitchDraft) {
+      setIsNewOutreachModalOpen(true);
+    }
+  }, [activePitchDraft]);
 
   // Live Conversations & KPI State
   const [conversations, setConversations] = useState<OutreachItem[]>([]);
@@ -94,8 +103,25 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
       const created = await apiCreateOutreach(newItemPayload);
       setConversations(prev => [created, ...prev]);
       setActiveConversationId(created.id);
-      setActionToast(`Outreach initiated with ${created.contactName}!`);
+      setActionToast(`Pitch dispatched to ${created.contactName}!`);
       setTimeout(() => setActionToast(null), 3500);
+
+      // Auto-push deal to pipeline if pitched from prospect intelligence
+      if (activePitchDraft) {
+        addDealToPipeline({
+          companyName: newItemPayload.companyName || activePitchDraft.companyName,
+          domain: newItemPayload.domain || activePitchDraft.domain || 'company.com',
+          dealTitle: `${activePitchDraft.recommendedPackage || 'Search Modernization'} (${activePitchDraft.companyName})`,
+          serviceName: activePitchDraft.recommendedPackage || 'Turnkey SEO Suite',
+          dealValue: activePitchDraft.estimatedValue || 18000,
+          opportunityScore: activePitchDraft.opportunityScore || 85,
+          stage: 'contacted',
+          contactName: newItemPayload.contactName || activePitchDraft.contactName || 'Decision Maker',
+          contactRole: newItemPayload.contactRole || activePitchDraft.contactRole || 'Managing Director'
+        });
+        clearActivePitchDraft();
+      }
+
       await loadOutreach(true);
     } catch (err: any) {
       console.error('Failed to start outreach:', err);
@@ -355,8 +381,12 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
       {/* New Outreach Modal */}
       <NewOutreachModal
         isOpen={isNewOutreachModalOpen}
-        onClose={() => setIsNewOutreachModalOpen(false)}
+        onClose={() => {
+          setIsNewOutreachModalOpen(false);
+          clearActivePitchDraft();
+        }}
         onCreateOutreach={handleCreateOutreach}
+        initialPayload={activePitchDraft}
       />
 
       {/* AI Copilot Modal */}

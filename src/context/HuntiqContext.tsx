@@ -21,6 +21,7 @@ import {
 } from '../api';
 import { currencyService, type CurrencyCode } from '../services/currencyService';
 import { getStoredUser, fetchUserActivityLogs, type UserAccount } from '../api/auth';
+import type { ProspectPitchPayload } from '../types/outreach';
 
 
 export type AppView = 
@@ -69,6 +70,11 @@ interface HuntiqContextType {
   activeDossier: ResearchDossier | null;
   openResearch: (companyName: string) => void;
   closeResearch: () => void;
+
+  // Active Prospect Pitch Draft
+  activePitchDraft: ProspectPitchPayload | null;
+  startPitchForProspect: (payload: ProspectPitchPayload) => void;
+  clearActivePitchDraft: () => void;
 
   // Action Dispatchers (Optimized & Cached)
   searchCompanies: (query?: string, industry?: string) => CompanyItem[];
@@ -252,6 +258,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   const [copilotInitialQuery, setCopilotInitialQuery] = useState('');
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
 
+
   // Cached Research Dossier
   const activeDossier = useMemo(() => {
     if (!researchedCompany) return null;
@@ -344,6 +351,18 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     else if (clean === 'settings' || clean === 'setting' || clean === 'team') setCurrentView('settings');
     else if (clean === 'profile' || clean === 'user-profile' || clean === 'account') setCurrentView('profile');
     else if (clean === 'onboarding') setCurrentView('onboarding');
+  }, []);
+
+  // Active Prospect Pitch Draft State
+  const [activePitchDraft, setActivePitchDraft] = useState<ProspectPitchPayload | null>(null);
+
+  const startPitchForProspect = useCallback((payload: ProspectPitchPayload) => {
+    setActivePitchDraft(payload);
+    navigateTo('outreach');
+  }, [navigateTo]);
+
+  const clearActivePitchDraft = useCallback(() => {
+    setActivePitchDraft(null);
   }, []);
 
   // Modal Triggers
@@ -611,7 +630,10 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     setCurrentUser,
     updateCurrentUser,
     userActivityLogs,
-    refreshActivityLogs
+    refreshActivityLogs,
+    activePitchDraft,
+    startPitchForProspect,
+    clearActivePitchDraft
   }), [
     currentView,
     navigateTo,
@@ -647,7 +669,10 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     setCurrentUser,
     updateCurrentUser,
     userActivityLogs,
-    refreshActivityLogs
+    refreshActivityLogs,
+    activePitchDraft,
+    startPitchForProspect,
+    clearActivePitchDraft
   ]);
 
 
