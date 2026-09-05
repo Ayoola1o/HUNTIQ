@@ -5,7 +5,12 @@ import { prospectorEngine } from '../../src/engine/prospectorEngine';
 import { geoProspectingEngine } from '../engine/geo/geoProspectingEngine';
 import { DigitalAuditEngine } from '../engine/audit/digitalAuditEngine';
 import { createPipelineRepository } from '../repositories/pipeline';
-import { createMapsProvider } from '../providers/maps';
+import { createMapsProvider, MapProviderError } from '../providers/maps';
+import { deduplicateBusinesses } from '../utils/deduplication';
+import { DiscoveryJobService } from '../services/discoveryJobService';
+import { CompanyResolver } from '../engine/resolution/companyResolver';
+import { serverScoringEngine } from '../engine/scoringEngine';
+import { config } from '../config/env';
 import type { AuthenticatedRequest } from '../middleware/auth';
 
 export const prospectsRouter = Router();
@@ -36,49 +41,148 @@ prospectsRouter.post('/prospects/search', (req: Request, res: Response) => {
 });
 
 // 2. Apify Google Maps Place Discovery & Extraction Waterfall
-prospectsRouter.post('/prospects/discover-maps', async (req: AuthenticatedRequest, res: Response) => {
-  const { query, location, radiusKm, maxResults, category, minRating, minReviews, hasWebsite, hasPhone } = req.body || {};
+prospectsRouter.post(['/prospects/discover-maps', '/discover-maps'], async (req: AuthenticatedRequest, res: Response) => {
+  const {
+    query,
+    location,
+    radiusKm,
+    maxResults,
+    category,
+    minRating,
+    minReviews,
+    hasWebsite,
+    hasPhone,
+    centerCoordinates
+  } = req.body || {};
 
   if (!query && !category && !location) {
     return res.status(400).json({
       success: false,
       error: {
-        code: 'MISSING_SEARCH_QUERY',
+        code: 'MAP_VALIDATION_ERROR',
         message: 'Search query, category, or location is required for Maps discovery.'
       },
       meta: { timestamp: new Date().toISOString() }
     });
   }
 
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const userId = req.user?.id || 'user-default-001';
+
+  // Concurrency & Rate Limiting Check (Phase 15)
+  if (DiscoveryJobService.checkConcurrencyLimit(workspaceId)) {
+    return res.status(429).json({
+      success: false,
+      error: {
+        code: 'MAP_RATE_LIMIT_EXCEEDED',
+        message: 'Maximum concurrent maps discovery jobs reached for this workspace. Please wait for current jobs to complete.'
+      },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+
+  const effectiveMaxResults = Math.min(
+    Math.max(1, Number(maxResults) || 20),
+    config.mapsMaxResults
+  );
+  const effectiveRadiusKm = Math.min(
+    Math.max(1, Number(radiusKm) || 15),
+    config.mapsMaxRadiusKm
+  );
+
+  const providerType = config.huntiqMapsMock ? 'APIFY_MOCK' : 'APIFY_GOOGLE_MAPS';
+  const job = DiscoveryJobService.createJob({
+    workspaceId,
+    userId,
+    provider: providerType,
+    query: query || category || 'Businesses',
+    location,
+    radius: effectiveRadiusKm,
+    filters: { category, minRating, minReviews, hasWebsite, hasPhone }
+  });
+
   try {
     const mapsProvider = createMapsProvider();
-    const places = await mapsProvider.searchPlaces({
+    let places = await mapsProvider.searchPlaces({
       query: query || category || 'Businesses',
-      location: location || 'Lagos, Nigeria',
-      radiusKm: radiusKm ? Number(radiusKm) : 15,
-      maxResults: maxResults ? Number(maxResults) : 20,
+      location: location || undefined,
+      centerCoordinates,
+      radiusKm: effectiveRadiusKm,
+      maxResults: effectiveMaxResults,
       category,
-      minRating: minRating ? Number(minRating) : undefined,
-      minReviews: minReviews ? Number(minReviews) : undefined,
-      hasWebsite: hasWebsite ? Boolean(hasWebsite) : undefined,
-      hasPhone: hasPhone ? Boolean(hasPhone) : undefined
+      minRating: minRating !== undefined ? Number(minRating) : undefined,
+      minReviews: minReviews !== undefined ? Number(minReviews) : undefined,
+      hasWebsite: hasWebsite !== undefined ? Boolean(hasWebsite) : undefined,
+      hasPhone: hasPhone !== undefined ? Boolean(hasPhone) : undefined
     });
 
+    // 1. Deterministic Deduplication (Phase 7)
+    places = deduplicateBusinesses(places);
+
+    // 2. Company Resolution & Evidence-Based Opportunity Scoring (Phase 9 & 11)
+    const warnings: string[] = [];
+    for (const place of places) {
+      // Connect to Company Resolution
+      const resolution = await CompanyResolver.resolveDiscoveredPlace(place, workspaceId);
+      (place as any).resolutionStatus = resolution.resolutionStatus;
+      if (resolution.companyId) {
+        (place as any).companyId = resolution.companyId;
+      }
+
+      // Digital Gap Audit (Phase 10)
+      const audit = DigitalAuditEngine.audit({
+        id: place.placeId,
+        name: place.name,
+        category: place.category || 'Commercial Entity',
+        website: place.website || undefined,
+        phone: place.phone || undefined,
+        rating: place.rating || undefined,
+        reviewCount: place.reviewCount || undefined,
+        address: place.address || undefined
+      });
+      place.digitalAudit = audit;
+
+      // Evidence-based explainable opportunity scoring (Phase 11)
+      const scoring = serverScoringEngine.evaluateDiscoveredPlace(place, audit);
+      place.opportunityScore = scoring.score;
+      place.opportunityBreakdown = scoring;
+    }
+
+    // Complete tracking job (Phase 13 & 14)
+    DiscoveryJobService.completeJob(job.id, places.length, null, {
+      actorId: config.apifyActorId
+    });
+
+    // Standardized API response contract (Phase 16)
     res.status(200).json({
       success: true,
-      data: places,
-      meta: {
+      data: {
+        results: places,
         total: places.length,
-        provider: process.env.APIFY_API_TOKEN ? 'APIFY_GOOGLE_MAPS' : 'APIFY_MOCK_FALLBACK',
+        query: query || category || 'Businesses',
+        location: location || null,
+        provider: providerType,
+        jobId: job.id,
+        warnings
+      },
+      meta: {
         timestamp: new Date().toISOString()
       }
     });
   } catch (err: any) {
-    res.status(500).json({
+    const errorCode = err instanceof MapProviderError ? err.code : 'MAP_PROVIDER_UNAVAILABLE';
+    const errorMessage = err instanceof MapProviderError
+      ? err.message
+      : 'Maps discovery provider is temporarily unavailable.';
+    const statusCode = err instanceof MapProviderError ? err.statusCode : 503;
+
+    DiscoveryJobService.failJob(job.id, { code: errorCode, message: errorMessage });
+
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'MAPS_DISCOVERY_ERROR',
-        message: err.message || 'Failed to execute Maps discovery query.'
+        code: errorCode,
+        message: errorMessage
       },
       meta: { timestamp: new Date().toISOString() }
     });
@@ -189,8 +293,8 @@ prospectsRouter.post('/prospects/capture', async (req: AuthenticatedRequest, res
         stageEnteredAt: 'Just now',
         expectedCloseDate: 'Next 30 Days',
         ownerName,
-        contactName: b.decisionMakers?.[0]?.name || 'Business Owner',
-        contactRole: b.decisionMakers?.[0]?.role || 'Managing Director',
+        contactName: b.decisionMakers?.[0]?.name || '',
+        contactRole: b.decisionMakers?.[0]?.role || '',
         contactAvatarBg: isDigitalGap ? '#fee2e2' : '#eff6ff',
         contactAvatarColor: isDigitalGap ? '#dc2626' : '#4f46e5',
         lastActivity: 'Captured via Geo Radar',

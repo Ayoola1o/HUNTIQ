@@ -186,10 +186,10 @@ export class CompanyResolver {
       domain: verifiedDomain || '',
       website: req.website || (verifiedDomain ? `https://${verifiedDomain}` : undefined),
       industry: req.industry || 'Technology & Commercial',
-      employeeCount: '100',
-      employeeRange: '50-150',
-      country: req.country || 'Nigeria',
-      city: req.city || 'Lagos',
+      employeeCount: undefined,
+      employeeRange: undefined,
+      country: req.country || undefined,
+      city: req.city || undefined,
       description: verifiedDomain
         ? `Canonical company record auto-indexed by HUNTIQ Resolution Engine for ${cleanName}.`
         : `Company entity pending external domain verification for ${cleanName}.`,
@@ -221,6 +221,116 @@ export class CompanyResolver {
       normalizedDomain: verifiedDomain || '',
       cleanName,
       isNew: true
+    };
+  }
+
+  /**
+   * Instance wrapper for resolving a discovered place.
+   */
+  public async resolveDiscoveredPlace(
+    place: {
+      placeId: string;
+      name: string;
+      website?: string | null;
+      address?: string | null;
+      city?: string | null;
+      country?: string | null;
+    },
+    workspaceId: string = 'ws-main'
+  ) {
+    return CompanyResolver.resolveDiscoveredPlace(place, workspaceId);
+  }
+
+  /**
+   * Resolves a discovered place business against existing canonical companies without guessing.
+   * If a confident match cannot be made: resolutionStatus = 'UNRESOLVED'.
+   */
+  public static async resolveDiscoveredPlace(
+    place: {
+      placeId: string;
+      name: string;
+      website?: string | null;
+      address?: string | null;
+      city?: string | null;
+      country?: string | null;
+    },
+    workspaceId: string = 'ws-main'
+  ): Promise<{
+    resolutionStatus: 'RESOLVED' | 'UNRESOLVED';
+    companyId?: string;
+    matchedCompanyId?: string | null;
+    matchedCompany?: DbCompany;
+    confidence: number;
+    matchType?: 'EXACT_DOMAIN' | 'ALIAS_MATCH' | 'FUZZY_NAME_MATCH';
+    matchMethod?: 'EXACT_DOMAIN' | 'ALIAS_MATCH' | 'FUZZY_NAME_MATCH';
+  }> {
+    const rawDomain = place.website;
+    const normalizedDomain = this.normalizeDomain(rawDomain);
+    const cleanName = this.cleanCompanyName(place.name);
+
+    const existingCompanies = db.getCompaniesByWorkspace(workspaceId);
+
+    // 1. Exact Domain Match (100% confidence)
+    if (normalizedDomain) {
+      const match = existingCompanies.find(
+        c => c.domain && c.domain.toLowerCase() === normalizedDomain.toLowerCase()
+      );
+      if (match) {
+        return {
+          resolutionStatus: 'RESOLVED',
+          companyId: match.id,
+          matchedCompanyId: match.id,
+          matchedCompany: match,
+          confidence: 1.0,
+          matchType: 'EXACT_DOMAIN',
+          matchMethod: 'EXACT_DOMAIN'
+        };
+      }
+    }
+
+    // 2. Alias / Website Match (95% confidence)
+    if (normalizedDomain) {
+      const match = existingCompanies.find(
+        c =>
+          (c.website && c.website.toLowerCase().includes(normalizedDomain)) ||
+          (c.domain && normalizedDomain.includes(c.domain.toLowerCase()))
+      );
+      if (match) {
+        return {
+          resolutionStatus: 'RESOLVED',
+          companyId: match.id,
+          matchedCompanyId: match.id,
+          matchedCompany: match,
+          confidence: 0.95,
+          matchType: 'ALIAS_MATCH',
+          matchMethod: 'ALIAS_MATCH'
+        };
+      }
+    }
+
+    // 3. High-Confidence Clean Name Match (>= 90% similarity)
+    if (cleanName && cleanName.length > 2) {
+      for (const comp of existingCompanies) {
+        const similarity = this.calculateSimilarity(comp.name, cleanName);
+        if (similarity >= 0.90) {
+          return {
+            resolutionStatus: 'RESOLVED',
+            companyId: comp.id,
+            matchedCompanyId: comp.id,
+            matchedCompany: comp,
+            confidence: Number(similarity.toFixed(2)),
+            matchType: 'FUZZY_NAME_MATCH',
+            matchMethod: 'FUZZY_NAME_MATCH'
+          };
+        }
+      }
+    }
+
+    // Not confidently matched -> strictly UNRESOLVED without guessing
+    return {
+      resolutionStatus: 'UNRESOLVED',
+      matchedCompanyId: null,
+      confidence: 0
     };
   }
 

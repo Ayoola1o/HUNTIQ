@@ -43,17 +43,18 @@ export const BusinessNicheDiscovery: React.FC<BusinessNicheDiscoveryProps> = ({
   const handlePitchProspect = (biz: DiscoveredBusiness) => {
     const cleanDomain = biz.website 
       ? biz.website.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] 
-      : `${biz.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+      : null;
 
     const payload: ProspectPitchPayload = {
       companyName: biz.name,
       domain: cleanDomain,
-      phone: biz.phone,
-      address: biz.address,
-      district: biz.location,
-      contactName: 'Managing Director / Owner',
-      contactRole: 'Managing Director / Business Owner',
-      email: `contact@${cleanDomain}`,
+      phone: biz.phone || null,
+      address: biz.address || null,
+      district: biz.location || null,
+      contactName: null,
+      contactRole: null,
+      email: null,
+      emailStatus: 'not_found',
       opportunityScore: biz.seoOpportunityScore,
       seoScore: biz.seoOpportunityScore,
       commercialIntentKeywords: biz.commercialIntentKeywords || [],

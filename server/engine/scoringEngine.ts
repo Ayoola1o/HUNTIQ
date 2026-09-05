@@ -112,6 +112,108 @@ export class ScoringEngine {
       recommendedAction
     };
   }
+
+  /**
+   * Evaluates an explainable opportunity score for a discovered place business.
+   * Derives factors strictly from verifiable evidence (digital gaps, presence, reviews, ratings).
+   */
+  public static evaluateDiscoveredPlace(
+    place: {
+      website: string | null;
+      phone: string | null;
+      rating: number | null;
+      reviewCount: number | null;
+      address: string | null;
+      businessStatus: string | null;
+    },
+    audit?: {
+      gapScore?: number;
+      issuesDetected?: Array<{ title: string; severity: string }>;
+    }
+  ): {
+    score: number;
+    factors: Array<{ type: string; value: number; evidence: string }>;
+  } {
+    const factors: Array<{ type: string; value: number; evidence: string }> = [];
+    let score = 50; // Base baseline for commercial entity discovery
+
+    // Factor 1: Verified Local Presence
+    if (place.address) {
+      score += 12;
+      factors.push({
+        type: 'company_presence',
+        value: 12,
+        evidence: `Verified active commercial address: ${place.address}`
+      });
+    }
+
+    // Factor 2: Digital Presence Gap or Web Maturity
+    if (!place.website) {
+      score += 20;
+      factors.push({
+        type: 'digital_gap_opportunity',
+        value: 20,
+        evidence: 'High conversion urgency: No verified website found on Google Maps'
+      });
+    } else if (audit?.gapScore && audit.gapScore >= 70) {
+      score += 18;
+      factors.push({
+        type: 'performance_gap_opportunity',
+        value: 18,
+        evidence: `Significant digital friction detected (Gap score: ${audit.gapScore}/100)`
+      });
+    } else {
+      score += 10;
+      factors.push({
+        type: 'digital_optimization',
+        value: 10,
+        evidence: 'Active digital presence ready for advanced optimization & modernization'
+      });
+    }
+
+    // Factor 3: Google Maps Review Traction
+    if (place.reviewCount && place.reviewCount > 0) {
+      const val = Math.min(15, Math.round(place.reviewCount / 5));
+      score += val;
+      factors.push({
+        type: 'market_traction',
+        value: val,
+        evidence: `${place.reviewCount} customer reviews recorded on Google Maps`
+      });
+    }
+
+    // Factor 4: Verified Contact Channel
+    if (place.phone) {
+      score += 8;
+      factors.push({
+        type: 'contact_reachability',
+        value: 8,
+        evidence: 'Verified direct business telephone channel available'
+      });
+    }
+
+    return {
+      score: Math.min(98, score),
+      factors
+    };
+  }
+
+  public evaluateDiscoveredPlace(
+    place: {
+      website: string | null;
+      phone: string | null;
+      rating: number | null;
+      reviewCount: number | null;
+      address: string | null;
+      businessStatus: string | null;
+    },
+    audit?: {
+      gapScore?: number;
+      issuesDetected?: Array<{ title: string; severity: string }>;
+    }
+  ) {
+    return ScoringEngine.evaluateDiscoveredPlace(place, audit);
+  }
 }
 
 export const serverScoringEngine = new ScoringEngine();
