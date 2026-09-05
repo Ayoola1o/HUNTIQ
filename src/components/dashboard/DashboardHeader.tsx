@@ -78,7 +78,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               letterSpacing: '-0.02em',
               fontFamily: 'var(--font-primary)'
             }}>
-              {getGreeting()}, Ayoola 👋
+              {getGreeting()}, {currentUser?.fullName ? currentUser.fullName.split(' ')[0] : 'Hunter'} 👋
             </h1>
             <div style={{
               display: 'inline-flex',

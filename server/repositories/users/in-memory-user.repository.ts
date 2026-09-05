@@ -1,5 +1,6 @@
 import type { UserRepository, UserEntity, CreateUserWithWorkspaceParams } from './user-repository';
 import { hashPassword } from '../../services/auth.service';
+import { persistentStore } from '../../db/persistentStore';
 
 export class InMemoryUserRepository implements UserRepository {
   private static users: UserEntity[] = [];
@@ -90,10 +91,26 @@ export class InMemoryUserRepository implements UserRepository {
 
   public async saveOnboarding(userId: string, workspaceId: string, data: any): Promise<boolean> {
     InMemoryUserRepository.onboarding.set(`${userId}:${workspaceId}`, data);
+    try {
+      persistentStore.saveWorkspaceOnboarding(userId, workspaceId, data);
+    } catch {}
+    if (data?.workspaceName) {
+      const user = InMemoryUserRepository.users.find((u) => u.id === userId);
+      if (user) {
+        user.companyName = data.workspaceName;
+        user.updatedAt = new Date().toISOString();
+      }
+    }
     return true;
   }
 
   public async getOnboarding(userId: string, workspaceId: string): Promise<any> {
-    return InMemoryUserRepository.onboarding.get(`${userId}:${workspaceId}`) || null;
+    const memoryData = InMemoryUserRepository.onboarding.get(`${userId}:${workspaceId}`);
+    if (memoryData) return memoryData;
+    try {
+      return persistentStore.getWorkspaceOnboarding(workspaceId) || null;
+    } catch {
+      return null;
+    }
   }
 }

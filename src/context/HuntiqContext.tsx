@@ -20,8 +20,10 @@ import {
   updatePipelineDeal
 } from '../api';
 import { currencyService, type CurrencyCode } from '../services/currencyService';
-import { getStoredUser, fetchUserActivityLogs, type UserAccount } from '../api/auth';
+import { getStoredUser, fetchUserActivityLogs, fetchUserOnboarding, saveUserOnboarding, type UserAccount } from '../api/auth';
 import type { ProspectPitchPayload } from '../types/outreach';
+import type { OnboardingData } from '../types/onboarding';
+import { initialOnboardingData } from '../types/onboarding';
 
 
 export type AppView = 
@@ -101,6 +103,11 @@ interface HuntiqContextType {
   updateCurrentUser: (updates: Partial<UserAccount>) => void;
   userActivityLogs: any[];
   refreshActivityLogs: () => Promise<void>;
+
+  // Onboarding Profile State
+  onboardingData: OnboardingData;
+  isOnboardingCompleted: boolean;
+  saveOnboardingData: (data: OnboardingData) => Promise<void>;
 }
 
 
@@ -167,6 +174,53 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
       setUserActivityLogs(logs || []);
     } catch {}
   }, []);
+
+  // Onboarding Profile State Scoped to Current Profile & Workspace
+  const [onboardingData, setOnboardingData] = useState<OnboardingData>(initialOnboardingData);
+  const [isOnboardingCompleted, setIsOnboardingCompleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('huntiq_onboarding_completed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Load and hydrate onboarding data for current user / profile
+  useEffect(() => {
+    let isMounted = true;
+    fetchUserOnboarding()
+      .then((saved) => {
+        if (!isMounted) return;
+        if (saved) {
+          setOnboardingData((prev) => ({
+            ...prev,
+            ...saved,
+            workspaceName: saved.workspaceName || currentUser?.companyName || prev.workspaceName
+          }));
+          setIsOnboardingCompleted(true);
+        } else if (currentUser?.companyName) {
+          setOnboardingData((prev) => ({
+            ...prev,
+            workspaceName: currentUser.companyName || prev.workspaceName
+          }));
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [currentUser?.id, currentUser?.companyName]);
+
+  const saveOnboardingData = useCallback(async (data: OnboardingData) => {
+    setOnboardingData(data);
+    setIsOnboardingCompleted(true);
+    try {
+      await saveUserOnboarding(data);
+    } catch (err) {
+      console.warn('Could not save onboarding to backend:', err);
+    }
+    if (data.workspaceName && currentUser) {
+      updateCurrentUser({ companyName: data.workspaceName });
+    }
+  }, [currentUser, updateCurrentUser]);
 
   const formatCurrency = useCallback((amountInUsd: number, options?: { compact?: boolean; precision?: number }) => {
     return currencyService.format(amountInUsd, currency, options);
@@ -634,7 +688,10 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     refreshActivityLogs,
     activePitchDraft,
     startPitchForProspect,
-    clearActivePitchDraft
+    clearActivePitchDraft,
+    onboardingData,
+    isOnboardingCompleted,
+    saveOnboardingData
   }), [
     currentView,
     navigateTo,
@@ -673,7 +730,10 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     refreshActivityLogs,
     activePitchDraft,
     startPitchForProspect,
-    clearActivePitchDraft
+    clearActivePitchDraft,
+    onboardingData,
+    isOnboardingCompleted,
+    saveOnboardingData
   ]);
 
 

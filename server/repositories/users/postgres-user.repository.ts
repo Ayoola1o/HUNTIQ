@@ -155,6 +155,11 @@ export class PostgresUserRepository implements UserRepository {
         ) VALUES ($1, $2, 'ONBOARDING_COMPLETED', 'WORKSPACE_ONBOARDING', 'User completed onboarding survey', $3)
       `;
       await this.pool.query(query, [userId, workspaceId, JSON.stringify(data)]);
+      if (data?.workspaceName) {
+        await this.pool.query('UPDATE workspaces SET name = $1 WHERE id = $2', [data.workspaceName, workspaceId]).catch(() => {});
+        await this.pool.query('UPDATE users SET company_name = $1 WHERE id = $2', [data.workspaceName, userId]).catch(() => {});
+      }
+      this.fallback.saveOnboarding(userId, workspaceId, data);
       return true;
     } catch {
       return this.fallback.saveOnboarding(userId, workspaceId, data);

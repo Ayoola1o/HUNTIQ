@@ -20,6 +20,7 @@ import {
   Settings, 
   Sparkles 
 } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface SettingsPageProps {
   onNavigate: (nav: string) => void;
@@ -30,18 +31,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
+  const { currentUser, onboardingData, saveOnboardingData } = useHuntiq();
   const [activeSection, setActiveSection] = useState<SettingsSection>('workspace');
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
-  // State configurations
-  const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig>({
-    workspaceName: 'HUNTIQ Revenue Team',
-    workspaceSlug: 'huntiq-prod',
-    defaultCurrency: 'USD',
+  // State configurations initialized from profile onboarding data
+  const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig>(() => ({
+    workspaceName: onboardingData?.workspaceName || currentUser?.companyName || 'HUNTIQ Revenue Team',
+    workspaceSlug: (onboardingData?.workspaceName || currentUser?.companyName || 'huntiq-prod').toLowerCase().replace(/[^a-z0-9]/g, '-'),
+    defaultCurrency: (currentUser?.defaultCurrency as 'USD' | 'NGN' | 'GBP' | 'EUR') || 'USD',
     timezone: 'Africa/Lagos',
     dateFormat: 'MM/DD/YYYY',
     defaultLandingView: 'dashboard'
-  });
+  }));
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
     { id: 'tm-1', name: 'Ayoola Ade', email: 'ayoola@huntiq.ai', role: 'Owner', status: 'Active', lastActive: 'Now', avatarBg: '#eff6ff', avatarColor: '#1d4ed8' },
@@ -49,14 +51,31 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     { id: 'tm-3', name: 'David Okafor', email: 'david@huntiq.ai', role: 'Sales Rep', status: 'Active', lastActive: 'Yesterday', avatarBg: '#dbeafe', avatarColor: '#1e40af' }
   ]);
 
-  const [icpConfig, setIcpConfig] = useState<IcpConfig>({
-    targetIndustries: ['FinTech & Digital Banking', 'Enterprise SaaS', 'B2B Logistics & Supply Chain', 'Telecommunications'],
+  const [icpConfig, setIcpConfig] = useState<IcpConfig>(() => ({
+    targetIndustries: onboardingData?.industries?.length ? onboardingData.industries : ['FinTech & Digital Banking', 'Enterprise SaaS', 'B2B Logistics & Supply Chain', 'Telecommunications'],
     companySizeMin: 50,
     companySizeMax: 500,
-    targetGeographies: ['Nigeria', 'Kenya', 'Ghana', 'South Africa'],
-    decisionMakerRoles: ['Head of People', 'VP Operations', 'Chief Executive Officer', 'Chief Commercial Officer'],
-    minOpportunityValue: 10000
-  });
+    targetGeographies: onboardingData?.geographicMarkets?.length ? onboardingData.geographicMarkets : ['Nigeria', 'Kenya', 'Ghana', 'South Africa'],
+    decisionMakerRoles: onboardingData?.targetBuyerRoles?.length ? onboardingData.targetBuyerRoles : ['Head of People', 'VP Operations', 'Chief Executive Officer', 'Chief Commercial Officer'],
+    minOpportunityValue: onboardingData?.averageDealValue || 10000
+  }));
+
+  // Sync state when onboardingData updates or loads
+  React.useEffect(() => {
+    if (onboardingData) {
+      setWorkspaceConfig((prev) => ({
+        ...prev,
+        workspaceName: onboardingData.workspaceName || prev.workspaceName
+      }));
+      setIcpConfig((prev) => ({
+        ...prev,
+        targetIndustries: onboardingData.industries?.length ? onboardingData.industries : prev.targetIndustries,
+        targetGeographies: onboardingData.geographicMarkets?.length ? onboardingData.geographicMarkets : prev.targetGeographies,
+        decisionMakerRoles: onboardingData.targetBuyerRoles?.length ? onboardingData.targetBuyerRoles : prev.decisionMakerRoles,
+        minOpportunityValue: onboardingData.averageDealValue || prev.minOpportunityValue
+      }));
+    }
+  }, [onboardingData]);
 
   const [scoringWeights, setScoringWeights] = useState<ScoringWeights>({
     buyingSignalsWeight: 35,
@@ -81,6 +100,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
   const handleRemoveMember = (id: string) => {
     setTeamMembers(teamMembers.filter(m => m.id !== id));
+  };
+
+  const handleSaveWorkspace = (newCfg: WorkspaceConfig) => {
+    setWorkspaceConfig(newCfg);
+    if (onboardingData) {
+      saveOnboardingData({
+        ...onboardingData,
+        workspaceName: newCfg.workspaceName
+      }).catch(() => {});
+    }
+  };
+
+  const handleSaveIcp = (newIcp: IcpConfig) => {
+    setIcpConfig(newIcp);
+    if (onboardingData) {
+      saveOnboardingData({
+        ...onboardingData,
+        industries: newIcp.targetIndustries,
+        geographicMarkets: newIcp.targetGeographies,
+        targetBuyerRoles: newIcp.decisionMakerRoles,
+        averageDealValue: newIcp.minOpportunityValue
+      }).catch(() => {});
+    }
   };
 
   return (
@@ -176,14 +218,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             {activeSection === 'workspace' && (
               <WorkspaceSettingsPanel
                 config={workspaceConfig}
-                onSave={setWorkspaceConfig}
+                onSave={handleSaveWorkspace}
               />
             )}
 
             {activeSection === 'profile' && (
               <WorkspaceSettingsPanel
                 config={workspaceConfig}
-                onSave={setWorkspaceConfig}
+                onSave={handleSaveWorkspace}
               />
             )}
 
@@ -198,14 +240,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             {activeSection === 'pipeline' && (
               <IcpSettingsPanel
                 config={icpConfig}
-                onSave={setIcpConfig}
+                onSave={handleSaveIcp}
               />
             )}
 
             {activeSection === 'icp' && (
               <IcpSettingsPanel
                 config={icpConfig}
-                onSave={setIcpConfig}
+                onSave={handleSaveIcp}
               />
             )}
 

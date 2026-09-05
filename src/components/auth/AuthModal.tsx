@@ -16,7 +16,7 @@ import type { CurrencyCode } from '../../services/currencyService';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAuthSuccess: (user: UserAccount) => void;
+  onAuthSuccess: (user: UserAccount, mode: 'login' | 'signup') => void;
   initialMode?: 'login' | 'signup';
 }
 
@@ -57,14 +57,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           companyName,
           defaultCurrency
         });
-        onAuthSuccess(res.user);
+        onAuthSuccess(res.user, 'signup');
         onClose();
       } else {
         if (!email.trim() || !password.trim()) {
           throw new Error('Please enter your email and password.');
         }
         const res = await loginUser({ email, password });
-        onAuthSuccess(res.user);
+        onAuthSuccess(res.user, 'login');
         onClose();
       }
     } catch (err: any) {

@@ -540,9 +540,16 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
-        onAuthSuccess={(user) => {
+        onAuthSuccess={(user, mode) => {
           setCurrentUser(user);
           refreshData();
+          if (mode === 'signup') {
+            if (onGoToOnboarding) {
+              onGoToOnboarding();
+            } else {
+              onSelectNav('onboarding');
+            }
+          }
         }}
       />
     </>

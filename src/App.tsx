@@ -29,38 +29,30 @@ import { IntegrationsPage } from './components/integrations/IntegrationsPage';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { ProfilePage } from './components/profile/ProfilePage';
 import { HuntiqProvider, useHuntiq } from './context/HuntiqContext';
-import { fetchUserOnboarding, saveUserOnboarding } from './api/auth';
+import { saveUserOnboarding } from './api/auth';
 import type { OnboardingData } from './types/onboarding';
 import { initialOnboardingData } from './types/onboarding';
 
 function AppContent() {
-  const { currentView, navigateTo, currentUser, updateCurrentUser } = useHuntiq();
+  const { currentView, navigateTo, currentUser, updateCurrentUser, onboardingData, saveOnboardingData } = useHuntiq();
   const [currentStep, setCurrentStep] = useState<number>(1);
-  const [formData, setFormData] = useState<OnboardingData>(initialOnboardingData);
+  const [formData, setFormData] = useState<OnboardingData>(() => onboardingData || initialOnboardingData);
 
-  // Hydrate saved onboarding choices from server or disk
+  // Sync formData with context hydration and user profile
   useEffect(() => {
-    let isMounted = true;
-    fetchUserOnboarding()
-      .then((saved) => {
-        if (isMounted && saved) {
-          setFormData((prev) => ({
-            ...prev,
-            ...saved,
-            workspaceName: saved.workspaceName || currentUser?.companyName || prev.workspaceName
-          }));
-        } else if (isMounted && currentUser?.companyName) {
-          setFormData((prev) => ({
-            ...prev,
-            workspaceName: currentUser.companyName || prev.workspaceName
-          }));
-        }
-      })
-      .catch((err) => {
-        console.warn('Could not load onboarding data:', err);
-      });
-    return () => { isMounted = false; };
-  }, [currentUser?.id]);
+    if (onboardingData) {
+      setFormData((prev) => ({
+        ...prev,
+        ...onboardingData,
+        workspaceName: onboardingData.workspaceName || currentUser?.companyName || (currentUser?.fullName ? `${currentUser.fullName}'s Workspace` : prev.workspaceName)
+      }));
+    } else if (currentUser) {
+      setFormData((prev) => ({
+        ...prev,
+        workspaceName: currentUser.companyName || (currentUser.fullName ? `${currentUser.fullName}'s Workspace` : prev.workspaceName)
+      }));
+    }
+  }, [onboardingData, currentUser?.id, currentUser?.companyName, currentUser?.fullName]);
 
   const handleDataChange = (updates: Partial<OnboardingData>) => {
     setFormData((prev) => {
@@ -86,7 +78,7 @@ function AppContent() {
 
   const handleStartHunting = async () => {
     try {
-      await saveUserOnboarding(formData);
+      await saveOnboardingData(formData);
       if (formData.workspaceName) {
         updateCurrentUser({ companyName: formData.workspaceName });
       }
