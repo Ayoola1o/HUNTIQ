@@ -45,95 +45,157 @@ export class PostgresSignalRepository implements SignalRepository {
     return result.rows[0];
   }
 
-  async findByCompanyId(companyId: string): Promise<SignalRecord[]> {
-    const result = await this.pool.query(
+  async findByCompanyId(companyId: string, workspaceId?: string): Promise<SignalRecord[]> {
+    const query = workspaceId
+      ? `
+        SELECT 
+          id,
+          workspace_id as "workspaceId",
+          company_id as "companyId",
+          type,
+          title,
+          summary,
+          strength,
+          confidence,
+          detected_at as "detectedAt",
+          observed_from as "observedFrom",
+          observed_to as "observedTo",
+          metadata,
+          created_at as "createdAt",
+          updated_at as "updatedAt"
+        FROM signals
+        WHERE company_id = $1 AND workspace_id = $2
+        ORDER BY detected_at DESC
       `
-      SELECT 
-        id,
-        workspace_id as "workspaceId",
-        company_id as "companyId",
-        type,
-        title,
-        summary,
-        strength,
-        confidence,
-        detected_at as "detectedAt",
-        observed_from as "observedFrom",
-        observed_to as "observedTo",
-        metadata,
-        created_at as "createdAt",
-        updated_at as "updatedAt"
-      FROM signals
-      WHERE company_id = $1
-      ORDER BY detected_at DESC
-      `,
-      [companyId]
-    );
+      : `
+        SELECT 
+          id,
+          workspace_id as "workspaceId",
+          company_id as "companyId",
+          type,
+          title,
+          summary,
+          strength,
+          confidence,
+          detected_at as "detectedAt",
+          observed_from as "observedFrom",
+          observed_to as "observedTo",
+          metadata,
+          created_at as "createdAt",
+          updated_at as "updatedAt"
+        FROM signals
+        WHERE company_id = $1
+        ORDER BY detected_at DESC
+      `;
 
+    const params = workspaceId ? [companyId, workspaceId] : [companyId];
+    const result = await this.pool.query(query, params);
     return result.rows;
   }
 
-  async findByType(type: string): Promise<SignalRecord[]> {
-    const result = await this.pool.query(
+  async findByType(type: string, workspaceId?: string): Promise<SignalRecord[]> {
+    const query = workspaceId
+      ? `
+        SELECT 
+          id,
+          workspace_id as "workspaceId",
+          company_id as "companyId",
+          type,
+          title,
+          summary,
+          strength,
+          confidence,
+          detected_at as "detectedAt",
+          observed_from as "observedFrom",
+          observed_to as "observedTo",
+          metadata,
+          created_at as "createdAt",
+          updated_at as "updatedAt"
+        FROM signals
+        WHERE type = $1 AND workspace_id = $2
+        ORDER BY detected_at DESC
       `
-      SELECT 
-        id,
-        workspace_id as "workspaceId",
-        company_id as "companyId",
-        type,
-        title,
-        summary,
-        strength,
-        confidence,
-        detected_at as "detectedAt",
-        observed_from as "observedFrom",
-        observed_to as "observedTo",
-        metadata,
-        created_at as "createdAt",
-        updated_at as "updatedAt"
-      FROM signals
-      WHERE type = $1
-      ORDER BY detected_at DESC
-      `,
-      [type]
-    );
+      : `
+        SELECT 
+          id,
+          workspace_id as "workspaceId",
+          company_id as "companyId",
+          type,
+          title,
+          summary,
+          strength,
+          confidence,
+          detected_at as "detectedAt",
+          observed_from as "observedFrom",
+          observed_to as "observedTo",
+          metadata,
+          created_at as "createdAt",
+          updated_at as "updatedAt"
+        FROM signals
+        WHERE type = $1
+        ORDER BY detected_at DESC
+      `;
 
+    const params = workspaceId ? [type, workspaceId] : [type];
+    const result = await this.pool.query(query, params);
     return result.rows;
   }
 
-  async list(limit = 50, offset = 0): Promise<SignalRecord[]> {
-    const result = await this.pool.query(
+  async list(limit = 50, offset = 0, workspaceId?: string): Promise<SignalRecord[]> {
+    const query = workspaceId
+      ? `
+        SELECT 
+          id,
+          workspace_id as "workspaceId",
+          company_id as "companyId",
+          type,
+          title,
+          summary,
+          strength,
+          confidence,
+          detected_at as "detectedAt",
+          observed_from as "observedFrom",
+          observed_to as "observedTo",
+          metadata,
+          created_at as "createdAt",
+          updated_at as "updatedAt"
+        FROM signals
+        WHERE workspace_id = $3
+        ORDER BY detected_at DESC
+        LIMIT $1 OFFSET $2
       `
-      SELECT 
-        id,
-        workspace_id as "workspaceId",
-        company_id as "companyId",
-        type,
-        title,
-        summary,
-        strength,
-        confidence,
-        detected_at as "detectedAt",
-        observed_from as "observedFrom",
-        observed_to as "observedTo",
-        metadata,
-        created_at as "createdAt",
-        updated_at as "updatedAt"
-      FROM signals
-      ORDER BY detected_at DESC
-      LIMIT $1 OFFSET $2
-      `,
-      [limit, offset]
-    );
+      : `
+        SELECT 
+          id,
+          workspace_id as "workspaceId",
+          company_id as "companyId",
+          type,
+          title,
+          summary,
+          strength,
+          confidence,
+          detected_at as "detectedAt",
+          observed_from as "observedFrom",
+          observed_to as "observedTo",
+          metadata,
+          created_at as "createdAt",
+          updated_at as "updatedAt"
+        FROM signals
+        ORDER BY detected_at DESC
+        LIMIT $1 OFFSET $2
+      `;
 
+    const params = workspaceId ? [limit, offset, workspaceId] : [limit, offset];
+    const result = await this.pool.query(query, params);
     return result.rows;
   }
 
-  async deleteByCompanyId(companyId: string): Promise<number> {
-    const result = await this.pool.query(
-      'DELETE FROM signals WHERE company_id = $1',
-      [companyId]
-    );
+  async deleteByCompanyId(companyId: string, workspaceId?: string): Promise<number> {
+    const query = workspaceId
+      ? 'DELETE FROM signals WHERE company_id = $1 AND workspace_id = $2'
+      : 'DELETE FROM signals WHERE company_id = $1';
+    const params = workspaceId ? [companyId, workspaceId] : [companyId];
+    const result = await this.pool.query(query, params);
     return result.rowCount || 0;
   }
 }

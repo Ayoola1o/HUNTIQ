@@ -433,7 +433,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     const newDeal: PipelineDealItem = {
       id: `deal-${Date.now()}`,
       companyName: deal.companyName || 'New Target Account',
-      domain: deal.domain || 'company.com',
+      domain: deal.domain || null,
       dealTitle: deal.dealTitle || 'Strategic Advisory Deal',
       serviceName: deal.serviceName || 'Core Consulting',
       dealValue: deal.dealValue || 20000,
@@ -489,7 +489,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     const newCompanies: CompanyItem[] = scrapedList.map((b) => ({
       id: `comp-geo-${b.id}`,
       name: b.name,
-      domain: b.domain || 'company.com',
+      domain: b.domain || (b.website ? b.website.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] : null),
       industry: b.category,
       employees: b.headcountEstimate || '25-50',
       revenue: '$1M - $10M',
@@ -531,11 +531,12 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
       const pkg = audit?.recommendedPackage;
       const dealVal = pkg?.estimatedValue?.max || b.estimatedDealValue || 15000;
       const score = b.opportunityScore || 85;
+      const derivedDomain = b.domain || (b.website ? b.website.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] : null);
 
       return {
         id: `deal-geo-${b.id}-${Date.now()}`,
         companyName: b.name,
-        domain: b.domain || b.website?.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] || 'company.com',
+        domain: derivedDomain,
         dealTitle: pkg ? `${pkg.packageName} (${audit.gapScore >= 70 ? 'Turnkey Fix' : 'Growth Optimization'})` : 'Digital Transformation & Acquisition Package',
         serviceName: pkg?.packageName || 'Digital Modernization Suite',
         dealValue: dealVal,

@@ -903,15 +903,23 @@ export class PersistentStore {
   // ==================== RESEARCH REPORTS & LOGS ====================
 
   public getResearchReportsByUser(userId: string, workspaceId?: string): ScopedResearchReport[] {
-    return this.data.researchReports.filter(r => r.userId === userId || (workspaceId && r.workspaceId === workspaceId));
+    return this.data.researchReports.filter(r => (workspaceId ? r.workspaceId === workspaceId : r.userId === userId));
   }
 
-  public getResearchReportById(id: string, userId: string): ScopedResearchReport | undefined {
-    return this.data.researchReports.find(r => r.id === id && r.userId === userId);
+  public getResearchReportById(id: string, userId?: string, workspaceId?: string): ScopedResearchReport | undefined {
+    return this.data.researchReports.find(r => r.id === id && (!workspaceId || r.workspaceId === workspaceId));
+  }
+
+  public deleteResearchReport(id: string, userId?: string, workspaceId?: string): boolean {
+    const index = this.data.researchReports.findIndex(r => r.id === id && (!workspaceId || r.workspaceId === workspaceId));
+    if (index === -1) return false;
+    this.data.researchReports.splice(index, 1);
+    this.queueSave();
+    return true;
   }
 
   public saveResearchReport(userId: string, workspaceId: string, report: CompanyResearchReport): ScopedResearchReport {
-    const existingIndex = this.data.researchReports.findIndex(r => r.id === report.id && r.userId === userId);
+    const existingIndex = this.data.researchReports.findIndex(r => r.id === report.id && (r.workspaceId === workspaceId || r.userId === userId));
     const record: ScopedResearchReport = {
       ...report,
       userId,

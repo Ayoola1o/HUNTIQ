@@ -110,7 +110,7 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
       if (activePitchDraft) {
         addDealToPipeline({
           companyName: newItemPayload.companyName || activePitchDraft.companyName,
-          domain: newItemPayload.domain || activePitchDraft.domain || 'company.com',
+          domain: newItemPayload.domain || activePitchDraft.domain || '',
           dealTitle: `${activePitchDraft.recommendedPackage || 'Search Modernization'} (${activePitchDraft.companyName})`,
           serviceName: activePitchDraft.recommendedPackage || 'Turnkey SEO Suite',
           dealValue: activePitchDraft.estimatedValue || 18000,

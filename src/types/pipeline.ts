@@ -15,7 +15,7 @@ export interface DealActivityLog {
 export interface PipelineDealItem {
   id: string;
   companyName: string;
-  domain: string;
+  domain?: string | null;
   dealTitle: string;
   serviceName: string;
   dealValue: number; // e.g. 18000 ($18,000)
@@ -27,6 +27,7 @@ export interface PipelineDealItem {
   ownerName: string;
   contactName: string;
   contactRole: string;
+  contactEmail?: string | null;
   contactAvatarBg: string;
   contactAvatarColor: string;
   lastActivity: string;

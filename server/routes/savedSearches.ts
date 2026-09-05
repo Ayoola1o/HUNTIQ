@@ -1,23 +1,38 @@
 import { Router } from 'express';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import type { ApiResponse } from '../types/api';
-import { savedSearchService } from '../services/savedSearchService';
+import { createSavedSearchRepository } from '../repositories/saved-searches';
+import type { AuthenticatedRequest } from '../middleware/auth';
 
 export const savedSearchesRouter = Router();
+const savedSearchRepository = createSavedSearchRepository();
 
 // 1. List saved searches with optional filters & KPI summary
-savedSearchesRouter.get('/saved-searches', (req: Request, res: Response) => {
+savedSearchesRouter.get('/saved-searches', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const searchType = typeof req.query.searchType === 'string' ? req.query.searchType : undefined;
   const query = typeof req.query.q === 'string' ? req.query.q : (typeof req.query.query === 'string' ? req.query.query : undefined);
   const monitoring = req.query.monitoring === 'true' ? true : (req.query.monitoring === 'false' ? false : undefined);
 
-  const { searches, kpiSummary } = savedSearchService.list({
+  const searches = await savedSearchRepository.list(workspaceId, {
     status,
     searchType,
     monitoring,
     query
   });
+
+  const activeMonitoring = searches.filter(s => s.monitoringEnabled).length;
+  const totalMatchesTracked = searches.reduce((acc, s) => acc + (s.totalMatches || 0), 0);
+  const newMatchesThisWeek = searches.reduce((acc, s) => acc + (s.newMatchesCount || 0), 0);
+  const highIntentAlerts = searches.reduce((acc, s) => acc + (s.highOpportunityCount || 0), 0);
+
+  const kpiSummary = {
+    activeMonitoring,
+    totalMatchesTracked,
+    newMatchesThisWeek,
+    highIntentAlerts
+  };
 
   const response: ApiResponse = {
     success: true,
@@ -35,9 +50,10 @@ savedSearchesRouter.get('/saved-searches', (req: Request, res: Response) => {
 });
 
 // 2. Get specific saved search by ID
-savedSearchesRouter.get('/saved-searches/:id', (req: Request, res: Response) => {
+savedSearchesRouter.get('/saved-searches/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const search = savedSearchService.getById(id);
+  const search = await savedSearchRepository.getById(id, workspaceId);
 
   if (!search) {
     const errorResponse: ApiResponse = {
@@ -62,47 +78,23 @@ savedSearchesRouter.get('/saved-searches/:id', (req: Request, res: Response) => 
 });
 
 // 3. Create a new saved search
-savedSearchesRouter.post('/saved-searches', (req: Request, res: Response) => {
-  const {
-    name,
-    description,
-    searchType,
-    naturalQuery,
-    filters,
-    signalsToWatch,
-    icpName,
-    monitoringEnabled,
-    alertFrequency,
-    alertSettings
-  } = req.body || {};
+savedSearchesRouter.post('/saved-searches', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const userId = req.user?.id;
+  const payload = req.body;
 
-  if (!name || typeof name !== 'string' || !name.trim()) {
+  if (!payload || !payload.name) {
     const errorResponse: ApiResponse = {
       success: false,
       error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Search name is required.'
+        code: 'INVALID_SAVED_SEARCH_PAYLOAD',
+        message: 'Search name is required to save search criteria.'
       }
     };
     return res.status(400).json(errorResponse);
   }
 
-  const created = savedSearchService.create({
-    name: name.trim(),
-    description,
-    searchType: searchType || 'ai_search',
-    naturalQuery,
-    filters: filters || {
-      industries: ['Technology & SaaS'],
-      locations: ['Lagos, Nigeria'],
-      companySizes: ['50 – 500']
-    },
-    signalsToWatch: signalsToWatch || ['Hiring Surge', 'Regional Expansion'],
-    icpName: icpName || 'Primary Growth ICP',
-    monitoringEnabled: monitoringEnabled !== false,
-    alertFrequency: alertFrequency || 'immediately',
-    alertSettings
-  });
+  const created = await savedSearchRepository.create(payload, workspaceId, userId);
 
   const response: ApiResponse = {
     success: true,
@@ -115,17 +107,20 @@ savedSearchesRouter.post('/saved-searches', (req: Request, res: Response) => {
   res.status(201).json(response);
 });
 
-// 4. Update saved search parameters
-savedSearchesRouter.patch('/saved-searches/:id', (req: Request, res: Response) => {
+// 4. Update an existing saved search
+savedSearchesRouter.patch('/saved-searches/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const updated = savedSearchService.update(id, req.body || {});
+  const updates = req.body;
+
+  const updated = await savedSearchRepository.update(id, updates, workspaceId);
 
   if (!updated) {
     const errorResponse: ApiResponse = {
       success: false,
       error: {
         code: 'SAVED_SEARCH_NOT_FOUND',
-        message: `Saved search with ID '${id}' was not found.`
+        message: `Saved search with ID '${id}' not found for update.`
       }
     };
     return res.status(404).json(errorResponse);
@@ -142,25 +137,30 @@ savedSearchesRouter.patch('/saved-searches/:id', (req: Request, res: Response) =
   res.status(200).json(response);
 });
 
-// 5. On-demand search execution
-savedSearchesRouter.post('/saved-searches/:id/run', (req: Request, res: Response) => {
+// 5. Toggle autonomous monitoring
+savedSearchesRouter.post('/saved-searches/:id/toggle-monitoring', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const result = savedSearchService.run(id);
+  const existing = await savedSearchRepository.getById(id, workspaceId);
 
-  if (!result) {
+  if (!existing) {
     const errorResponse: ApiResponse = {
       success: false,
       error: {
         code: 'SAVED_SEARCH_NOT_FOUND',
-        message: `Saved search with ID '${id}' was not found.`
+        message: `Saved search with ID '${id}' not found.`
       }
     };
     return res.status(404).json(errorResponse);
   }
 
+  const updated = await savedSearchRepository.update(id, {
+    monitoringEnabled: !existing.monitoringEnabled
+  }, workspaceId);
+
   const response: ApiResponse = {
     success: true,
-    data: result,
+    data: updated,
     meta: {
       timestamp: new Date().toISOString()
     }
@@ -169,118 +169,30 @@ savedSearchesRouter.post('/saved-searches/:id/run', (req: Request, res: Response
   res.status(200).json(response);
 });
 
-// 6. Pause monitoring
-savedSearchesRouter.post('/saved-searches/:id/pause', (req: Request, res: Response) => {
+// 6. Delete saved search
+savedSearchesRouter.delete('/saved-searches/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const result = savedSearchService.pause(id);
-
-  if (!result) {
-    return res.status(404).json({
-      success: false,
-      error: { code: 'SAVED_SEARCH_NOT_FOUND', message: `Saved search '${id}' not found.` }
-    });
-  }
-
-  res.status(200).json({
-    success: true,
-    data: result,
-    meta: { timestamp: new Date().toISOString() }
-  });
-});
-
-// 7. Resume monitoring
-savedSearchesRouter.post('/saved-searches/:id/resume', (req: Request, res: Response) => {
-  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const result = savedSearchService.resume(id);
-
-  if (!result) {
-    return res.status(404).json({
-      success: false,
-      error: { code: 'SAVED_SEARCH_NOT_FOUND', message: `Saved search '${id}' not found.` }
-    });
-  }
-
-  res.status(200).json({
-    success: true,
-    data: result,
-    meta: { timestamp: new Date().toISOString() }
-  });
-});
-
-// 8. Delete saved search
-savedSearchesRouter.delete('/saved-searches/:id', (req: Request, res: Response) => {
-  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const deleted = savedSearchService.delete(id);
+  const deleted = await savedSearchRepository.delete(id, workspaceId);
 
   if (!deleted) {
-    return res.status(404).json({
+    const errorResponse: ApiResponse = {
       success: false,
-      error: { code: 'SAVED_SEARCH_NOT_FOUND', message: `Saved search '${id}' not found.` }
-    });
+      error: {
+        code: 'SAVED_SEARCH_NOT_FOUND',
+        message: `Saved search with ID '${id}' not found for deletion.`
+      }
+    };
+    return res.status(404).json(errorResponse);
   }
 
-  res.status(200).json({
+  const response: ApiResponse = {
     success: true,
     data: { id, deleted: true },
-    meta: { timestamp: new Date().toISOString() }
-  });
-});
+    meta: {
+      timestamp: new Date().toISOString()
+    }
+  };
 
-// 9. Get search results / matched companies
-savedSearchesRouter.get('/saved-searches/:id/results', (req: Request, res: Response) => {
-  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const search = savedSearchService.getById(id);
-
-  if (!search) {
-    return res.status(404).json({
-      success: false,
-      error: { code: 'SAVED_SEARCH_NOT_FOUND', message: `Saved search '${id}' not found.` }
-    });
-  }
-
-  res.status(200).json({
-    success: true,
-    data: search.matchedCompanies,
-    meta: { total: search.matchedCompanies.length, timestamp: new Date().toISOString() }
-  });
-});
-
-// 10. Get activity history
-savedSearchesRouter.get('/saved-searches/:id/activity', (req: Request, res: Response) => {
-  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const search = savedSearchService.getById(id);
-
-  if (!search) {
-    return res.status(404).json({
-      success: false,
-      error: { code: 'SAVED_SEARCH_NOT_FOUND', message: `Saved search '${id}' not found.` }
-    });
-  }
-
-  res.status(200).json({
-    success: true,
-    data: search.activityHistory,
-    meta: { total: search.activityHistory.length, timestamp: new Date().toISOString() }
-  });
-});
-
-// 11. Update alert preferences
-savedSearchesRouter.patch('/saved-searches/:id/alert-settings', (req: Request, res: Response) => {
-  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const { alertSettings, alertFrequency } = req.body || {};
-
-  const updated = savedSearchService.updateAlertSettings(id, alertSettings, alertFrequency);
-
-  if (!updated) {
-    return res.status(404).json({
-      success: false,
-      error: { code: 'SAVED_SEARCH_NOT_FOUND', message: `Saved search '${id}' not found.` }
-    });
-  }
-
-  res.status(200).json({
-    success: true,
-    data: updated,
-    meta: { timestamp: new Date().toISOString() }
-  });
+  res.status(200).json(response);
 });

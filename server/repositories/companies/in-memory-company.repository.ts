@@ -55,11 +55,16 @@ export class InMemoryCompanyRepository implements CompanyRepository {
     }
   }
 
-  async list(params: CompanySearchParams = {}): Promise<CompanyItem[]> {
+  private readonly companyWorkspaces = new Map<string, string>();
+
+  async list(params: CompanySearchParams = {}, workspaceId?: string): Promise<CompanyItem[]> {
     const query = params.query?.toLowerCase();
     const industry = params.industry?.toLowerCase();
 
     return [...this.companies.values()].filter((company) => {
+      if (workspaceId && this.companyWorkspaces.has(company.id)) {
+        if (this.companyWorkspaces.get(company.id) !== workspaceId) return false;
+      }
       if (query && !company.name.toLowerCase().includes(query) && !company.domain.toLowerCase().includes(query)) {
         return false;
       }
@@ -70,11 +75,14 @@ export class InMemoryCompanyRepository implements CompanyRepository {
     });
   }
 
-  async getById(companyId: string): Promise<CompanyItem | undefined> {
+  async getById(companyId: string, workspaceId?: string): Promise<CompanyItem | undefined> {
+    if (workspaceId && this.companyWorkspaces.has(companyId)) {
+      if (this.companyWorkspaces.get(companyId) !== workspaceId) return undefined;
+    }
     return this.companies.get(companyId);
   }
 
-  async create(input: CreateCompanyInput): Promise<CompanyItem> {
+  async create(input: CreateCompanyInput, workspaceId?: string): Promise<CompanyItem> {
     const location = [input.city, input.state, input.country].filter(Boolean).join(', ');
     const company = emptyCompanyDefaults({
       id: randomUUID(),
@@ -91,6 +99,9 @@ export class InMemoryCompanyRepository implements CompanyRepository {
     });
 
     this.companies.set(company.id, company);
+    if (workspaceId) {
+      this.companyWorkspaces.set(company.id, workspaceId);
+    }
     return company;
   }
 }

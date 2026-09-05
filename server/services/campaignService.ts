@@ -41,8 +41,8 @@ export class CampaignService {
         contactName: cont.name,
         contactRole: cont.title || 'Decision Maker',
         companyName: comp?.name || 'Technology Company',
-        domain: comp?.domain || 'techcompany.com',
-        email: cont.email || `contact@${comp?.domain || 'tech.com'}`,
+        domain: comp?.domain || '',
+        email: cont.email || null,
         status: statuses[idx % statuses.length],
         opportunityScore: Math.min(99, 88 + (idx * 3) % 11),
         lastTouch: idx === 0 ? 'Replied yesterday' : idx === 1 ? 'Opened 2h ago' : 'Dispatched 1d ago'
@@ -294,8 +294,8 @@ export class CampaignService {
         contactName: cont.name,
         contactRole: cont.title || 'Decision Maker',
         companyName: comp?.name || 'Target Enterprise',
-        domain: comp?.domain || 'enterprise.com',
-        email: cont.email || `contact@${comp?.domain || 'company.com'}`,
+        domain: comp?.domain || '',
+        email: cont.email || null,
         status: 'pending',
         opportunityScore: Math.min(98, 86 + idx * 2),
         lastTouch: 'Initialized for automated dispatch'

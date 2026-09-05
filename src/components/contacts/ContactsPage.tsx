@@ -137,9 +137,9 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       const fallback: ContactItem = {
         id: `cont-${Date.now()}`,
         name: contactData.name || 'New Contact',
-        email: contactData.email || 'contact@company.com',
+        email: contactData.email || '',
         avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-        verificationStatus: 'verified',
+        verificationStatus: contactData.email ? 'verified' : 'unverified',
         companyName: contactData.companyName || 'Target Account',
         companyLocation: 'Lagos, Nigeria',
         companyIndustry: 'Technology',

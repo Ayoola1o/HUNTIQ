@@ -59,7 +59,7 @@ export class ResearchEngine {
           name: 'Babafemi Lawson',
           role: 'Head of People & Operations',
           department: 'Human Resources & Ops',
-          email: `babafemi@${company.domain || 'company.com'}`,
+          email: undefined,
           linkedin: `https://linkedin.com/in/babafemi-lawson`,
           confidence: 96
         },
@@ -67,7 +67,7 @@ export class ResearchEngine {
           name: 'Kemi Adeleke',
           role: 'Chief Technology Officer',
           department: 'Engineering & Product',
-          email: `kemi@${company.domain || 'company.com'}`,
+          email: undefined,
           linkedin: `https://linkedin.com/in/kemi-adeleke`,
           confidence: 94
         },
@@ -75,7 +75,7 @@ export class ResearchEngine {
           name: 'Tariq Al-Mansoor',
           role: 'VP Commercial & Growth',
           department: 'Sales',
-          email: `tariq@${company.domain || 'company.com'}`,
+          email: undefined,
           linkedin: `https://linkedin.com/in/tariq-almansoor`,
           confidence: 91
         }

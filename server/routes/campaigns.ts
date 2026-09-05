@@ -1,21 +1,32 @@
 import { Router } from 'express';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import type { ApiResponse } from '../types/api';
-import { campaignService } from '../services/campaignService';
+import { createCampaignRepository } from '../repositories/campaigns';
+import type { AuthenticatedRequest } from '../middleware/auth';
 
 export const campaignsRouter = Router();
+const campaignRepository = createCampaignRepository();
 
 // 1. List campaigns with optional filters & KPI summary
-campaignsRouter.get('/campaigns', (req: Request, res: Response) => {
+campaignsRouter.get('/campaigns', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const channel = typeof req.query.channel === 'string' ? req.query.channel : undefined;
   const query = typeof req.query.q === 'string' ? req.query.q : (typeof req.query.query === 'string' ? req.query.query : undefined);
 
-  const { campaigns, kpiSummary } = campaignService.list({
+  const campaigns = await campaignRepository.list(workspaceId, {
     status,
     channel,
     query
   });
+
+  const kpiSummary = {
+    activeCampaigns: campaigns.filter(c => c.status === 'active').length,
+    totalAudience: campaigns.reduce((acc, c) => acc + (c.audienceCount || 0), 0),
+    totalReplies: campaigns.reduce((acc, c) => acc + Math.round((c.sentCount || 0) * (c.replyRate || 0) / 100), 0),
+    opportunitiesCreated: campaigns.reduce((acc, c) => acc + (c.opportunitiesCreated || 0), 0),
+    pipelineGenerated: campaigns.reduce((acc, c) => acc + (c.expectedValue || 0), 0)
+  };
 
   const response: ApiResponse = {
     success: true,
@@ -33,9 +44,10 @@ campaignsRouter.get('/campaigns', (req: Request, res: Response) => {
 });
 
 // 2. Get single campaign details by ID
-campaignsRouter.get('/campaigns/:id', (req: Request, res: Response) => {
+campaignsRouter.get('/campaigns/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const campaign = campaignService.getById(id);
+  const campaign = await campaignRepository.getById(id, workspaceId);
 
   if (!campaign) {
     const errorResponse: ApiResponse = {
@@ -60,7 +72,9 @@ campaignsRouter.get('/campaigns/:id', (req: Request, res: Response) => {
 });
 
 // 3. Create a new campaign
-campaignsRouter.post('/campaigns', (req: Request, res: Response) => {
+campaignsRouter.post('/campaigns', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const userId = req.user?.id;
   const payload = req.body;
 
   if (!payload || !payload.name) {
@@ -74,7 +88,7 @@ campaignsRouter.post('/campaigns', (req: Request, res: Response) => {
     return res.status(400).json(errorResponse);
   }
 
-  const created = campaignService.create(payload);
+  const created = await campaignRepository.create(payload, workspaceId, userId);
 
   const response: ApiResponse = {
     success: true,
@@ -88,11 +102,12 @@ campaignsRouter.post('/campaigns', (req: Request, res: Response) => {
 });
 
 // 4. Update an existing campaign
-campaignsRouter.patch('/campaigns/:id', (req: Request, res: Response) => {
+campaignsRouter.patch('/campaigns/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const updates = req.body;
 
-  const updated = campaignService.update(id, updates);
+  const updated = await campaignRepository.update(id, updates, workspaceId);
 
   if (!updated) {
     const errorResponse: ApiResponse = {
@@ -117,11 +132,12 @@ campaignsRouter.patch('/campaigns/:id', (req: Request, res: Response) => {
 });
 
 // 5. Toggle campaign active/paused status
-campaignsRouter.post('/campaigns/:id/toggle', (req: Request, res: Response) => {
+campaignsRouter.post('/campaigns/:id/toggle', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const toggled = campaignService.toggleStatus(id);
+  const existing = await campaignRepository.getById(id, workspaceId);
 
-  if (!toggled) {
+  if (!existing) {
     const errorResponse: ApiResponse = {
       success: false,
       error: {
@@ -132,9 +148,12 @@ campaignsRouter.post('/campaigns/:id/toggle', (req: Request, res: Response) => {
     return res.status(404).json(errorResponse);
   }
 
+  const newStatus = existing.status === 'active' ? 'paused' : 'active';
+  const updated = await campaignRepository.update(id, { status: newStatus }, workspaceId);
+
   const response: ApiResponse = {
     success: true,
-    data: toggled,
+    data: updated,
     meta: {
       timestamp: new Date().toISOString()
     }
@@ -144,9 +163,10 @@ campaignsRouter.post('/campaigns/:id/toggle', (req: Request, res: Response) => {
 });
 
 // 6. Delete campaign
-campaignsRouter.delete('/campaigns/:id', (req: Request, res: Response) => {
+campaignsRouter.delete('/campaigns/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const deleted = campaignService.delete(id);
+  const deleted = await campaignRepository.delete(id, workspaceId);
 
   if (!deleted) {
     const errorResponse: ApiResponse = {

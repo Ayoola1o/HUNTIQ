@@ -34,7 +34,7 @@ export const RecentResearchTable: React.FC<RecentResearchTableProps> = ({
       const q = tableSearch.toLowerCase();
       return (
         rep.companyName.toLowerCase().includes(q) ||
-        rep.domain.toLowerCase().includes(q) ||
+        (rep.domain ? rep.domain.toLowerCase().includes(q) : false) ||
         rep.industry.toLowerCase().includes(q) ||
         rep.location.toLowerCase().includes(q)
       );

@@ -271,8 +271,9 @@ export async function createCampaign(payload: Partial<CampaignItem>): Promise<Ca
         contactName: 'Executive Lead',
         contactRole: 'Head of Operations',
         companyName: payload.targetAudienceName || 'Target Enterprise',
-        domain: 'company.com',
-        email: 'lead@company.com',
+        domain: null,
+        email: null,
+        emailStatus: 'not_found',
         status: 'pending',
         opportunityScore: 92,
         lastTouch: 'Scheduled for dispatch'

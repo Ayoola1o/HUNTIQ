@@ -4,9 +4,12 @@ import type { ApiResponse } from '../types/api';
 import { prospectorEngine } from '../../src/engine/prospectorEngine';
 import { geoProspectingEngine } from '../engine/geo/geoProspectingEngine';
 import { DigitalAuditEngine } from '../engine/audit/digitalAuditEngine';
-import { persistentStore, DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID } from '../db/persistentStore';
+import { createPipelineRepository } from '../repositories/pipeline';
+import { createMapsProvider } from '../providers/maps';
+import type { AuthenticatedRequest } from '../middleware/auth';
 
 export const prospectsRouter = Router();
+const pipelineRepository = createPipelineRepository();
 
 // 1. Natural Language & Filter Search
 prospectsRouter.post('/prospects/search', (req: Request, res: Response) => {
@@ -32,7 +35,57 @@ prospectsRouter.post('/prospects/search', (req: Request, res: Response) => {
   res.status(200).json(response);
 });
 
-// 2. Discover Geographically Scraped Prospects & Digital Gaps (Google Places / Geo Discovery)
+// 2. Apify Google Maps Place Discovery & Extraction Waterfall
+prospectsRouter.post('/prospects/discover-maps', async (req: AuthenticatedRequest, res: Response) => {
+  const { query, location, radiusKm, maxResults, category, minRating, minReviews, hasWebsite, hasPhone } = req.body || {};
+
+  if (!query && !category && !location) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'MISSING_SEARCH_QUERY',
+        message: 'Search query, category, or location is required for Maps discovery.'
+      },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+
+  try {
+    const mapsProvider = createMapsProvider();
+    const places = await mapsProvider.searchPlaces({
+      query: query || category || 'Businesses',
+      location: location || 'Lagos, Nigeria',
+      radiusKm: radiusKm ? Number(radiusKm) : 15,
+      maxResults: maxResults ? Number(maxResults) : 20,
+      category,
+      minRating: minRating ? Number(minRating) : undefined,
+      minReviews: minReviews ? Number(minReviews) : undefined,
+      hasWebsite: hasWebsite ? Boolean(hasWebsite) : undefined,
+      hasPhone: hasPhone ? Boolean(hasPhone) : undefined
+    });
+
+    res.status(200).json({
+      success: true,
+      data: places,
+      meta: {
+        total: places.length,
+        provider: process.env.APIFY_API_TOKEN ? 'APIFY_GOOGLE_MAPS' : 'APIFY_MOCK_FALLBACK',
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'MAPS_DISCOVERY_ERROR',
+        message: err.message || 'Failed to execute Maps discovery query.'
+      },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+});
+
+// 3. Discover Geographically Scraped Prospects & Digital Gaps (Google Places / Geo Discovery)
 prospectsRouter.post(['/prospects/scrape-geo', '/prospects/discover-geo'], (req: Request, res: Response) => {
   const { zoneId, district, radiusKm, categoryFilter, category, mode, filters, location } = req.body || {};
 
@@ -57,7 +110,7 @@ prospectsRouter.post(['/prospects/scrape-geo', '/prospects/discover-geo'], (req:
   res.status(200).json(response);
 });
 
-// 3. Run On-Demand Digital Audit for a Specific Entity
+// 4. Run On-Demand Digital Audit for a Specific Entity
 prospectsRouter.post('/prospects/:businessId/audit', (req: Request, res: Response) => {
   const { businessId } = req.params;
   const { name, category, website, phone, rating, reviewCount, address, district } = req.body || {};
@@ -85,8 +138,8 @@ prospectsRouter.post('/prospects/:businessId/audit', (req: Request, res: Respons
   res.status(200).json(response);
 });
 
-// 4. Batch Capture Scraped Businesses -> Companies, Leads, Opportunities & Pipeline
-prospectsRouter.post('/prospects/capture', (req: Request, res: Response) => {
+// 5. Batch Capture Scraped Businesses -> Pipeline Deals via Repository
+prospectsRouter.post('/prospects/capture', async (req: AuthenticatedRequest, res: Response) => {
   const { businesses, destination, pipelineStage } = req.body || {};
 
   if (!businesses || !Array.isArray(businesses) || businesses.length === 0) {
@@ -100,22 +153,33 @@ prospectsRouter.post('/prospects/capture', (req: Request, res: Response) => {
     return res.status(400).json(errorResponse);
   }
 
-  const capturedResults = businesses.map((b: any) => {
+  const uId = req.user?.id || 'user-default-001';
+  const wId = req.user?.workspaceId || 'ws-default-001';
+  const ownerName = req.user?.fullName || 'Ayoola Ade';
+
+  const capturedResults = [];
+
+  for (const b of businesses) {
     const isDigitalGap = b.targetType === 'LOCAL_COMMERCIAL' || !!b.digitalAudit;
     const dealValue = b.digitalAudit?.recommendedPackage?.estimatedValue?.max || 5000;
     const gapScore = b.digitalAudit?.gapScore || 75;
 
-    // Optional pipeline promotion
+    let cleanDomain = b.domain || '';
+    if (!cleanDomain && b.website) {
+      cleanDomain = b.website.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+    }
+    if (cleanDomain.includes('company.com')) {
+      cleanDomain = '';
+    }
+
+    // Pipeline promotion via Repository
     if (destination === 'PIPELINE' || destination === 'ALL') {
       const stage = pipelineStage || (gapScore >= 80 ? 'discovery' : 'contacted');
-      const uId = (req as any).user?.id || DEFAULT_USER_ID;
-      const wId = (req as any).user?.workspaceId || DEFAULT_WORKSPACE_ID;
-      const ownerName = (req as any).user?.fullName || 'Ayoola Ade';
 
-      persistentStore.savePipelineDeal(uId, wId, {
+      const savedDeal = await pipelineRepository.save({
         id: `deal-geo-${b.id || Math.random().toString(36).substring(2, 9)}`,
         companyName: b.name,
-        domain: b.domain || 'company.com',
+        domain: cleanDomain,
         dealTitle: `${b.name} - ${b.digitalAudit?.recommendedPackage?.packageName || 'Digital Modernization'}`,
         serviceName: b.digitalAudit?.recommendedPackage?.packageName || 'Digital Modernization Suite',
         dealValue,
@@ -138,34 +202,41 @@ prospectsRouter.post('/prospects/capture', (req: Request, res: Response) => {
             id: `act-${Date.now()}`,
             type: 'stage_change',
             title: 'Prospect Captured',
-            description: `Captured from Geo Radar with gap score ${gapScore}/100.`,
+            description: `Captured from Apify / Google Places Radar into ${stage} stage.`,
             timestamp: 'Just now',
             user: ownerName
           }
-        ]
+        ],
+        userId: uId,
+        workspaceId: wId
+      });
+
+      capturedResults.push({
+        id: b.id,
+        name: b.name,
+        capturedAs: 'DEAL',
+        dealId: savedDeal.id,
+        stage
+      });
+    } else {
+      capturedResults.push({
+        id: b.id,
+        name: b.name,
+        capturedAs: 'DISCOVERED_LEAD',
+        stage: 'discovery'
       });
     }
+  }
 
-    return {
-      id: b.id,
-      name: b.name,
-      captured: true,
-      destination: destination || 'OPPORTUNITIES',
-      gapScore,
-      dealValue
-    };
-  });
-
-  const response: ApiResponse = {
+  res.status(200).json({
     success: true,
     data: {
-      totalCaptured: capturedResults.length,
-      records: capturedResults
+      capturedCount: capturedResults.length,
+      destination: destination || 'PIPELINE',
+      items: capturedResults
     },
     meta: {
       timestamp: new Date().toISOString()
     }
-  };
-
-  res.status(201).json(response);
+  });
 });

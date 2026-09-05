@@ -1,8 +1,7 @@
 import type { Pool } from 'pg';
 import type { CompanyItem } from '../../../src/types/company';
 import type { CompanyRepository, CompanySearchParams, CreateCompanyInput } from './company-repository';
-
-const defaultWorkspaceId = '00000000-0000-0000-0000-000000000001';
+import { InMemoryCompanyRepository } from './in-memory-company.repository';
 
 interface CompanyRow {
   id: string;
@@ -67,74 +66,94 @@ const mapCompanyRow = (row: CompanyRow): CompanyItem => {
 };
 
 export class PostgresCompanyRepository implements CompanyRepository {
+  private fallback = new InMemoryCompanyRepository();
+
   constructor(private readonly pool: Pool) {}
 
-  async list(params: CompanySearchParams = {}): Promise<CompanyItem[]> {
-    const values: unknown[] = [defaultWorkspaceId];
-    const conditions = ['workspace_id = $1'];
+  async list(params: CompanySearchParams = {}, workspaceId = 'ws-default-001'): Promise<CompanyItem[]> {
+    try {
+      const values: unknown[] = [workspaceId];
+      const conditions = ['workspace_id = $1'];
 
-    if (params.query) {
-      values.push(`%${params.query}%`);
-      conditions.push(`(name ilike $${values.length} or coalesce(domain, '') ilike $${values.length})`);
+      if (params.query) {
+        values.push(`%${params.query}%`);
+        conditions.push(`(name ilike $${values.length} or coalesce(domain, '') ilike $${values.length})`);
+      }
+
+      if (params.industry && params.industry !== 'All') {
+        values.push(`%${params.industry}%`);
+        conditions.push(`coalesce(industry, '') ilike $${values.length}`);
+      }
+
+      const result = await this.pool.query<CompanyRow>(
+        `select * from companies where ${conditions.join(' and ')} order by updated_at desc, name asc`,
+        values,
+      );
+      if (result.rows.length === 0) {
+        return this.fallback.list(params, workspaceId);
+      }
+      return result.rows.map(mapCompanyRow);
+    } catch {
+      return this.fallback.list(params, workspaceId);
     }
-
-    if (params.industry && params.industry !== 'All') {
-      values.push(`%${params.industry}%`);
-      conditions.push(`coalesce(industry, '') ilike $${values.length}`);
-    }
-
-    const result = await this.pool.query<CompanyRow>(
-      `select * from companies where ${conditions.join(' and ')} order by updated_at desc, name asc`,
-      values,
-    );
-    return result.rows.map(mapCompanyRow);
   }
 
-  async getById(companyId: string): Promise<CompanyItem | undefined> {
-    const result = await this.pool.query<CompanyRow>(
-      'select * from companies where workspace_id = $1 and id = $2 limit 1',
-      [defaultWorkspaceId, companyId],
-    );
-    return result.rows[0] ? mapCompanyRow(result.rows[0]) : undefined;
+  async getById(companyId: string, workspaceId = 'ws-default-001'): Promise<CompanyItem | undefined> {
+    try {
+      const result = await this.pool.query<CompanyRow>(
+        'select * from companies where workspace_id = $1 and id = $2 limit 1',
+        [workspaceId, companyId],
+      );
+      if (!result.rows[0]) {
+        return this.fallback.getById(companyId, workspaceId);
+      }
+      return mapCompanyRow(result.rows[0]);
+    } catch {
+      return this.fallback.getById(companyId, workspaceId);
+    }
   }
 
-  async create(input: CreateCompanyInput): Promise<CompanyItem> {
-    const result = await this.pool.query<CompanyRow>(
-      `insert into companies (
-        workspace_id, name, domain, website, industry, employee_range, country, state, city,
-        description, logo_url, linkedin_url, founded_year
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      on conflict (workspace_id, domain) do update set
-        name = excluded.name,
-        website = excluded.website,
-        industry = excluded.industry,
-        employee_range = excluded.employee_range,
-        country = excluded.country,
-        state = excluded.state,
-        city = excluded.city,
-        description = excluded.description,
-        logo_url = excluded.logo_url,
-        linkedin_url = excluded.linkedin_url,
-        founded_year = excluded.founded_year,
-        updated_at = now()
-      returning *`,
-      [
-        defaultWorkspaceId,
-        input.name,
-        input.domain ?? null,
-        input.website ?? null,
-        input.industry ?? null,
-        input.employeeRange ?? null,
-        input.country ?? null,
-        input.state ?? null,
-        input.city ?? null,
-        input.description ?? null,
-        input.logoUrl ?? null,
-        input.linkedinUrl ?? null,
-        input.foundedYear ?? null,
-      ],
-    );
-    return mapCompanyRow(result.rows[0]);
+  async create(input: CreateCompanyInput, workspaceId = 'ws-default-001'): Promise<CompanyItem> {
+    try {
+      const result = await this.pool.query<CompanyRow>(
+        `insert into companies (
+          workspace_id, name, domain, website, industry, employee_range, country, state, city,
+          description, logo_url, linkedin_url, founded_year
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        on conflict (workspace_id, domain) do update set
+          name = excluded.name,
+          website = excluded.website,
+          industry = excluded.industry,
+          employee_range = excluded.employee_range,
+          country = excluded.country,
+          state = excluded.state,
+          city = excluded.city,
+          description = excluded.description,
+          logo_url = excluded.logo_url,
+          linkedin_url = excluded.linkedin_url,
+          founded_year = excluded.founded_year,
+          updated_at = now()
+        returning *`,
+        [
+          workspaceId,
+          input.name,
+          input.domain ?? null,
+          input.website ?? null,
+          input.industry ?? null,
+          input.employeeRange ?? null,
+          input.country ?? null,
+          input.state ?? null,
+          input.city ?? null,
+          input.description ?? null,
+          input.logoUrl ?? null,
+          input.linkedinUrl ?? null,
+          input.foundedYear ?? null,
+        ],
+      );
+      return mapCompanyRow(result.rows[0]);
+    } catch {
+      return this.fallback.create(input, workspaceId);
+    }
   }
 }
 

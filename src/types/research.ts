@@ -19,7 +19,8 @@ export interface ResearchDecisionMaker {
   avatarColor: string;
   influence: 'High' | 'Medium' | 'Low';
   relevance: number; // e.g. 96%
-  email?: string;
+  email?: string | null;
+  emailStatus?: 'verified' | 'unverified' | 'not_found';
   linkedin?: string;
   isBestContact?: boolean;
   reasonForContact?: string;
@@ -54,7 +55,7 @@ export interface CompanyResearchReport {
   id: string;
   companyId: string;
   companyName: string;
-  domain: string;
+  domain?: string | null;
   industry: string;
   location: string;
   logoBg: string;

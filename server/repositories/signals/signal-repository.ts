@@ -17,8 +17,8 @@ export interface SignalRecord {
 
 export interface SignalRepository {
   create(signal: Omit<SignalRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<SignalRecord>;
-  findByCompanyId(companyId: string): Promise<SignalRecord[]>;
-  findByType(type: string): Promise<SignalRecord[]>;
-  list(limit?: number, offset?: number): Promise<SignalRecord[]>;
-  deleteByCompanyId(companyId: string): Promise<number>;
+  findByCompanyId(companyId: string, workspaceId?: string): Promise<SignalRecord[]>;
+  findByType(type: string, workspaceId?: string): Promise<SignalRecord[]>;
+  list(limit?: number, offset?: number, workspaceId?: string): Promise<SignalRecord[]>;
+  deleteByCompanyId(companyId: string, workspaceId?: string): Promise<number>;
 }

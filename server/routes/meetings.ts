@@ -1,21 +1,36 @@
 import { Router } from 'express';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import type { ApiResponse } from '../types/api';
-import { meetingService } from '../services/meetingService';
+import { createMeetingRepository } from '../repositories/meetings';
+import type { AuthenticatedRequest } from '../middleware/auth';
 
 export const meetingsRouter = Router();
+const meetingRepository = createMeetingRepository();
 
 // 1. List meetings with optional filters & KPI summary
-meetingsRouter.get('/meetings', (req: Request, res: Response) => {
+meetingsRouter.get('/meetings', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const meetingType = typeof req.query.meetingType === 'string' ? req.query.meetingType : undefined;
   const query = typeof req.query.q === 'string' ? req.query.q : (typeof req.query.query === 'string' ? req.query.query : undefined);
 
-  const { meetings, kpiSummary } = meetingService.list({
+  const meetings = await meetingRepository.list(workspaceId, {
     status,
     meetingType,
     query
   });
+
+  const upcomingMeetings = meetings.filter(m => m.status === 'upcoming').length;
+  const todayCount = meetings.filter(m => m.scheduledTime.includes('Today')).length;
+  const completedThisMonth = meetings.filter(m => m.status === 'completed').length;
+  const bookedFromOutreach = 75; // percentage benchmark
+
+  const kpiSummary = {
+    upcomingMeetings,
+    todayCount,
+    completedThisMonth,
+    bookedFromOutreach
+  };
 
   const response: ApiResponse = {
     success: true,
@@ -32,10 +47,11 @@ meetingsRouter.get('/meetings', (req: Request, res: Response) => {
   res.status(200).json(response);
 });
 
-// 2. Get meeting by ID
-meetingsRouter.get('/meetings/:id', (req: Request, res: Response) => {
+// 2. Get specific meeting by ID
+meetingsRouter.get('/meetings/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const meeting = meetingService.getById(id);
+  const meeting = await meetingRepository.getById(id, workspaceId);
 
   if (!meeting) {
     const errorResponse: ApiResponse = {
@@ -60,21 +76,23 @@ meetingsRouter.get('/meetings/:id', (req: Request, res: Response) => {
 });
 
 // 3. Schedule a new meeting
-meetingsRouter.post('/meetings', (req: Request, res: Response) => {
+meetingsRouter.post('/meetings', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const userId = req.user?.id;
   const payload = req.body;
 
-  if (!payload || !payload.companyName || !payload.contactName) {
+  if (!payload || !payload.title || !payload.companyName) {
     const errorResponse: ApiResponse = {
       success: false,
       error: {
         code: 'INVALID_MEETING_PAYLOAD',
-        message: 'Company name and contact name are required to schedule a meeting.'
+        message: 'Meeting title and company name are required to schedule a meeting.'
       }
     };
     return res.status(400).json(errorResponse);
   }
 
-  const created = meetingService.create(payload);
+  const created = await meetingRepository.create(payload, workspaceId, userId);
 
   const response: ApiResponse = {
     success: true,
@@ -87,19 +105,20 @@ meetingsRouter.post('/meetings', (req: Request, res: Response) => {
   res.status(201).json(response);
 });
 
-// 4. Update meeting fields
-meetingsRouter.patch('/meetings/:id', (req: Request, res: Response) => {
+// 4. Update meeting details or status
+meetingsRouter.patch('/meetings/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const updates = req.body;
 
-  const updated = meetingService.update(id, updates);
+  const updated = await meetingRepository.update(id, updates, workspaceId);
 
   if (!updated) {
     const errorResponse: ApiResponse = {
       success: false,
       error: {
         code: 'MEETING_NOT_FOUND',
-        message: `Meeting with ID '${id}' was not found.`
+        message: `Meeting with ID '${id}' not found for update.`
       }
     };
     return res.status(404).json(errorResponse);
@@ -116,19 +135,18 @@ meetingsRouter.patch('/meetings/:id', (req: Request, res: Response) => {
   res.status(200).json(response);
 });
 
-// 5. Update debrief notes
-meetingsRouter.patch('/meetings/:id/notes', (req: Request, res: Response) => {
+// 5. Cancel meeting
+meetingsRouter.post('/meetings/:id/cancel', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const { notes } = req.body || {};
-
-  const updated = meetingService.updateNotes(id, notes || '');
+  const updated = await meetingRepository.update(id, { status: 'cancelled' }, workspaceId);
 
   if (!updated) {
     const errorResponse: ApiResponse = {
       success: false,
       error: {
         code: 'MEETING_NOT_FOUND',
-        message: `Meeting with ID '${id}' was not found.`
+        message: `Meeting with ID '${id}' not found.`
       }
     };
     return res.status(404).json(errorResponse);
@@ -146,16 +164,17 @@ meetingsRouter.patch('/meetings/:id/notes', (req: Request, res: Response) => {
 });
 
 // 6. Delete meeting
-meetingsRouter.delete('/meetings/:id', (req: Request, res: Response) => {
+meetingsRouter.delete('/meetings/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const deleted = meetingService.delete(id);
+  const deleted = await meetingRepository.delete(id, workspaceId);
 
   if (!deleted) {
     const errorResponse: ApiResponse = {
       success: false,
       error: {
         code: 'MEETING_NOT_FOUND',
-        message: `Meeting with ID '${id}' was not found for deletion.`
+        message: `Meeting with ID '${id}' not found for deletion.`
       }
     };
     return res.status(404).json(errorResponse);

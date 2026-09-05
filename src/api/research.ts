@@ -292,7 +292,7 @@ export async function fetchResearchReports(params?: {
       const q = params.query.toLowerCase().trim();
       list = list.filter(r =>
         r.companyName.toLowerCase().includes(q) ||
-        r.domain.toLowerCase().includes(q) ||
+        (r.domain ? r.domain.toLowerCase().includes(q) : false) ||
         r.industry.toLowerCase().includes(q)
       );
     }

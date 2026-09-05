@@ -15,8 +15,9 @@ export interface TargetProspectItem {
   contactName: string;
   contactRole: string;
   companyName: string;
-  domain: string;
-  email: string;
+  domain?: string | null;
+  email?: string | null;
+  emailStatus?: 'verified' | 'unverified' | 'not_found';
   status: 'pending' | 'delivered' | 'opened' | 'replied' | 'converted';
   opportunityScore: number;
   lastTouch: string;

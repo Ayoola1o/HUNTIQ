@@ -43,7 +43,7 @@ researchRouter.get('/research/reports', (req: AuthenticatedRequest, res: Respons
  */
 researchRouter.get('/research/reports/:id', (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const report = researchService.getById(id, req.user?.id);
+  const report = researchService.getById(id, req.user?.id, req.user?.workspaceId);
 
   if (!report) {
     return res.status(404).json({
@@ -141,9 +141,9 @@ researchRouter.patch('/research/reports/:id', (req: AuthenticatedRequest, res: R
  * DELETE /api/research/reports/:id
  * Delete a research report
  */
-researchRouter.delete('/research/reports/:id', (req: Request, res: Response) => {
+researchRouter.delete('/research/reports/:id', (req: AuthenticatedRequest, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const deleted = researchService.deleteReport(id);
+  const deleted = researchService.deleteReport(id, req.user?.id, req.user?.workspaceId);
 
   if (!deleted) {
     return res.status(404).json({

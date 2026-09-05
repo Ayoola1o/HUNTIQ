@@ -43,9 +43,10 @@ export interface ResearchDossier {
     name: string;
     role: string;
     department: string;
-    email: string;
-    phone?: string;
-    linkedin: string;
+    email?: string | null;
+    emailStatus?: 'verified' | 'unverified' | 'not_found';
+    phone?: string | null;
+    linkedin?: string;
     confidence: number;
   }[];
   triggerEvents: SignalItem[];

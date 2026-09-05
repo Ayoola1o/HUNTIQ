@@ -67,8 +67,8 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
         const cName = initialPayload.companyName || '';
         const ctName = initialPayload.contactName || 'Managing Director / Business Owner';
         const ctRole = initialPayload.contactRole || 'Managing Director / Owner';
-        const dName = initialPayload.domain || (cName ? `${cName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com` : '');
-        const eMail = initialPayload.email || (ctName && dName ? `${ctName.toLowerCase().split(' ')[0]}@${dName}` : `contact@${dName || 'company.com'}`);
+        const dName = initialPayload.domain && !initialPayload.domain.includes('company.com') ? initialPayload.domain : '';
+        const eMail = initialPayload.email && !initialPayload.email.includes('company.com') ? initialPayload.email : '';
         const pNum = initialPayload.phone || '';
 
         setCompanyName(cName);
@@ -531,14 +531,21 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
-                    {channel === 'phone' ? 'Phone Number' : 'Email Address'}
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155' }}>
+                      {channel === 'phone' ? 'Phone Number' : 'Email Address'}
+                    </label>
+                    {channel === 'email' && !email && (
+                      <span style={{ fontSize: '10.5px', color: '#dc2626', fontWeight: 600, background: '#fef2f2', padding: '1px 6px', borderRadius: '4px', border: '1px solid #fecaca' }}>
+                        Email not found
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
-                    value={channel === 'phone' ? phone : email}
+                    value={channel === 'phone' ? (phone || '') : (email || '')}
                     onChange={(e) => channel === 'phone' ? setPhone(e.target.value) : setEmail(e.target.value)}
-                    placeholder={channel === 'phone' ? '+234 801 234 5678' : 'contact@company.com'}
+                    placeholder={channel === 'phone' ? '+234 801 234 5678' : 'name@verified-domain.com (or use InMail/Call)'}
                     style={{
                       width: '100%',
                       padding: '8px 12px',

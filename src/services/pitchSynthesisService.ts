@@ -5,6 +5,8 @@ export interface GeneratedPitchContent {
   emailBody: string;
   linkedInBody: string;
   callScript: string;
+  hasVerifiedEmail: boolean;
+  emailStatus: 'verified' | 'unverified' | 'not_found';
 }
 
 export function synthesizePitch(payload: Partial<ProspectPitchPayload>, senderName: string = 'Ayoola Ade'): GeneratedPitchContent {
@@ -16,6 +18,9 @@ export function synthesizePitch(payload: Partial<ProspectPitchPayload>, senderNa
   const score = payload.seoScore || payload.opportunityScore || 78;
   const pkg = payload.recommendedPackage || 'Turnkey Search & Client Acquisition Suite';
 
+  const hasVerifiedEmail = Boolean(payload.email && payload.email.trim() && !payload.email.includes('company.com'));
+  const emailStatus: 'verified' | 'unverified' | 'not_found' = payload.emailStatus || (hasVerifiedEmail ? 'verified' : 'not_found');
+
   const subject = payload.suggestedSubject || (
     payload.topCompetitors?.length
       ? `Quick note: ${company} vs ${competitor} search ranking on Google`
@@ -24,7 +29,11 @@ export function synthesizePitch(payload: Partial<ProspectPitchPayload>, senderNa
 
   const keywordsList = payload.commercialIntentKeywords?.slice(0, 3).map(k => `"${k}"`).join(', ') || `"${topKw}"`;
 
-  const emailBody = payload.suggestedBody || `Hi ${contact},
+  const emailNotice = !hasVerifiedEmail
+    ? `[NOTE: Verified email address not found for this contact. Discover via Hunter enrichment or reach out via LinkedIn InMail / Phone Battlecard.]\n\n`
+    : '';
+
+  const emailBody = payload.suggestedBody || `${emailNotice}Hi ${contact},
 
 I was reviewing commercial search visibility across your sector and noticed that ${company} is currently losing top search placement to ${competitor} for key commercial inquiries like ${keywordsList}.
 
@@ -55,6 +64,8 @@ We've prepared a 3-step action plan to help you reclaim that top placement. Do y
     subject,
     emailBody,
     linkedInBody,
-    callScript
+    callScript,
+    hasVerifiedEmail,
+    emailStatus
   };
 }

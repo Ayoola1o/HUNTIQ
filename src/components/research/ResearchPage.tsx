@@ -101,13 +101,14 @@ export const ResearchPage: React.FC<ResearchPageProps> = ({
     // Check if report exists
     const match = reports.find(r => 
       r.companyName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      r.domain.toLowerCase().includes(searchQuery.toLowerCase())
+      (r.domain ? r.domain.toLowerCase().includes(searchQuery.toLowerCase()) : false)
     );
 
     if (match) {
       setSelectedReport(match);
     } else {
-      handleCompleteNewResearch(searchQuery, `${searchQuery.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`);
+      const detectedDomain = searchQuery.includes('.') ? searchQuery.toLowerCase().trim() : '';
+      handleCompleteNewResearch(searchQuery, detectedDomain);
     }
   };
 

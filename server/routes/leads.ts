@@ -1,20 +1,23 @@
 import { Router } from 'express';
 import type { Response } from 'express';
 import type { ApiResponse } from '../types/api';
-import { db } from '../db/memoryStore';
+import { createLeadRepository } from '../repositories/leads';
+import { createCompanyRepository } from '../repositories/companies';
 import { serverScoringEngine } from '../engine/scoringEngine';
 import { AutomaticLeadEngine } from '../engine/leads/automaticLeadEngine';
 import { leadService } from '../services/leadService';
 import type { AuthenticatedRequest } from '../middleware/auth';
 
 export const leadsRouter = Router();
+const leadRepository = createLeadRepository();
+const companyRepository = createCompanyRepository();
 
 /**
  * GET /api/leads
  * Query qualified leads
  */
 leadsRouter.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const { status } = req.query as { status?: string };
 
   const list = await leadService.listLeads(workspaceId, status);
@@ -34,7 +37,7 @@ leadsRouter.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
  * Evaluate company, score opportunity, and auto-generate lead & pipeline deal if threshold met
  */
 leadsRouter.post('/leads/evaluate', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const { companyId } = req.body || {};
 
   if (!companyId) {
@@ -45,7 +48,7 @@ leadsRouter.post('/leads/evaluate', async (req: AuthenticatedRequest, res: Respo
     });
   }
 
-  const company = db.getCompanyById(companyId, workspaceId);
+  const company = await companyRepository.getById(companyId, workspaceId);
   if (!company) {
     return res.status(404).json({
       success: false,
@@ -54,23 +57,18 @@ leadsRouter.post('/leads/evaluate', async (req: AuthenticatedRequest, res: Respo
     });
   }
 
-  const jobs = db.getJobsByCompany(companyId, workspaceId);
-  const signals = db.getSignalsByCompany(companyId, workspaceId);
-  const contacts = db.getContactsByCompany(companyId, workspaceId);
+  const evaluation = serverScoringEngine.evaluate(
+    company as any,
+    [],
+    [],
+    []
+  );
 
-  // Compute live multi-factor evaluation
-  const evaluation = serverScoringEngine.evaluate(company, jobs, signals, contacts);
-
-  let lead = db.leads.find(l => l.companyId === companyId && l.workspaceId === workspaceId);
+  let lead = await leadRepository.findById(companyId, workspaceId);
 
   if (!lead && evaluation.totalScore >= 75) {
-    const primaryContact = contacts.find(c => c.seniority === 'DIRECTOR' || c.seniority === 'VP') || contacts[0];
-    const topSignal = signals[0];
-
     lead = await leadService.createLead(workspaceId, {
       companyId: company.id,
-      contactId: primaryContact?.id,
-      signalId: topSignal?.id,
       score: evaluation.totalScore,
       tier: evaluation.tier,
       status: 'NEW',
@@ -98,7 +96,7 @@ leadsRouter.post('/leads/evaluate', async (req: AuthenticatedRequest, res: Respo
  * Runs autonomous qualification across all workspace accounts
  */
 leadsRouter.post('/leads/auto-qualify', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
 
   try {
     const result = await AutomaticLeadEngine.runAutoQualification(workspaceId);
@@ -122,7 +120,7 @@ leadsRouter.post('/leads/auto-qualify', async (req: AuthenticatedRequest, res: R
  * Promotes a lead directly to the active CRM pipeline
  */
 leadsRouter.post('/leads/:id/promote', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const { id } = req.params;
   const { customDealValue } = req.body || {};
 
@@ -147,23 +145,18 @@ leadsRouter.post('/leads/:id/promote', async (req: AuthenticatedRequest, res: Re
  * PATCH /api/leads/:id/status
  * Updates lead status
  */
-leadsRouter.patch('/leads/:id/status', (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+leadsRouter.patch('/leads/:id/status', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const { id } = req.params;
   const { status } = req.body || {};
 
-  const lead = db.leads.find(l => l.id === id && l.workspaceId === workspaceId);
+  const lead = await leadRepository.updateStatus(id, status, workspaceId);
   if (!lead) {
     return res.status(404).json({
       success: false,
       error: { code: 'LEAD_NOT_FOUND', message: `Lead '${id}' not found.` },
       meta: { timestamp: new Date().toISOString() }
     });
-  }
-
-  if (status) {
-    lead.status = status;
-    lead.updatedAt = new Date().toISOString();
   }
 
   res.status(200).json({

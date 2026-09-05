@@ -27,7 +27,9 @@ jobsRouter.post('/jobs/sync', async (req: AuthenticatedRequest, res: Response) =
     // Auto-resolve company if not in database
     if (!targetCompany) {
       const resolvedName = companyName || (domain ? domain.split('.')[0] : boardToken || 'Target Account');
-      const resolvedDomain = domain || (boardToken ? `${boardToken}.com` : 'company.com');
+      const resolvedDomain = domain 
+        ? domain.toLowerCase().trim() 
+        : (boardToken ? `${boardToken.toLowerCase()}.internal` : `${resolvedName.toLowerCase().replace(/[^a-z0-9]/g, '')}.internal`);
 
       targetCompany = await companyService.upsertCompany(workspaceId, {
         name: resolvedName.charAt(0).toUpperCase() + resolvedName.slice(1),

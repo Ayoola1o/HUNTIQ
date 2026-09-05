@@ -14,21 +14,22 @@ export class InMemorySignalRepository implements SignalRepository {
     return record;
   }
 
-  async findByCompanyId(companyId: string): Promise<SignalRecord[]> {
-    return this.signals.filter(s => s.companyId === companyId);
+  async findByCompanyId(companyId: string, workspaceId?: string): Promise<SignalRecord[]> {
+    return this.signals.filter(s => s.companyId === companyId && (!workspaceId || s.workspaceId === workspaceId));
   }
 
-  async findByType(type: string): Promise<SignalRecord[]> {
-    return this.signals.filter(s => s.type === type);
+  async findByType(type: string, workspaceId?: string): Promise<SignalRecord[]> {
+    return this.signals.filter(s => s.type === type && (!workspaceId || s.workspaceId === workspaceId));
   }
 
-  async list(limit = 50, offset = 0): Promise<SignalRecord[]> {
-    return this.signals.slice(offset, offset + limit);
+  async list(limit = 50, offset = 0, workspaceId?: string): Promise<SignalRecord[]> {
+    const filtered = workspaceId ? this.signals.filter(s => s.workspaceId === workspaceId) : this.signals;
+    return filtered.slice(offset, offset + limit);
   }
 
-  async deleteByCompanyId(companyId: string): Promise<number> {
+  async deleteByCompanyId(companyId: string, workspaceId?: string): Promise<number> {
     const initial = this.signals.length;
-    this.signals = this.signals.filter(s => s.companyId !== companyId);
+    this.signals = this.signals.filter(s => !(s.companyId === companyId && (!workspaceId || s.workspaceId === workspaceId)));
     return initial - this.signals.length;
   }
 }

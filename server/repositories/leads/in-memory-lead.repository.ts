@@ -32,20 +32,24 @@ export class InMemoryLeadRepository implements LeadRepository {
     return this.create(lead);
   }
 
-  async findByCompanyId(companyId: string): Promise<LeadRecord[]> {
-    return this.leads.filter(l => l.companyId === companyId);
+  async findByCompanyId(companyId: string, workspaceId?: string): Promise<LeadRecord[]> {
+    return this.leads.filter(l => l.companyId === companyId && (!workspaceId || l.workspaceId === workspaceId));
   }
 
-  async findById(id: string): Promise<LeadRecord | null> {
-    return this.leads.find(l => l.id === id) || null;
+  async findById(id: string, workspaceId?: string): Promise<LeadRecord | null> {
+    return this.leads.find(l => l.id === id && (!workspaceId || l.workspaceId === workspaceId)) || null;
   }
 
-  async list(limit = 50, offset = 0): Promise<LeadRecord[]> {
-    return this.leads.slice(offset, offset + limit);
+  async list(workspaceId?: string, limit = 50, offset = 0): Promise<LeadRecord[]> {
+    let filtered = this.leads;
+    if (workspaceId) {
+      filtered = filtered.filter(l => l.workspaceId === workspaceId);
+    }
+    return filtered.slice(offset, offset + limit);
   }
 
-  async updateStatus(id: string, status: LeadRecord['status']): Promise<LeadRecord | null> {
-    const lead = this.leads.find(l => l.id === id);
+  async updateStatus(id: string, status: LeadRecord['status'], workspaceId?: string): Promise<LeadRecord | null> {
+    const lead = this.leads.find(l => l.id === id && (!workspaceId || l.workspaceId === workspaceId));
     if (!lead) return null;
     lead.status = status;
     lead.updatedAt = new Date();

@@ -85,7 +85,7 @@ export class InMemoryPipelineRepository implements PipelineRepository {
       priority: deal.priority || 'Medium',
       contactName: deal.contactName || 'Managing Director',
       contactRole: deal.contactRole || 'Owner',
-      contactEmail: deal.contactEmail || 'contact@prospect.com',
+      contactEmail: deal.contactEmail || undefined,
       expectedCloseDate: deal.expectedCloseDate || 'In 30 days',
       lastActivity: deal.lastActivity || 'Created in Pipeline',
       lastActivityType: deal.lastActivityType || 'signal',

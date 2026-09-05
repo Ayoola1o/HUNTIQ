@@ -4,19 +4,17 @@ import type { ApiResponse } from '../types/api';
 import { createCompanyRepository, InMemoryCompanyRepository } from '../repositories/companies';
 import { CompanyResolver } from '../engine';
 
+import type { AuthenticatedRequest } from '../middleware/auth';
+
 export const companiesRouter = Router();
 const companyRepository = createCompanyRepository();
 
-companiesRouter.get('/companies', async (req: Request, res: Response) => {
+companiesRouter.get('/companies', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const query = typeof req.query.q === 'string' ? req.query.q : undefined;
   const industry = typeof req.query.industry === 'string' ? req.query.industry : undefined;
   
-  let list: any[] = [];
-  try {
-    list = await companyRepository.list({ query, industry });
-  } catch {
-    list = await new InMemoryCompanyRepository().list({ query, industry });
-  }
+  const list = await companyRepository.list({ query, industry }, workspaceId);
 
   const response: ApiResponse = {
     success: true,
@@ -30,7 +28,8 @@ companiesRouter.get('/companies', async (req: Request, res: Response) => {
   res.status(200).json(response);
 });
 
-companiesRouter.post('/companies', async (req: Request, res: Response) => {
+companiesRouter.post('/companies', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const {
     name,
     domain,
@@ -67,7 +66,7 @@ companiesRouter.post('/companies', async (req: Request, res: Response) => {
     logoUrl: typeof logoUrl === 'string' ? logoUrl.trim() : undefined,
     linkedinUrl: typeof linkedinUrl === 'string' ? linkedinUrl.trim() : undefined,
     foundedYear: Number.isFinite(Number(foundedYear)) ? Number(foundedYear) : undefined,
-  });
+  }, workspaceId);
 
   return res.status(201).json({
     success: true,
@@ -76,9 +75,10 @@ companiesRouter.post('/companies', async (req: Request, res: Response) => {
   });
 });
 
-companiesRouter.get('/companies/:id', async (req: Request, res: Response) => {
+companiesRouter.get('/companies/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId || 'ws-default-001';
   const companyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const company = await companyRepository.getById(companyId);
+  const company = await companyRepository.getById(companyId, workspaceId);
 
   if (!company) {
     return res.status(404).json({

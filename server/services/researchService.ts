@@ -268,7 +268,7 @@ export class ResearchService {
       const q = params.query.toLowerCase().trim();
       list = list.filter(r =>
         r.companyName.toLowerCase().includes(q) ||
-        r.domain.toLowerCase().includes(q) ||
+        (r.domain && r.domain.toLowerCase().includes(q)) ||
         r.industry.toLowerCase().includes(q) ||
         r.location.toLowerCase().includes(q) ||
         r.executiveSummary.toLowerCase().includes(q)
@@ -285,8 +285,8 @@ export class ResearchService {
     return { reports: list, kpiSummary };
   }
 
-  public getById(id: string, userId?: string): CompanyResearchReport | undefined {
-    return persistentStore.getResearchReportById(id, userId || DEFAULT_USER_ID);
+  public getById(id: string, userId?: string, workspaceId?: string): CompanyResearchReport | undefined {
+    return persistentStore.getResearchReportById(id, userId, workspaceId);
   }
 
   public generateReport(
@@ -302,7 +302,7 @@ export class ResearchService {
     // Generate AI Dossier
     const dossier = researchEngine.generateDossier(companyName);
     const id = `res-${Date.now()}`;
-    const cleanDomain = domain || `${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+    const cleanDomain = domain && domain.trim().length > 0 ? domain.trim() : null;
     const cleanIndustry = industry || dossier.industry || 'Technology & SaaS';
 
     const newReport: CompanyResearchReport = {
@@ -378,7 +378,8 @@ export class ResearchService {
           avatarColor: '#2563eb',
           influence: 'High',
           relevance: 95,
-          email: `leadership@${cleanDomain}`,
+          email: null,
+          emailStatus: 'not_found',
           isBestContact: true,
           reasonForContact: 'Key decision maker for strategic vendor partnerships.'
         }
@@ -404,11 +405,11 @@ export class ResearchService {
           close: `Could we connect for 10 minutes next week?`
         },
         whatsApp: {
-          text: `Hi! Ayoola from Peak Consulting here. Sent a brief note to your email regarding scaling frameworks for ${companyName}. Looking forward to connecting!`
+          text: `Hi! Ayoola from Peak Consulting here. Sent a brief note regarding scaling frameworks for ${companyName}. Looking forward to connecting!`
         }
       },
       sources: [
-        { id: `src-${Date.now()}`, sourceType: 'website', title: `${companyName} Corporate Portal`, sourceUrl: `https://${cleanDomain}`, publishedAt: 'Recently', retrievedAt: 'Just now', claimReference: 'Company profile and operational details verified.', confidence: 95 }
+        { id: `src-${Date.now()}`, sourceType: 'website', title: `${companyName} Corporate Portal`, sourceUrl: cleanDomain ? `https://${cleanDomain}` : `https://${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}`, publishedAt: 'Recently', retrievedAt: 'Just now', claimReference: 'Company profile and operational details verified.', confidence: 95 }
       ]
     };
 
@@ -418,7 +419,7 @@ export class ResearchService {
   public refreshReport(id: string, userId?: string, workspaceId?: string): CompanyResearchReport | undefined {
     const uId = userId || DEFAULT_USER_ID;
     const wId = workspaceId || DEFAULT_WORKSPACE_ID;
-    const current = persistentStore.getResearchReportById(id, uId);
+    const current = persistentStore.getResearchReportById(id, uId, wId);
     if (!current) return undefined;
 
     const updated: CompanyResearchReport = {
@@ -446,7 +447,7 @@ export class ResearchService {
   public updateReport(id: string, updates: Partial<CompanyResearchReport>, userId?: string, workspaceId?: string): CompanyResearchReport | undefined {
     const uId = userId || DEFAULT_USER_ID;
     const wId = workspaceId || DEFAULT_WORKSPACE_ID;
-    const current = persistentStore.getResearchReportById(id, uId);
+    const current = persistentStore.getResearchReportById(id, uId, wId);
     if (!current) return undefined;
 
     const updated = {
@@ -458,8 +459,8 @@ export class ResearchService {
     return persistentStore.saveResearchReport(uId, wId, updated);
   }
 
-  public deleteReport(id: string): boolean {
-    return true;
+  public deleteReport(id: string, userId?: string, workspaceId?: string): boolean {
+    return persistentStore.deleteResearchReport(id, userId, workspaceId);
   }
 }
 

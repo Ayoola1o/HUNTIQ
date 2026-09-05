@@ -15,9 +15,10 @@ export interface OutreachItem {
   contactName: string;
   contactRole: string;
   companyName: string;
-  domain: string;
-  email: string;
-  phone?: string;
+  domain?: string | null;
+  email?: string | null;
+  emailStatus?: 'verified' | 'unverified' | 'not_found';
+  phone?: string | null;
   avatarBg: string;
   avatarColor: string;
   subject: string;
@@ -41,13 +42,14 @@ export interface OutreachKpiSummary {
 
 export interface ProspectPitchPayload {
   companyName: string;
-  domain?: string;
-  phone?: string;
-  address?: string;
-  district?: string;
-  contactName?: string;
-  contactRole?: string;
-  email?: string;
+  domain?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  district?: string | null;
+  contactName?: string | null;
+  contactRole?: string | null;
+  email?: string | null;
+  emailStatus?: 'verified' | 'unverified' | 'not_found';
   opportunityScore?: number;
   seoScore?: number;
   competitorGapScore?: number;
