@@ -6,7 +6,7 @@ import {
   Send, 
   Copy, 
   Check, 
-  Zap 
+  Zap
 } from 'lucide-react';
 import type { GeoScrapedBusiness } from '../../engine/geoScraperEngine';
 import { useHuntiq } from '../../context/HuntiqContext';

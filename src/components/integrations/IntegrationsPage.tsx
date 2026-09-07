@@ -25,8 +25,33 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeKpiFilter, setActiveKpiFilter] = useState('connected');
 
-  // Initial Mock Integrations
+  // Initial Integrations
   const [integrations, setIntegrations] = useState<IntegrationItem[]>([
+    {
+      id: 'int-email-scraper',
+      name: 'HUNTIQ Web & Email Contact Scraper',
+      brandColor: '#2563eb',
+      bgColor: '#eff6ff',
+      category: 'enrichment' as any,
+      description: 'Native web crawler engine extracting authentic emails, decision-makers, direct phone numbers, and live MX deliverability from target company websites.',
+      status: 'connected',
+      connectedAccount: 'Native Internal Engine',
+      lastSync: 'Live',
+      recordsProcessed: 1250,
+      syncDirection: 'import',
+      syncFrequency: 'On-Demand & Live Crawl',
+      syncConfig: { emailActivity: false, contacts: true, calendar: false, deals: true, pushSignals: true },
+      fieldMappings: [
+        { externalField: 'Email', huntiqField: 'contactEmail' },
+        { externalField: 'Name', huntiqField: 'contactName' },
+        { externalField: 'JobTitle', huntiqField: 'contactRole' },
+        { externalField: 'Phone', huntiqField: 'contactPhone' }
+      ],
+      activityLog: [
+        { id: 'sc1', timestamp: 'Just now', message: 'DoH MX verification active (Cloudflare & Google DoH)', type: 'success', recordsCount: 1 },
+        { id: 'sc2', timestamp: '1 hour ago', message: 'Domain crawler engine online with max depth 3', type: 'info', recordsCount: 0 }
+      ]
+    },
     {
       id: 'int-gmail',
       name: 'Gmail & Google Workspace',

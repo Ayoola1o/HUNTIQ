@@ -13,3 +13,5 @@ export const createOutreachRepository = (): OutreachRepository => {
   }
   return new InMemoryOutreachRepository();
 };
+
+export const outreachRepository = createOutreachRepository();

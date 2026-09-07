@@ -1,5 +1,7 @@
 import { db } from '../db/memoryStore';
 import type { DbContact, DbCompany } from '../db/types';
+import { scrapeEmailRecordsFromWebsite } from '../engine/scraper/webScraper';
+import { ScrapedEmailRecord } from '../engine/scraper/types';
 
 export interface EnrichmentResult {
   company: DbCompany;
@@ -10,96 +12,94 @@ export interface EnrichmentResult {
 
 export class EnrichmentService {
   /**
-   * Enriches a company with verified decision makers and discovers email patterns.
+   * Enriches a company by crawling its website to discover authentic emails,
+   * decision-makers, phones, socials, and MX deliverability.
+   * Zero synthetic contacts fabricated.
    */
   public async enrichCompanyContacts(companyId: string, workspaceId: string): Promise<EnrichmentResult> {
     const company = db.getCompanyById(companyId, workspaceId);
     if (!company) throw new Error(`Company '${companyId}' not found`);
 
-    const domain = company.domain.toLowerCase().trim();
-    const pattern = `{first}.{last}@${domain}`;
-
-    // Target executive archetypes to resolve
-    const archetypes = [
-      {
-        firstName: 'Jane',
-        lastName: 'Smith',
-        jobTitle: 'Head of People & Organizational Strategy',
-        department: 'Human Resources',
-        seniority: 'DIRECTOR',
-        phone: '+234 802 345 6789',
-        confidence: 96
-      },
-      {
-        firstName: 'Tunde',
-        lastName: 'Bakare',
-        jobTitle: 'VP of Engineering & Core Infrastructure',
-        department: 'Engineering',
-        seniority: 'VP',
-        phone: '+234 803 123 4567',
-        confidence: 94
-      },
-      {
-        firstName: 'Ngozi',
-        lastName: 'Eze',
-        jobTitle: 'Chief Revenue Officer (CRO)',
-        department: 'Commercial',
-        seniority: 'CXO',
-        phone: '+234 809 876 5432',
-        confidence: 92
-      }
-    ];
+    const domain = (company.domain || '').toLowerCase().trim();
+    const websiteUrl = company.website || (domain ? `https://${domain}` : '');
+    const pattern = domain ? `{first}.{last}@${domain}` : '';
 
     const added: DbContact[] = [];
 
-    for (const arch of archetypes) {
-      const email = `${arch.firstName.toLowerCase()}.${arch.lastName.toLowerCase()}@${domain}`;
-      
-      // Check if contact already exists
-      const existing = db.contacts.find(c => c.companyId === company.id && c.email === email);
-      if (existing) continue;
+    if (websiteUrl) {
+      try {
+        const crawlResult = await scrapeEmailRecordsFromWebsite(websiteUrl, {
+          maxDepth: 1,
+          maxPages: 8,
+          sameDomainOnly: true,
+          timeout: 8000
+        }, true);
 
-      const newContact: DbContact = {
-        id: `contact-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        workspaceId,
-        companyId: company.id,
-        firstName: arch.firstName,
-        lastName: arch.lastName,
-        jobTitle: arch.jobTitle,
-        department: arch.department,
-        seniority: arch.seniority,
-        email,
-        emailStatus: 'VALID',
-        emailConfidence: arch.confidence,
-        phone: arch.phone,
-        linkedinUrl: `https://linkedin.com/in/${arch.firstName.toLowerCase()}-${arch.lastName.toLowerCase()}`,
-        source: 'HUNTIQ_ENRICHMENT_ENGINE',
-        sourceUrl: `https://${domain}`,
-        firstSeenAt: new Date().toISOString(),
-        lastVerifiedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+        for (const record of crawlResult.records) {
+          // Check if contact already exists in workspace
+          const existing = db.contacts.find(
+            c => c.companyId === company.id && c.email.toLowerCase() === record.email.toLowerCase()
+          );
+          if (existing) continue;
 
-      db.contacts.push(newContact);
-      added.push(newContact);
+          // Parse name
+          let firstName = '';
+          let lastName = '';
+          if (record.name) {
+            const nameParts = record.name.trim().split(' ');
+            firstName = nameParts[0] || '';
+            lastName = nameParts.slice(1).join(' ') || '';
+          } else {
+            const rawLocal = record.email.split('@')[0];
+            firstName = rawLocal.charAt(0).toUpperCase() + rawLocal.slice(1);
+          }
 
-      db.logActivity({
-        workspaceId,
-        userId: 'usr-1',
-        companyId: company.id,
-        contactId: newContact.id,
-        type: 'CONTACT_ADDED',
-        title: `Enriched Contact: ${newContact.firstName} ${newContact.lastName} (${newContact.jobTitle})`,
-        description: `Verified email ${newContact.email} with ${newContact.emailConfidence}% confidence.`
-      });
+          const isDeliverable = record.mxStatus === 'deliverable';
+          const newContact: DbContact = {
+            id: `contact-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            workspaceId,
+            companyId: company.id,
+            firstName,
+            lastName,
+            jobTitle: record.jobTitle || (record.type === 'role' ? 'Department Head / Inquiries' : 'Team Member'),
+            department: record.type === 'role' ? 'Operations' : 'Executive',
+            seniority: record.jobTitle?.match(/Chief|CEO|CTO|COO|CFO|VP|Director|Head|Founder/i) ? 'CXO' : 'MID',
+            email: record.email,
+            emailStatus: isDeliverable ? 'VALID' : 'UNVERIFIED',
+            emailConfidence: isDeliverable ? 95 : 65,
+            phone: record.phone || company.phone || undefined,
+            linkedinUrl: record.socials?.linkedin || company.linkedinUrl || undefined,
+            source: 'HUNTIQ_WEB_EMAIL_SCRAPER',
+            sourceUrl: record.sourceUrl,
+            firstSeenAt: new Date().toISOString(),
+            lastVerifiedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+
+          db.contacts.push(newContact);
+          added.push(newContact);
+
+          db.logActivity({
+            workspaceId,
+            userId: 'usr-1',
+            companyId: company.id,
+            contactId: newContact.id,
+            type: 'CONTACT_ADDED',
+            title: `Discovered Contact: ${newContact.firstName} ${newContact.lastName} (${newContact.jobTitle})`,
+            description: `Scraped from ${record.sourceUrl} with MX status: ${record.mxStatus || 'unverified'}.`
+          });
+        }
+      } catch (err: any) {
+        console.warn(`[ENRICHMENT] Website crawl failed for ${company.name} (${websiteUrl}): ${err.message}`);
+      }
     }
 
     return {
       company,
       emailPattern: pattern,
       contactsAdded: added,
-      verifiedCount: added.length
+      verifiedCount: added.filter(c => c.emailStatus === 'VALID').length
     };
   }
 }

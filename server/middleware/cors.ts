@@ -3,8 +3,14 @@ import { config } from '../config/env';
 
 export const corsMiddleware = cors({
   origin: (origin, callback) => {
-    // Allow non-browser agents or matching allowed origin whitelist
-    if (!origin || config.corsOrigins.includes(origin) || origin.startsWith('http://localhost:')) {
+    // Allow non-browser agents, matching allowed origins, localhost, or vercel.app deployments
+    if (
+      !origin || 
+      config.corsOrigins.includes(origin) || 
+      origin.startsWith('http://localhost:') || 
+      origin.startsWith('http://127.0.0.1:') || 
+      origin.endsWith('.vercel.app')
+    ) {
       callback(null, true);
     } else {
       callback(new Error(`CORS blocked request from origin: ${origin}`));
@@ -12,5 +18,12 @@ export const corsMiddleware = cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-HUNTIQ-API-KEY']
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-HUNTIQ-API-KEY', 
+    'x-huntiq-api-key', 
+    'X-Workspace-Id', 
+    'x-workspace-id'
+  ]
 });
