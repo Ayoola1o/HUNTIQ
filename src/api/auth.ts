@@ -134,14 +134,15 @@ export async function fetchCurrentUser(): Promise<UserAccount | null> {
 
 export async function fetchUserApiKeys(): Promise<any[]> {
   const token = getStoredToken();
-  if (!token) return [];
-
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/api-keys`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      }
     });
     if (!res.ok) return [];
-    const body = await res.json();
+    const text = await res.text();
+    const body = text ? JSON.parse(text) : {};
     return body.data || [];
   } catch {
     return [];
@@ -158,8 +159,14 @@ export async function createUserApiKey(name: string): Promise<any> {
     },
     body: JSON.stringify({ name })
   });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.message || 'Failed to create API key');
+  const text = await res.text();
+  let body: any;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new Error(`Server returned status ${res.status}: ${text.slice(0, 120)}`);
+  }
+  if (!res.ok) throw new Error(body.error?.message || body.message || 'Failed to create API key');
   return body.data;
 }
 

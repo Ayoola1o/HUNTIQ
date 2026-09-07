@@ -43,9 +43,12 @@ export const createApp = () => {
   // Mount Auth Endpoints
   app.use('/api/v1/auth', authRouter);
   app.use('/api/auth', authRouter);
+  app.use('/v1/auth', authRouter);
+  app.use('/auth', authRouter);
 
-  // Mount API Endpoints under /api
+  // Mount API Endpoints under /api and root serverless aliases
   app.use('/api', healthRouter);
+  app.use('/health', healthRouter);
   app.use('/api', companiesRouter);
   app.use('/api', prospectsRouter);
   app.use('/api', signalsRouter);
