@@ -131,7 +131,7 @@ export const ContactDiscoveryModal: React.FC<ContactDiscoveryModalProps> = ({
             setStatus('failed');
             setErrorMessage(updatedJob.errorMessage || 'Discovery job failed during crawl execution.');
           }
-        } catch (pollErr: any) {
+        } catch (_pollErr: any) {
           // Keep polling unless persistent failure
           if (pollCount > 15) {
             if (pollingRef.current) clearInterval(pollingRef.current);

@@ -25,6 +25,7 @@ export class EmailScraperProvider {
     };
     if (this.config.apiKey) {
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+      headers['X-HUNTIQ-API-KEY'] = this.config.apiKey;
     }
     return headers;
   }

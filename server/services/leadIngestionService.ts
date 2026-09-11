@@ -288,9 +288,18 @@ export class LeadIngestionService {
 
     // 5. Update Scrape Job Status if associated
     if (matchedJobId) {
-      const finalStatus = rejected > 0 && accepted > 0 ? 'PARTIAL' : accepted > 0 ? 'COMPLETED' : 'FAILED';
+      let finalStatus: 'COMPLETED' | 'PARTIAL' | 'FAILED' = 'COMPLETED';
+      if (accepted === 0 && duplicates === 0 && rejected > 0) {
+        finalStatus = 'FAILED';
+      } else if (rejected > 0 && accepted > 0) {
+        finalStatus = 'PARTIAL';
+      } else {
+        finalStatus = 'COMPLETED';
+      }
+
+      const totalFound = accepted + duplicates;
       await discoveryJobRepository.updateJobStatus(matchedJobId, workspaceId, finalStatus, {
-        emailsFound: accepted
+        emailsFound: totalFound
       });
 
       await discoveryJobRepository.recordIntegrationEvent({
@@ -298,7 +307,7 @@ export class LeadIngestionService {
         jobId: matchedJobId,
         eventType: finalStatus === 'COMPLETED' ? 'EMAIL_DISCOVERY_COMPLETED' : finalStatus === 'PARTIAL' ? 'EMAIL_DISCOVERY_PARTIAL' : 'EMAIL_DISCOVERY_FAILED',
         provider: 'email-scraper',
-        payload: { accepted, duplicates, rejected }
+        payload: { accepted, duplicates, rejected, totalFound }
       });
     }
 

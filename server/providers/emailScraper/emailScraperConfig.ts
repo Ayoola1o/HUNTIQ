@@ -7,14 +7,16 @@ export interface EmailScraperConfig {
   apiUrl: string;
   apiKey?: string;
   timeoutMs: number;
+  maxRetries: number;
   enabled: boolean;
 }
 
 export class EmailScraperConfigManager {
   public static getConfig(): EmailScraperConfig {
-    const rawUrl = process.env.EMAIL_SCRAPER_API_URL || '';
+    const rawUrl = process.env.EMAIL_SCRAPER_API_URL || process.env.EMAIL_SCRAPER_URL || '';
     const rawKey = process.env.EMAIL_SCRAPER_API_KEY || '';
     const rawTimeout = process.env.EMAIL_SCRAPER_TIMEOUT_MS || '15000';
+    const rawRetries = process.env.EMAIL_SCRAPER_MAX_RETRIES || '3';
     const rawEnabled = process.env.EMAIL_SCRAPER_ENABLED;
 
     const enabled = rawEnabled !== undefined
@@ -25,6 +27,7 @@ export class EmailScraperConfigManager {
       apiUrl: rawUrl.trim().replace(/\/+$/, ''),
       apiKey: rawKey.trim() || undefined,
       timeoutMs: parseInt(rawTimeout, 10) || 15000,
+      maxRetries: parseInt(rawRetries, 10) || 3,
       enabled
     };
   }

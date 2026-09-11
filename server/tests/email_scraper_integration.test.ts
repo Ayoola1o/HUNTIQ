@@ -613,6 +613,98 @@ async function runSuite() {
       assert.strictEqual(publicSafe.safe, true);
     });
 
+    // 24. Scraper authentication via X-HUNTIQ-API-KEY header
+    await test('24. Scraper authenticates via X-HUNTIQ-API-KEY header and resolves workspace', async () => {
+      const res = await fetch(`${baseUrl}/api/v1/integrations/email-scraper/webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-HUNTIQ-API-KEY': rawScraperKey
+        },
+        body: JSON.stringify({ action: 'ping' })
+      });
+
+      assert.strictEqual(res.status, 200, `Expected 200 with X-HUNTIQ-API-KEY, got ${res.status}`);
+      const body = await res.json();
+      assert.strictEqual(body.authenticated, true);
+      assert.strictEqual(body.integration, 'huntiq');
+    });
+
+    // 25. Discovery job transitions to COMPLETED when leads are duplicates
+    await test('25. Discovery job transitions to COMPLETED when discovered contacts are duplicates', async () => {
+      const createRes = await fetch(`${baseUrl}/api/v1/integrations/email-scraper/discover`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokenA}`
+        },
+        body: JSON.stringify({
+          companyName: 'Duplicate Test Corp',
+          domain: 'dup-test.com',
+          website: 'https://dup-test.com'
+        })
+      });
+
+      assert.strictEqual(createRes.status, 201);
+      const jobData = await createRes.json();
+      const jobId = jobData.data.id;
+
+      // Send webhook with existing contact (testEmail1)
+      const webhookRes = await fetch(`${baseUrl}/api/v1/integrations/email-scraper/webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-HUNTIQ-API-KEY': rawScraperKey
+        },
+        body: JSON.stringify({
+          integration: 'email-scraper',
+          version: '1.0',
+          requestId: `req-dup-${Date.now()}`,
+          source: { type: 'website_email_scraper', jobId },
+          company: { name: 'Duplicate Test Corp', domain: 'dup-test.com' },
+          contacts: [
+            {
+              email: testEmail1,
+              emailStatus: 'VALIDATED',
+              confidence: 0.95
+            }
+          ]
+        })
+      });
+
+      assert.strictEqual(webhookRes.status, 200);
+      const webhookBody = await webhookRes.json();
+      assert.strictEqual(webhookBody.duplicates, 1);
+
+      // Verify job status is COMPLETED and not FAILED
+      const jobStatusRes = await fetch(`${baseUrl}/api/v1/integrations/email-scraper/jobs/${jobId}`, {
+        headers: { 'Authorization': `Bearer ${tokenA}` }
+      });
+      const finalJob = await jobStatusRes.json();
+      assert.strictEqual(finalJob.data.status, 'COMPLETED');
+      assert.strictEqual(finalJob.data.emailsFound, 1);
+    });
+
+    // 26. POST /api/v1/integrations/email-scraper/discover preserves companyName in metadata
+    await test('26. Discovery endpoint stores companyName in metadata for factual company association', async () => {
+      const res = await fetch(`${baseUrl}/api/v1/integrations/email-scraper/discover`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokenA}`
+        },
+        body: JSON.stringify({
+          companyName: 'The Highland Pub & Grill',
+          domain: 'highlandpub.com',
+          website: 'https://highlandpub.com'
+        })
+      });
+
+      assert.strictEqual(res.status, 201);
+      const body = await res.json();
+      assert.strictEqual(body.data.metadata.companyName, 'The Highland Pub & Grill');
+    });
+
     console.log('\n========================================================================');
     console.log(`🎉 ALL ${passed}/${total} INTEGRATION TESTS PASSED SUCCESSFULLY!`);
     console.log('========================================================================\n');
