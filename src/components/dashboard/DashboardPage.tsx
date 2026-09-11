@@ -44,6 +44,35 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onGoTo
     }
   };
 
+  const handleKpiCardClick = (metricId: string) => {
+    switch (metricId) {
+      case 'prospects':
+        onNavigate?.('find-prospects');
+        break;
+      case 'hot_opps':
+        onNavigate?.('opportunities');
+        break;
+      case 'signals':
+        onNavigate?.('signals');
+        break;
+      case 'deals':
+      case 'pipeline':
+      case 'revenue':
+      case 'avg_deal':
+        onNavigate?.('pipeline');
+        break;
+      default:
+        onNavigate?.('opportunities');
+        break;
+    }
+  };
+
+  const handleSearch = (query: string) => {
+    if (query.trim().length > 1) {
+      onNavigate?.('companies');
+    }
+  };
+
   return (
     <div style={{
       display: 'flex',
@@ -75,7 +104,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onGoTo
           onChangeDateRange={setDateRange}
           selectedTeam={selectedTeam}
           onChangeTeam={setSelectedTeam}
-          onSearch={() => {}}
+          onSearch={handleSearch}
         />
 
         {/* Scrollable Dashboard Body */}
@@ -91,7 +120,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onGoTo
           }}
         >
           {/* KPI Summary Cards */}
-          <KpiCards onCardClick={() => {}} />
+          <KpiCards onCardClick={handleKpiCardClick} />
 
           {/* Middle 2-Column Section */}
           <div className="grid-2-1 responsive-container" style={{

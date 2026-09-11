@@ -14,7 +14,10 @@ export const jobsRouter = Router();
  * Live job ingestion from Greenhouse / Lever / Ashby.
  */
 jobsRouter.post('/jobs/sync', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+  }
   const { companyId, domain, companyName, provider, boardToken } = req.body || {};
 
   try {
@@ -93,7 +96,10 @@ jobsRouter.post('/jobs/sync', async (req: AuthenticatedRequest, res: Response) =
  * Query jobs with filters
  */
 jobsRouter.get('/jobs', (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+  }
   const { companyId, department, seniority, remote, status } = req.query as Record<string, string | undefined>;
 
   let list = db.jobs.filter(j => j.workspaceId === workspaceId);
@@ -129,7 +135,10 @@ jobsRouter.get('/jobs', (req: AuthenticatedRequest, res: Response) => {
  * Compute real-time hiring acceleration & velocity metrics
  */
 jobsRouter.get('/jobs/velocity/:companyId', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+  }
   const { companyId } = req.params;
 
   const velocity = await jobService.calculateHiringVelocity(companyId, workspaceId);

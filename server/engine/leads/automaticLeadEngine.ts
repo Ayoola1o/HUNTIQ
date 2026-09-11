@@ -16,7 +16,8 @@ export class AutomaticLeadEngine {
    * Evaluates all companies in the workspace, identifies high-intent accounts,
    * generates qualified DbLead records, and synchronizes them directly into the CRM pipeline.
    */
-  public static async runAutoQualification(workspaceId: string = 'ws-main'): Promise<AutoQualificationResult> {
+  public static async runAutoQualification(workspaceId: string): Promise<AutoQualificationResult> {
+    if (!workspaceId) throw new Error('Workspace ID is required');
     const companies = db.getCompaniesByWorkspace(workspaceId);
     const newLeads: DbLead[] = [];
     const newPipelineDeals: PipelineDealItem[] = [];
@@ -122,9 +123,10 @@ export class AutomaticLeadEngine {
    */
   public static async promoteLeadToPipeline(
     leadId: string,
-    workspaceId: string = 'ws-main',
+    workspaceId: string,
     customDealValue?: number
   ): Promise<PipelineDealItem> {
+    if (!workspaceId) throw new Error('Workspace ID is required');
     const lead = db.leads.find(l => l.id === leadId && l.workspaceId === workspaceId);
     if (!lead) throw new Error(`Lead '${leadId}' not found`);
 

@@ -46,6 +46,8 @@ export type AppView =
   | 'integrations' 
   | 'settings' 
   | 'profile' 
+  | 'team'
+  | 'alerts'
   | 'onboarding';
 
 interface HuntiqContextType {

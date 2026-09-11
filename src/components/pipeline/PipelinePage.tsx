@@ -532,16 +532,167 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
           </div>
         </div>
 
-        {/* Primary Pipeline View (Kanban Board) */}
-        <PipelineKanbanBoard
-          deals={filteredDeals}
-          onSelectDeal={(deal) => setSelectedDeal(deal)}
-          onMoveDealStage={handleMoveDealStage}
-          onQuickAddDeal={(st) => {
-            setInitialStageForNew(st);
-            setIsNewDealModalOpen(true);
-          }}
-        />
+        {/* Primary Pipeline View (Kanban Board or List View) */}
+        {viewMode === 'kanban' ? (
+          <PipelineKanbanBoard
+            deals={filteredDeals}
+            onSelectDeal={(deal) => setSelectedDeal(deal)}
+            onMoveDealStage={handleMoveDealStage}
+            onQuickAddDeal={(st) => {
+              setInitialStageForNew(st);
+              setIsNewDealModalOpen(true);
+            }}
+          />
+        ) : (
+          <div style={{
+            margin: '0 32px 32px 32px',
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            border: '1px solid #eaecf0',
+            boxShadow: '0 4px 20px -2px rgba(16, 24, 40, 0.04)',
+            overflow: 'hidden'
+          }}>
+            <div className="mobile-table-wrapper">
+              <div style={{ minWidth: '850px' }}>
+                {/* Table Header */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2.5fr 1.6fr 1fr 1.2fr 1.2fr 2fr 1.4fr 100px',
+                  padding: '12px 20px',
+                  backgroundColor: '#f8fafc',
+                  borderBottom: '1px solid #eaecf0',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  color: '#64748b'
+                }}>
+                  <div>Deal & Opportunity</div>
+                  <div>Company</div>
+                  <div>Value</div>
+                  <div>Probability</div>
+                  <div>Stage</div>
+                  <div>Next Action</div>
+                  <div>Contact</div>
+                  <div style={{ textAlign: 'right' }}>Action</div>
+                </div>
+
+                {/* Table Body */}
+                {filteredDeals.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                    No deals match the selected criteria.
+                  </div>
+                ) : (
+                  filteredDeals.map((deal) => (
+                    <div
+                      key={deal.id}
+                      onClick={() => setSelectedDeal(deal)}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '2.5fr 1.6fr 1fr 1.2fr 1.2fr 2fr 1.4fr 100px',
+                        padding: '14px 20px',
+                        borderBottom: '1px solid #f1f5f9',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                    >
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                          {deal.dealTitle}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                          {deal.serviceName}
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
+                        {deal.companyName}
+                      </div>
+
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                        ${deal.dealValue.toLocaleString()}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{
+                          width: '40px',
+                          height: '6px',
+                          backgroundColor: '#e2e8f0',
+                          borderRadius: '3px',
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{
+                            width: `${deal.probability}%`,
+                            height: '100%',
+                            backgroundColor: deal.probability >= 70 ? '#10b981' : deal.probability >= 40 ? '#6366f1' : '#f59e0b'
+                          }} />
+                        </div>
+                        <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>
+                          {deal.probability}%
+                        </span>
+                      </div>
+
+                      <div>
+                        <span style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          textTransform: 'capitalize',
+                          backgroundColor: deal.stage === 'won' ? '#ecfdf5' : deal.stage === 'lost' ? '#fef2f2' : '#eff6ff',
+                          color: deal.stage === 'won' ? '#059669' : deal.stage === 'lost' ? '#dc2626' : '#2563eb',
+                          border: `1px solid ${deal.stage === 'won' ? '#a7f3d0' : deal.stage === 'lost' ? '#fecaca' : '#bfdbfe'}`
+                        }}>
+                          {deal.stage}
+                        </span>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>
+                          {deal.nextAction}
+                        </div>
+                        <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>
+                          Due: {deal.nextActionDueDate}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+                          {deal.contactName}
+                        </div>
+                        <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                          {deal.contactRole}
+                        </div>
+                      </div>
+
+                      <div style={{ textAlign: 'right' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDeal(deal);
+                          }}
+                          style={{
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '6px',
+                            padding: '4px 10px',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            color: '#334155',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Details
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Deal Detail Modal */}

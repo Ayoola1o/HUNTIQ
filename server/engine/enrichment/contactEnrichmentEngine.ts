@@ -139,8 +139,9 @@ export class ContactEnrichmentEngine {
    */
   public static async enrichCompany(
     company: DbCompany,
-    workspaceId: string = 'ws-main'
+    workspaceId: string
   ): Promise<CompanyEnrichmentOutput> {
+    if (!workspaceId) throw new Error('Workspace ID is required');
     const domain = company.domain.toLowerCase().trim();
     const pattern = this.discoverDomainPattern(domain);
 

@@ -25,14 +25,16 @@ import { useHuntiq } from '../../context/HuntiqContext';
 interface SettingsPageProps {
   onNavigate: (nav: string) => void;
   onGoToOnboarding?: () => void;
+  initialSection?: SettingsSection;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   onNavigate,
-  onGoToOnboarding
+  onGoToOnboarding,
+  initialSection = 'workspace'
 }) => {
   const { currentUser, onboardingData, saveOnboardingData } = useHuntiq();
-  const [activeSection, setActiveSection] = useState<SettingsSection>('workspace');
+  const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
   // State configurations initialized from profile onboarding data

@@ -9,6 +9,7 @@ import {
 } from '../engine/scraper';
 import { db } from '../db/memoryStore';
 import type { DbContact } from '../db/types';
+import { validateSafeScrapeUrl } from '../utils/urlValidator';
 
 export const scraperRouter = Router();
 
@@ -57,10 +58,18 @@ function broadcastEvent(job: ActiveCrawlSession, event: string, data: any) {
 scraperRouter.post('/scraper/page', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { url, timeout = 12000, verifyMx = true } = req.body;
-    if (!url || typeof url !== 'string' || !url.trim().startsWith('http')) {
+    if (!url || typeof url !== 'string') {
       return res.status(400).json({
         success: false,
         error: { code: 'INVALID_URL', message: 'Valid http or https URL is required' }
+      });
+    }
+
+    const validation = await validateSafeScrapeUrl(url.trim());
+    if (!validation.safe) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'SSRF_RESTRICTION', message: validation.error }
       });
     }
 
@@ -101,14 +110,28 @@ scraperRouter.post('/scraper/crawl', async (req: AuthenticatedRequest, res: Resp
       verifyMx = true
     } = req.body;
 
-    if (!url || typeof url !== 'string' || !url.trim().startsWith('http')) {
+    if (!url || typeof url !== 'string') {
       return res.status(400).json({
         success: false,
         error: { code: 'INVALID_URL', message: 'Valid http or https URL is required' }
       });
     }
 
-    const workspaceId = req.user?.workspaceId || 'ws-main';
+    const validation = await validateSafeScrapeUrl(url.trim());
+    if (!validation.safe) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'SSRF_RESTRICTION', message: validation.error }
+      });
+    }
+
+    const workspaceId = req.user?.workspaceId;
+    if (!workspaceId) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      });
+    }
     const jobId = `job-crawl-${Date.now()}-${randomUUID().substring(0, 6)}`;
 
     const job: ActiveCrawlSession = {
@@ -336,7 +359,13 @@ scraperRouter.post('/scraper/save-contacts', async (req: AuthenticatedRequest, r
       });
     }
 
-    const workspaceId = (req.headers['x-workspace-id'] as string) || req.user?.workspaceId || 'ws-main';
+    const workspaceId = req.user?.workspaceId;
+    if (!workspaceId) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      });
+    }
     const savedContacts: DbContact[] = [];
 
     for (const rec of records) {

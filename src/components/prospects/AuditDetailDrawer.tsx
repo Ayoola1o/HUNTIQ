@@ -6,10 +6,12 @@ import {
   Send, 
   Copy, 
   Check, 
-  Zap
+  Zap,
+  Users
 } from 'lucide-react';
 import type { GeoScrapedBusiness } from '../../engine/geoScraperEngine';
 import { useHuntiq } from '../../context/HuntiqContext';
+import { ContactDiscoveryModal } from './ContactDiscoveryModal';
 
 interface AuditDetailDrawerProps {
   business: GeoScrapedBusiness | null;
@@ -30,6 +32,7 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({
   const [copied, setCopied] = useState(false);
   const [isCaptured, setIsCaptured] = useState(false);
   const [isPushed, setIsPushed] = useState(false);
+  const [isDiscoveryOpen, setIsDiscoveryOpen] = useState(false);
 
   if (!business) return null;
 
@@ -431,53 +434,93 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({
         borderTop: '1px solid #f1f5f9',
         backgroundColor: '#f8fafc',
         display: 'flex',
+        flexDirection: 'column',
         gap: '10px'
       }}>
-        <button
-          onClick={handleCapture}
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            backgroundColor: isCaptured ? '#059669' : '#ffffff',
-            color: isCaptured ? '#ffffff' : '#0f172a',
-            border: '1px solid #cbd5e1',
-            borderRadius: '8px',
-            padding: '10px 14px',
-            fontSize: '12px',
-            fontWeight: 700,
-            cursor: 'pointer'
-          }}
-        >
-          {isCaptured ? <Check size={14} /> : <Zap size={14} color="#4f46e5" fill="#4f46e5" />}
-          <span>{isCaptured ? 'Captured!' : 'Capture Opportunity'}</span>
-        </button>
+        {Boolean(business.website || business.domain) && (
+          <button
+            onClick={() => setIsDiscoveryOpen(true)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              backgroundColor: '#eff6ff',
+              color: '#1d4ed8',
+              border: '1px solid #bfdbfe',
+              borderRadius: '8px',
+              padding: '9px 14px',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'background-color 0.15s ease'
+            }}
+          >
+            <Users size={14} />
+            <span>Discover Contacts (Email Scraper)</span>
+          </button>
+        )}
 
-        <button
-          onClick={handlePush}
-          style={{
-            flex: 1.3,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            backgroundColor: isPushed ? '#059669' : '#0f172a',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '10px 14px',
-            fontSize: '12px',
-            fontWeight: 700,
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
-          }}
-        >
-          {isPushed ? <Check size={14} /> : <Send size={14} />}
-          <span>{isPushed ? 'Pushed to Pipeline!' : `Push to Pipeline ($${audit.recommendedPackage.estimatedValue.max.toLocaleString()})`}</span>
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={handleCapture}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              backgroundColor: isCaptured ? '#059669' : '#ffffff',
+              color: isCaptured ? '#ffffff' : '#0f172a',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              padding: '10px 14px',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            {isCaptured ? <Check size={14} /> : <Zap size={14} color="#4f46e5" fill="#4f46e5" />}
+            <span>{isCaptured ? 'Captured!' : 'Capture Opportunity'}</span>
+          </button>
+
+          <button
+            onClick={handlePush}
+            style={{
+              flex: 1.3,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              backgroundColor: isPushed ? '#059669' : '#0f172a',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '10px 14px',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            }}
+          >
+            {isPushed ? <Check size={14} /> : <Send size={14} />}
+            <span>{isPushed ? 'Pushed to Pipeline!' : `Push to Pipeline ($${audit.recommendedPackage.estimatedValue.max.toLocaleString()})`}</span>
+          </button>
+        </div>
       </div>
+
+      <ContactDiscoveryModal
+        isOpen={isDiscoveryOpen}
+        onClose={() => setIsDiscoveryOpen(false)}
+        target={{
+          name: business.name,
+          website: business.website,
+          domain: business.domain,
+          category: business.category,
+          address: business.address
+        }}
+      />
     </div>
   );
 };

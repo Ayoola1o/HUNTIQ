@@ -10,3 +10,4 @@ export * from './jobs';
 export * from './contacts';
 export * from './leads';
 export * from './savedSearches';
+export * from './emailDiscovery';

@@ -15,7 +15,7 @@ interface AttentionFeedProps {
 }
 
 export const AttentionFeed: React.FC<AttentionFeedProps> = ({ onOpenResearch, onOpenContact }) => {
-  const { signals, companies } = useHuntiq();
+  const { signals, companies, navigateTo } = useHuntiq();
 
   const attentionItems = React.useMemo(() => {
     const liveItems: any[] = [];
@@ -352,6 +352,8 @@ export const AttentionFeed: React.FC<AttentionFeedProps> = ({ onOpenResearch, on
               )}
 
               <button
+                onClick={() => onOpenResearch(item.title)}
+                title="Inspect account intelligence"
                 style={{
                   background: 'none',
                   border: 'none',
@@ -370,6 +372,8 @@ export const AttentionFeed: React.FC<AttentionFeedProps> = ({ onOpenResearch, on
       {/* Show more updates */}
       <div style={{ textAlign: 'center', marginTop: '4px' }}>
         <button
+          onClick={() => navigateTo('signals')}
+          title="Explore all buying signals"
           style={{
             background: 'none',
             border: 'none',

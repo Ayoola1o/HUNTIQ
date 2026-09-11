@@ -359,6 +359,16 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
   const [scoreBreakdownTarget, setScoreBreakdownTarget] = useState<OpportunityItem | null>(null);
 
   const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateRange, setDateRange] = useState('Last 30 days');
+  const [isDateMenuOpen, setIsDateMenuOpen] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState<{
+    minScore?: number;
+    selectedIndustries?: string[];
+    selectedLocations?: string[];
+    selectedSignals?: string[];
+  }>({});
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const companies = React.useMemo(() => {
     const base = dynamicCompanies && dynamicCompanies.length > 0 ? dynamicCompanies : initialFallbackCompanies;
@@ -377,7 +387,73 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
     });
   };
 
+  const handleExportCsv = () => {
+    const headers = ['ID', 'Company Name', 'Industry', 'Employees', 'Revenue', 'Location', 'Opportunity Score'];
+    const rows = filteredCompanies.map(c => [
+      `"${c.id}"`,
+      `"${c.name}"`,
+      `"${c.industry || ''}"`,
+      `"${c.employees || ''}"`,
+      `"${c.revenue || ''}"`,
+      `"${c.location || ''}"`,
+      c.opportunityScore || 0
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `huntiq_companies_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setToastMessage(`Exported ${filteredCompanies.length} companies to CSV!`);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleSaveToList = (listName: string) => {
+    if (listModalCompany) {
+      setToastMessage(`Added ${listModalCompany.name} to "${listName}"!`);
+      setTimeout(() => setToastMessage(null), 3500);
+    }
+  };
+
+  const handleApplyFilters = (filters: any) => {
+    setAppliedFilters(filters);
+    setToastMessage('Target filters applied successfully');
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
   const filteredCompanies = companies.filter((c) => {
+    // Search query filtering
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matches =
+        c.name.toLowerCase().includes(q) ||
+        (c.industry && c.industry.toLowerCase().includes(q)) ||
+        (c.location && c.location.toLowerCase().includes(q)) ||
+        (c.description && c.description.toLowerCase().includes(q));
+      if (!matches) return false;
+    }
+
+    // Applied modal filters
+    if (appliedFilters.minScore && (c.opportunityScore || 0) < appliedFilters.minScore) {
+      return false;
+    }
+
+    if (appliedFilters.selectedIndustries && appliedFilters.selectedIndustries.length > 0) {
+      const matchesIndustry = appliedFilters.selectedIndustries.some(ind => 
+        c.industry?.toLowerCase().includes(ind.toLowerCase())
+      );
+      if (!matchesIndustry) return false;
+    }
+
+    if (appliedFilters.selectedLocations && appliedFilters.selectedLocations.length > 0) {
+      const matchesLoc = appliedFilters.selectedLocations.some(loc => 
+        c.location?.toLowerCase().includes(loc.toLowerCase())
+      );
+      if (!matchesLoc) return false;
+    }
+
     // Tab filtering
     if (activeTab === 'high-opportunity' && (c.opportunityScore || 0) < 80) return false;
     if (activeTab === 'recently-added' && !(c.lastActivity?.includes('h ago') || c.lastActivity?.includes('1d ago') || c.lastActivity?.includes('2d ago'))) return false;
@@ -413,8 +489,29 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        position: 'relative'
       }}>
+        {toastMessage && (
+          <div style={{
+            position: 'absolute',
+            top: '16px',
+            right: '32px',
+            zIndex: 100,
+            backgroundColor: '#0f172a',
+            color: '#ffffff',
+            padding: '10px 18px',
+            borderRadius: '10px',
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)',
+            fontSize: '13px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span>{toastMessage}</span>
+          </div>
+        )}
         {/* Top Header */}
         <header 
           className="mobile-header-pad"
@@ -465,6 +562,8 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
               <input
                 type="text"
                 placeholder="Search companies, people, signals..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   border: 'none',
                   outline: 'none',
@@ -512,6 +611,8 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
             {/* Notification Bell */}
             <div style={{ position: 'relative' }}>
               <button
+                onClick={() => onNavigate('signals')}
+                title="View Buying Signals & Alerts"
                 style={{
                   width: '38px',
                   height: '38px',
@@ -543,42 +644,86 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
             </div>
 
             {/* User Avatar */}
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              backgroundColor: '#f1f5f9',
-              border: '1px solid #cbd5e1',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12.5px',
-              fontWeight: 800,
-              color: '#334155'
-            }}>
-              AA
-            </div>
-
-            {/* Date Range Selector */}
-            <button
+            <div 
+              onClick={() => onNavigate('profile')}
+              title="View User Profile"
               style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: '#f1f5f9',
+                border: '1px solid #cbd5e1',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                height: '38px',
-                padding: '0 12px',
-                fontSize: '12px',
-                fontWeight: 600,
+                justifyContent: 'center',
+                fontSize: '12.5px',
+                fontWeight: 800,
                 color: '#334155',
                 cursor: 'pointer'
               }}
             >
-              <Calendar size={14} color="#64748b" />
-              <span>May 16, 2025 - May 30, 2025</span>
-            </button>
+              AA
+            </div>
+
+            {/* Date Range Selector Dropdown */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setIsDateMenuOpen(!isDateMenuOpen)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  height: '38px',
+                  padding: '0 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#334155',
+                  cursor: 'pointer'
+                }}
+              >
+                <Calendar size={14} color="#64748b" />
+                <span>{dateRange}</span>
+              </button>
+
+              {isDateMenuOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '42px',
+                  right: 0,
+                  backgroundColor: '#ffffff',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                  zIndex: 40,
+                  minWidth: '140px',
+                  padding: '6px'
+                }}>
+                  {['Today', 'Last 7 days', 'Last 30 days', 'This quarter'].map((opt) => (
+                    <div
+                      key={opt}
+                      onClick={() => {
+                        setDateRange(opt);
+                        setIsDateMenuOpen(false);
+                      }}
+                      style={{
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                        fontWeight: dateRange === opt ? 700 : 500,
+                        color: dateRange === opt ? '#4f46e5' : '#334155',
+                        backgroundColor: dateRange === opt ? '#f5f3ff' : 'transparent',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {opt}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Filters Button */}
             <button
@@ -604,6 +749,8 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
 
             {/* Export Button */}
             <button
+              onClick={handleExportCsv}
+              title="Export filtered directory to CSV"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -742,7 +889,7 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
         isOpen={!!listModalCompany}
         onClose={() => setListModalCompany(null)}
         company={listModalCompany}
-        onSave={(_list) => {}}
+        onSave={handleSaveToList}
       />
 
       <ScoreBreakdownModal
@@ -753,7 +900,7 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
       <OpportunityFiltersModal
         isOpen={isFiltersModalOpen}
         onClose={() => setIsFiltersModalOpen(false)}
-        onApply={() => {}}
+        onApply={handleApplyFilters}
       />
 
       <AiCopilotModal

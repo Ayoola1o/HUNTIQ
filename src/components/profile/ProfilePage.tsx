@@ -349,6 +349,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             {/* Notification Bell with Badge */}
             <div style={{ position: 'relative' }}>
               <button
+                onClick={() => setActiveSection('notifications')}
+                title="View notification preferences & alerts"
                 style={{
                   width: '34px',
                   height: '34px',
@@ -368,15 +370,15 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 position: 'absolute',
                 top: '-4px',
                 right: '-4px',
-                backgroundColor: '#ef4444',
+                backgroundColor: '#e11d48',
                 color: '#ffffff',
-                fontSize: '9.5px',
+                fontSize: '10px',
                 fontWeight: 800,
                 borderRadius: '10px',
                 padding: '1px 5px',
-                border: '2px solid #ffffff'
+                pointerEvents: 'none'
               }}>
-                12
+                3
               </span>
             </div>
 

@@ -13,8 +13,9 @@ export interface CompanyResolutionRequest {
 }
 
 export interface CompanyResolutionResult {
-  company: DbCompany;
-  matchType: 'EXACT_DOMAIN' | 'ALIAS_MATCH' | 'FUZZY_NAME_MATCH' | 'AUTO_CREATED';
+  company: DbCompany | null;
+  resolutionStatus: 'RESOLVED' | 'UNRESOLVED';
+  matchType?: 'EXACT_DOMAIN' | 'ALIAS_MATCH' | 'FUZZY_NAME_MATCH' | 'AUTO_CREATED';
   confidence: number; // 0 - 100
   normalizedDomain: string;
   cleanName: string;
@@ -112,15 +113,21 @@ export class CompanyResolver {
 
   /**
    * Core Entity Resolution Algorithm.
-   * Discovers existing canonical company or automatically creates & indexes a new one.
+   * Discovers existing canonical company. If confident match is not found,
+   * returns UNRESOLVED rather than fabricating synthetic company data.
    */
   public static async resolve(
     req: CompanyResolutionRequest,
-    workspaceId: string = 'ws-main'
+    workspaceId: string,
+    options?: { allowAutoCreate?: boolean; userId?: string }
   ): Promise<CompanyResolutionResult> {
+    if (!workspaceId) {
+      throw new Error('Workspace ID is required for company resolution');
+    }
+
     const rawDomain = req.domain || req.website || req.sourceUrl;
     const normalizedDomain = this.normalizeDomain(rawDomain) || (req.boardToken ? `${req.boardToken}.com` : '');
-    const cleanName = this.cleanCompanyName(req.name || (normalizedDomain ? normalizedDomain.split('.')[0] : 'Target Account'));
+    const cleanName = this.cleanCompanyName(req.name || (normalizedDomain ? normalizedDomain.split('.')[0] : ''));
 
     const existingCompanies = db.getCompaniesByWorkspace(workspaceId);
 
@@ -130,10 +137,11 @@ export class CompanyResolver {
       if (match) {
         return {
           company: match,
+          resolutionStatus: 'RESOLVED',
           matchType: 'EXACT_DOMAIN',
           confidence: 100,
           normalizedDomain,
-          cleanName,
+          cleanName: match.name,
           isNew: false
         };
       }
@@ -142,85 +150,96 @@ export class CompanyResolver {
     // 2. Alias / Website Match (Confidence: 95%)
     if (normalizedDomain) {
       const match = existingCompanies.find(c => 
-        c.website?.toLowerCase().includes(normalizedDomain) ||
-        normalizedDomain.includes(c.domain.toLowerCase())
+        (c.website && c.website.toLowerCase().includes(normalizedDomain)) ||
+        (c.domain && normalizedDomain.includes(c.domain.toLowerCase()))
       );
       if (match) {
         return {
           company: match,
+          resolutionStatus: 'RESOLVED',
           matchType: 'ALIAS_MATCH',
           confidence: 95,
           normalizedDomain,
-          cleanName,
+          cleanName: match.name,
           isNew: false
         };
       }
     }
 
-    // 3. Fuzzy Name Match (Confidence: 85% - 94%)
+    // 3. High-Confidence Fuzzy Name Match (Confidence: >= 85%)
     if (cleanName && cleanName.length > 2) {
       for (const comp of existingCompanies) {
         const similarity = this.calculateSimilarity(comp.name, cleanName);
         if (similarity >= 0.85) {
           return {
             company: comp,
+            resolutionStatus: 'RESOLVED',
             matchType: 'FUZZY_NAME_MATCH',
             confidence: Math.round(similarity * 100),
             normalizedDomain,
-            cleanName,
+            cleanName: comp.name,
             isNew: false
           };
         }
       }
     }
 
-    // 4. Auto-Create & Index New Canonical Company (Strict Evidence-Based)
-    const verifiedDomain = normalizedDomain || undefined;
-    const resolutionStatus = verifiedDomain ? 'ACTIVE' : 'RESOLUTION_PENDING';
-    
-    const newCompany: DbCompany = {
-      id: `comp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      workspaceId,
-      name: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
-      legalName: req.name || cleanName,
-      domain: verifiedDomain || '',
-      website: req.website || (verifiedDomain ? `https://${verifiedDomain}` : undefined),
-      industry: req.industry || 'Technology & Commercial',
-      employeeCount: undefined,
-      employeeRange: undefined,
-      country: req.country || undefined,
-      city: req.city || undefined,
-      description: verifiedDomain
-        ? `Canonical company record auto-indexed by HUNTIQ Resolution Engine for ${cleanName}.`
-        : `Company entity pending external domain verification for ${cleanName}.`,
-      logoUrl: verifiedDomain ? `https://${verifiedDomain}/favicon.ico` : undefined,
-      status: resolutionStatus as any,
-      firstSeenAt: new Date().toISOString(),
-      lastVerifiedAt: verifiedDomain ? new Date().toISOString() : undefined,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    // 4. Strict Evidence Check: Do NOT synthesize fake company unless explicitly requested with verified domain
+    if (options?.allowAutoCreate && normalizedDomain && cleanName) {
+      const verifiedDomain = normalizedDomain;
+      const newCompany: DbCompany = {
+        id: `comp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        workspaceId,
+        name: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
+        legalName: req.name || cleanName,
+        domain: verifiedDomain,
+        website: req.website || `https://${verifiedDomain}`,
+        industry: req.industry || 'Commercial Entity',
+        employeeCount: undefined,
+        employeeRange: undefined,
+        country: req.country || undefined,
+        city: req.city || undefined,
+        description: `Canonical company record registered for ${cleanName}.`,
+        logoUrl: undefined,
+        status: 'ACTIVE',
+        firstSeenAt: new Date().toISOString(),
+        lastVerifiedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
 
-    db.companies.push(newCompany);
+      db.companies.push(newCompany);
 
-    db.logActivity({
-      workspaceId,
-      userId: 'usr-1',
-      companyId: newCompany.id,
-      type: 'COMPANY_TRACKED',
-      title: `Canonical Entity Resolved: ${newCompany.name}`,
-      description: verifiedDomain 
-        ? `Discovered and registered ${newCompany.domain} in ${newCompany.city}.`
-        : `Registered ${newCompany.name} (Resolution Pending domain verification).`
-    });
+      if (options.userId) {
+        db.logActivity({
+          workspaceId,
+          userId: options.userId,
+          companyId: newCompany.id,
+          type: 'COMPANY_TRACKED',
+          title: `Canonical Entity Registered: ${newCompany.name}`,
+          description: `Discovered and registered ${newCompany.domain}.`
+        });
+      }
 
+      return {
+        company: newCompany,
+        resolutionStatus: 'RESOLVED',
+        matchType: 'AUTO_CREATED',
+        confidence: 85,
+        normalizedDomain: verifiedDomain,
+        cleanName,
+        isNew: true
+      };
+    }
+
+    // Not confidently matched -> Strictly UNRESOLVED without fabrication
     return {
-      company: newCompany,
-      matchType: 'AUTO_CREATED',
-      confidence: verifiedDomain ? 85 : 60,
-      normalizedDomain: verifiedDomain || '',
+      company: null,
+      resolutionStatus: 'UNRESOLVED',
+      confidence: 0,
+      normalizedDomain,
       cleanName,
-      isNew: true
+      isNew: false
     };
   }
 
@@ -236,7 +255,7 @@ export class CompanyResolver {
       city?: string | null;
       country?: string | null;
     },
-    workspaceId: string = 'ws-main'
+    workspaceId: string
   ) {
     return CompanyResolver.resolveDiscoveredPlace(place, workspaceId);
   }
@@ -254,7 +273,7 @@ export class CompanyResolver {
       city?: string | null;
       country?: string | null;
     },
-    workspaceId: string = 'ws-main'
+    workspaceId: string
   ): Promise<{
     resolutionStatus: 'RESOLVED' | 'UNRESOLVED';
     companyId?: string;
@@ -264,8 +283,12 @@ export class CompanyResolver {
     matchType?: 'EXACT_DOMAIN' | 'ALIAS_MATCH' | 'FUZZY_NAME_MATCH';
     matchMethod?: 'EXACT_DOMAIN' | 'ALIAS_MATCH' | 'FUZZY_NAME_MATCH';
   }> {
+    if (!workspaceId) {
+      throw new Error('Workspace ID is required for place resolution');
+    }
+
     const rawDomain = place.website;
-    const normalizedDomain = this.normalizeDomain(rawDomain);
+    const normalizedDomain = this.normalizeDomain(rawDomain || undefined);
     const cleanName = this.cleanCompanyName(place.name);
 
     const existingCompanies = db.getCompaniesByWorkspace(workspaceId);
@@ -340,7 +363,7 @@ export class CompanyResolver {
   public static async mergeCompanies(
     sourceCompanyId: string,
     targetCompanyId: string,
-    workspaceId: string = 'ws-main'
+    workspaceId: string
   ): Promise<DbCompany> {
     const source = db.getCompanyById(sourceCompanyId, workspaceId);
     const target = db.getCompanyById(targetCompanyId, workspaceId);
@@ -372,15 +395,6 @@ export class CompanyResolver {
 
     // Archive source
     source.status = 'ARCHIVED';
-
-    db.logActivity({
-      workspaceId,
-      userId: 'usr-1',
-      companyId: target.id,
-      type: 'COMPANY_TRACKED',
-      title: `Merged Duplicate: ${source.name} into ${target.name}`,
-      description: `Consolidated all jobs, signals, contacts, and leads under canonical domain ${target.domain}.`
-    });
 
     return target;
   }

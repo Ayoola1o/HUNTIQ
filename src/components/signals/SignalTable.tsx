@@ -337,6 +337,26 @@ export const SignalTable: React.FC<SignalTableProps> = ({
           </div>
 
           <button
+            onClick={() => {
+              const headers = ['Signal Title', 'Company', 'Type', 'Impact', 'Detected', 'Why It Matters', 'Source'];
+              const rows = signals.map(s => [
+                `"${(s.title || '').replace(/"/g, '""')}"`,
+                `"${(s.companyName || '').replace(/"/g, '""')}"`,
+                `"${s.type}"`,
+                `"${s.impactLevel}"`,
+                `"${s.detectedTime}"`,
+                `"${(s.whyItMatters || '').replace(/"/g, '""')}"`,
+                `"${s.sourceType}"`
+              ]);
+              const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+              const encodedUri = encodeURI(csvContent);
+              const link = document.createElement('a');
+              link.setAttribute('href', encodedUri);
+              link.setAttribute('download', `signals_export_${new Date().toISOString().slice(0, 10)}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',

@@ -28,6 +28,7 @@ interface ContactTableProps {
   onToggleBookmark?: (contactId: string) => void;
   onOpenAddModal: () => void;
   onOpenImportModal: () => void;
+  onOpenFilters?: () => void;
 }
 
 export const ContactTable: React.FC<ContactTableProps> = ({
@@ -38,7 +39,8 @@ export const ContactTable: React.FC<ContactTableProps> = ({
   onSelectTab,
   onToggleBookmark,
   onOpenAddModal,
-  onOpenImportModal
+  onOpenImportModal,
+  onOpenFilters
 }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>(['cont-1']);
   const [searchQuery, setSearchQuery] = useState('');
@@ -378,20 +380,23 @@ export const ContactTable: React.FC<ContactTableProps> = ({
           </div>
 
           {/* More Filters (2) */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '12px',
-            fontWeight: 600,
-            color: '#4f46e5',
-            backgroundColor: '#f5f3ff',
-            border: '1px solid #c7d2fe',
-            borderRadius: '8px',
-            padding: '0 10px',
-            height: '34px',
-            cursor: 'pointer'
-          }}>
+          <div
+            onClick={onOpenFilters}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#4f46e5',
+              backgroundColor: '#f5f3ff',
+              border: '1px solid #c7d2fe',
+              borderRadius: '8px',
+              padding: '0 10px',
+              height: '34px',
+              cursor: 'pointer'
+            }}
+          >
             <SlidersHorizontal size={13} />
             <span>More Filters</span>
             <span style={{

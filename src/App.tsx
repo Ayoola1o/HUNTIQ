@@ -104,6 +104,31 @@ function AppContent() {
     );
   }
 
+  if (currentView === 'team') {
+    return (
+      <SettingsPage
+        onNavigate={handleNavigate}
+        initialSection="team"
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          navigateTo('onboarding');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'alerts') {
+    return (
+      <SignalsPage
+        onNavigate={handleNavigate}
+        onGoToOnboarding={() => {
+          setCurrentStep(1);
+          navigateTo('onboarding');
+        }}
+      />
+    );
+  }
+
   if (currentView === 'settings') {
     return (
       <SettingsPage

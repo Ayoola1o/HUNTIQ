@@ -14,7 +14,10 @@ export const signalsRouter = Router();
  * Lists buying signals with attached evidence
  */
 signalsRouter.get('/signals', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+  }
   const type = req.query.type as string | undefined;
   const companyId = req.query.companyId as string | undefined;
 
@@ -82,7 +85,10 @@ signalsRouter.get('/signals', async (req: AuthenticatedRequest, res: Response) =
  * Generates signals and verifiable evidence for a company based on its jobs
  */
 signalsRouter.post('/signals/generate', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+  }
   const { companyId } = req.body || {};
 
   if (!companyId) {
@@ -186,7 +192,10 @@ signalsRouter.post('/signals/generate', async (req: AuthenticatedRequest, res: R
  * Retrieves all signals and proof evidence for a specific company
  */
 signalsRouter.get('/signals/:companyId', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+  }
   const { companyId } = req.params;
 
   const signalRepo = createSignalRepository();

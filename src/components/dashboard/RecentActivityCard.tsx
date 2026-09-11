@@ -6,8 +6,10 @@ import {
   CheckCircle2, 
   ArrowRight 
 } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 export const RecentActivityCard: React.FC = () => {
+  const { navigateTo } = useHuntiq();
   const activities = [
     {
       id: '1',
@@ -69,7 +71,10 @@ export const RecentActivityCard: React.FC = () => {
 
         <a
           href="#activity"
-          onClick={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.preventDefault();
+            navigateTo('signals');
+          }}
           style={{
             fontSize: '12px',
             fontWeight: 600,
@@ -77,7 +82,8 @@ export const RecentActivityCard: React.FC = () => {
             textDecoration: 'none',
             display: 'flex',
             alignItems: 'center',
-            gap: '3px'
+            gap: '3px',
+            cursor: 'pointer'
           }}
         >
           <span>View all</span>

@@ -22,7 +22,8 @@ import {
   Sparkles, 
   RefreshCw,
   AlertCircle,
-  FolderOpen
+  FolderOpen,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface ContactsPageProps {
@@ -44,12 +45,30 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
 
+  // Filters state
+  const [appliedFilters, setAppliedFilters] = useState<{
+    minScore: number;
+    selectedIndustries: string[];
+    selectedLocations: string[];
+    selectedSignals: string[];
+  } | null>(null);
+
   // Modals state
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  const handleApplyFilters = (filters: {
+    minScore: number;
+    selectedIndustries: string[];
+    selectedLocations: string[];
+    selectedSignals: string[];
+  }) => {
+    setAppliedFilters(filters);
+    setIsFiltersModalOpen(false);
+  };
 
   // Load Contacts from Live Backend API
   const loadContacts = useCallback(async () => {
@@ -87,12 +106,34 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
     return contacts.find(c => c.id === selectedContactId) || contacts[0] || null;
   }, [contacts, selectedContactId]);
 
-  // Filtered contacts based on search and KPI Filter
+  // Filtered contacts based on search, KPI Filter, and applied modal filters
   const filteredContacts = useMemo(() => {
     return contacts.filter(c => {
       if (activeKpiFilter === 'high_influence' && c.influenceScore < 85) return false;
       if (activeKpiFilter === 'contacted' && !c.lastActivity.toLowerCase().includes('sent') && !c.lastActivity.toLowerCase().includes('opened')) return false;
       if (activeKpiFilter === 'replied' && !c.lastActivity.toLowerCase().includes('replied')) return false;
+
+      // Applied Modal Filters
+      if (appliedFilters) {
+        if (c.influenceScore < appliedFilters.minScore) return false;
+        if (
+          appliedFilters.selectedIndustries.length > 0 &&
+          !appliedFilters.selectedIndustries.some(ind =>
+            c.companyIndustry.toLowerCase().includes(ind.toLowerCase())
+          )
+        ) {
+          return false;
+        }
+        if (
+          appliedFilters.selectedLocations.length > 0 &&
+          !appliedFilters.selectedLocations.some(loc =>
+            c.location.toLowerCase().includes(loc.toLowerCase()) ||
+            c.companyLocation.toLowerCase().includes(loc.toLowerCase())
+          )
+        ) {
+          return false;
+        }
+      }
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -107,7 +148,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       }
       return true;
     });
-  }, [contacts, activeKpiFilter, searchQuery]);
+  }, [contacts, activeKpiFilter, searchQuery, appliedFilters]);
 
   // Toggle Save / Bookmark via API
   const handleToggleSave = async (contactId: string) => {
@@ -449,6 +490,26 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
               </div>
 
               <button
+                onClick={() => setIsFiltersModalOpen(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: appliedFilters ? '#f5f3ff' : '#ffffff',
+                  border: appliedFilters ? '1px solid #c7d2fe' : '1px solid #cbd5e1',
+                  color: appliedFilters ? '#4f46e5' : '#334155',
+                  borderRadius: '8px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <SlidersHorizontal size={13} color={appliedFilters ? '#4f46e5' : '#64748b'} />
+                <span>Filters {appliedFilters ? '(Active)' : ''}</span>
+              </button>
+
+              <button
                 onClick={() => setIsImportModalOpen(true)}
                 style={{
                   display: 'flex',
@@ -569,6 +630,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                   onToggleBookmark={handleToggleSave}
                   onOpenAddModal={() => setIsAddModalOpen(true)}
                   onOpenImportModal={() => setIsImportModalOpen(true)}
+                  onOpenFilters={() => setIsFiltersModalOpen(true)}
                 />
               )}
             </div>
@@ -605,7 +667,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       <OpportunityFiltersModal
         isOpen={isFiltersModalOpen}
         onClose={() => setIsFiltersModalOpen(false)}
-        onApply={() => setIsFiltersModalOpen(false)}
+        onApply={handleApplyFilters}
       />
 
       {/* AI Copilot Modal */}

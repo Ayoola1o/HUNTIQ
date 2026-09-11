@@ -34,10 +34,32 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
 
+  // Date Range and Filter states
+  const [dateRange, setDateRange] = useState('May 16, 2025 - May 30, 2025');
+  const [isDateMenuOpen, setIsDateMenuOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [appliedFilters, setAppliedFilters] = useState<{
+    minScore: number;
+    selectedIndustries: string[];
+    selectedLocations: string[];
+    selectedSignals: string[];
+  } | null>(null);
+
   // Modals state
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
+
+  const handleApplyFilters = (filters: {
+    minScore: number;
+    selectedIndustries: string[];
+    selectedLocations: string[];
+    selectedSignals: string[];
+  }) => {
+    setAppliedFilters(filters);
+    setToastMessage(`Filters applied: Min Score ${filters.minScore} | ${filters.selectedLocations.length} locations | ${filters.selectedSignals.length} signal types`);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   const selectedSig: SignalItem | undefined = (selectedSignalId ? signals.find((s: SignalItem) => s.id === selectedSignalId) : null) || signals[0];
 
@@ -67,6 +89,28 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
       const sigCompName = String(sig.companyName || '').toLowerCase();
       const comp = companies.find((c) => String(c.name || '').toLowerCase() === sigCompName);
       return comp ? (comp.opportunityScore || 0) >= 80 : (sig.impactScore || 0) >= 85;
+    }
+
+    // Applied Modal Filters
+    if (appliedFilters) {
+      if ((sig.impactScore || 70) < appliedFilters.minScore) return false;
+      if (
+        appliedFilters.selectedLocations.length > 0 &&
+        !appliedFilters.selectedLocations.some((loc) =>
+          String(sig.location || '').toLowerCase().includes(loc.toLowerCase())
+        )
+      ) {
+        return false;
+      }
+      if (
+        appliedFilters.selectedSignals.length > 0 &&
+        !appliedFilters.selectedSignals.some((s) =>
+          String(sig.title || '').toLowerCase().includes(s.toLowerCase()) ||
+          String(sig.type || '').toLowerCase().includes(s.toLowerCase())
+        )
+      ) {
+        return false;
+      }
     }
 
     return true;
@@ -204,6 +248,8 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
             {/* Notification Bell */}
             <div style={{ position: 'relative' }}>
               <button
+                onClick={() => onNavigate('signals')}
+                title="View signals & notifications"
                 style={{
                   width: '38px',
                   height: '38px',
@@ -228,49 +274,98 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
                 fontSize: '10px',
                 fontWeight: 800,
                 borderRadius: '10px',
-                padding: '1px 5px'
+                padding: '1px 5px',
+                pointerEvents: 'none'
               }}>
                 12
               </span>
             </div>
 
             {/* User Avatar */}
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              backgroundColor: '#f1f5f9',
-              border: '1px solid #cbd5e1',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12.5px',
-              fontWeight: 800,
-              color: '#334155'
-            }}>
+            <div
+              onClick={() => onNavigate('profile')}
+              title="View your profile & account settings"
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: '#f1f5f9',
+                border: '1px solid #cbd5e1',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12.5px',
+                fontWeight: 800,
+                color: '#334155',
+                cursor: 'pointer',
+                userSelect: 'none'
+              }}
+            >
               AA
             </div>
 
-            {/* Date Range Selector */}
-            <button
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                height: '38px',
-                padding: '0 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#334155',
-                cursor: 'pointer'
-              }}
-            >
-              <Calendar size={14} color="#64748b" />
-              <span>May 16, 2025 - May 30, 2025</span>
-            </button>
+            {/* Date Range Selector Dropdown */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setIsDateMenuOpen(!isDateMenuOpen)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  height: '38px',
+                  padding: '0 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#334155',
+                  cursor: 'pointer'
+                }}
+              >
+                <Calendar size={14} color="#64748b" />
+                <span>{dateRange}</span>
+              </button>
+
+              {isDateMenuOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '44px',
+                  right: 0,
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
+                  zIndex: 50,
+                  minWidth: '200px',
+                  padding: '6px'
+                }}>
+                  {['Today', 'Last 7 Days', 'Last 30 Days', 'May 16, 2025 - May 30, 2025', 'This Quarter'].map((range) => (
+                    <button
+                      key={range}
+                      onClick={() => {
+                        setDateRange(range);
+                        setIsDateMenuOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 12px',
+                        fontSize: '12px',
+                        fontWeight: dateRange === range ? 700 : 500,
+                        color: dateRange === range ? '#4f46e5' : '#334155',
+                        backgroundColor: dateRange === range ? '#f5f3ff' : 'transparent',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {range}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Filters Button */}
             <button
@@ -308,6 +403,39 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
             padding: '20px 0 36px'
           }}
         >
+          {/* Filter Feedback Toast */}
+          {toastMessage && (
+            <div style={{
+              margin: '0 32px',
+              padding: '10px 16px',
+              backgroundColor: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: '#1e40af',
+              boxShadow: '0 2px 6px rgba(59, 130, 246, 0.1)'
+            }}>
+              <span>{toastMessage}</span>
+              <button
+                onClick={() => setToastMessage(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#1d4ed8',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '12px'
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {/* 6 Top Summary KPI Cards */}
           <SignalsKpiCards
             activeFilter={activeKpiFilter}
@@ -352,7 +480,7 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
       <OpportunityFiltersModal
         isOpen={isFiltersModalOpen}
         onClose={() => setIsFiltersModalOpen(false)}
-        onApply={() => {}}
+        onApply={handleApplyFilters}
       />
 
       <AiCopilotModal

@@ -23,7 +23,7 @@ export class ScoringEngine {
 
     // 1. Hiring Velocity Scoring (Weight: 35%)
     const openJobs = jobs.filter(j => j.status === 'OPEN');
-    let velocityScore = 30;
+    let velocityScore = 20;
 
     if (openJobs.length >= 10) {
       velocityScore = 95;
@@ -32,14 +32,14 @@ export class ScoringEngine {
       velocityScore = 80;
       keyDrivers.push(`Strong hiring momentum (${openJobs.length} open roles)`);
     } else if (openJobs.length >= 2) {
-      velocityScore = 65;
+      velocityScore = 60;
       keyDrivers.push(`Active recruitment in ${Array.from(new Set(openJobs.map(j => j.department))).slice(0, 2).join(', ')}`);
     } else if (openJobs.length === 1) {
-      velocityScore = 50;
+      velocityScore = 40;
     }
 
     // 2. Buying Signal Surge (Weight: 35%)
-    let signalScore = 30;
+    let signalScore = 15;
     const activeSignals = signals.filter(s => s.status === 'ACTIVE');
 
     if (activeSignals.some(s => s.type === 'HIRING_ACCELERATION')) {
@@ -47,17 +47,17 @@ export class ScoringEngine {
       keyDrivers.push('Detected rapid hiring acceleration over 14-day window');
     }
     if (activeSignals.some(s => s.type === 'LEADERSHIP_HIRING')) {
-      signalScore += 20;
+      signalScore += 25;
       keyDrivers.push('Executive leadership search underway');
     }
     if (activeSignals.some(s => s.type === 'EXPANSION' || s.type === 'FUNDING')) {
-      signalScore += 15;
+      signalScore += 20;
       keyDrivers.push('Regional expansion or funding growth signal detected');
     }
     signalScore = Math.min(100, signalScore);
 
     // 3. Contact Reachability & Decision Maker Presence (Weight: 30%)
-    let contactReachabilityScore = 20;
+    let contactReachabilityScore = 10;
     const verifiedExecs = contacts.filter(c => 
       (c.seniority === 'DIRECTOR' || c.seniority === 'VP' || c.seniority === 'CXO') &&
       c.emailStatus === 'VALID'
@@ -67,11 +67,25 @@ export class ScoringEngine {
       contactReachabilityScore = 95;
       keyDrivers.push(`Multiple verified C-level/Director contacts (${verifiedExecs.map(e => e.firstName).join(', ')})`);
     } else if (verifiedExecs.length === 1) {
-      contactReachabilityScore = 85;
+      contactReachabilityScore = 80;
       keyDrivers.push(`Verified key decision maker: ${verifiedExecs[0].firstName} ${verifiedExecs[0].lastName} (${verifiedExecs[0].jobTitle})`);
     } else if (contacts.length > 0) {
-      contactReachabilityScore = 55;
+      const anyVerified = contacts.some(c => c.emailStatus === 'VALID');
+      contactReachabilityScore = anyVerified ? 50 : 30;
     }
+
+    // 4. ICP Fit Evaluation (Grounded in verifiable company properties)
+    let icpFitScore = 30;
+    if (company.domain && !company.domain.includes('gmail.com') && !company.domain.includes('yahoo.com')) {
+      icpFitScore += 20;
+    }
+    if (company.industry && company.industry !== 'Unknown') {
+      icpFitScore += 20;
+    }
+    if (company.employeeCount !== undefined && company.employeeCount > 0) {
+      icpFitScore += 20;
+    }
+    icpFitScore = Math.min(100, icpFitScore);
 
     // Composite Weighted Score
     const totalScore = Math.round(
@@ -81,30 +95,32 @@ export class ScoringEngine {
     );
 
     const tier: OpportunityEvaluation['tier'] = 
-      totalScore >= 85 ? 'Tier 1' : totalScore >= 70 ? 'Tier 2' : 'Tier 3';
+      totalScore >= 80 ? 'Tier 1' : totalScore >= 60 ? 'Tier 2' : 'Tier 3';
 
-    // Estimated Deal Value Calculation based on Employee size & Velocity
-    const empCount = parseInt(company.employeeCount || '100', 10) || 100;
-    let baseDeal = empCount > 500 ? 45000 : empCount > 200 ? 30000 : 18000;
-    if (totalScore >= 90) baseDeal *= 1.25;
+    // Estimated Deal Value: Calculated strictly when employee count or role count is verified
+    let estimatedDealValue = 0;
+    if (company.employeeCount && company.employeeCount > 0) {
+      estimatedDealValue = company.employeeCount > 500 ? 35000 : company.employeeCount > 100 ? 20000 : 10000;
+    } else if (openJobs.length > 0) {
+      estimatedDealValue = openJobs.length * 2000;
+    }
 
-    const estimatedDealValue = Math.round(baseDeal / 1000) * 1000;
-    const conversionProbability = Math.min(92, Math.max(25, Math.round(totalScore * 0.9)));
+    const conversionProbability = Math.min(90, Math.max(15, Math.round(totalScore * 0.85)));
 
     let recommendedAction = 'Monitor for additional buying signals';
-    if (totalScore >= 85) {
+    if (totalScore >= 80) {
       recommendedAction = verifiedExecs.length > 0 
-        ? `Initiate personalized outreach to ${verifiedExecs[0].firstName} ${verifiedExecs[0].lastName} focusing on strategic scaling`
-        : 'Run automated decision-maker enrichment to resolve C-level contacts';
-    } else if (totalScore >= 70) {
-      recommendedAction = 'Add account to high-priority watchlist and initiate discovery research';
+        ? `Initiate outreach to ${verifiedExecs[0].firstName} ${verifiedExecs[0].lastName} focusing on strategic scaling`
+        : 'Run decision-maker enrichment to resolve verified C-level contacts';
+    } else if (totalScore >= 60) {
+      recommendedAction = 'Add account to watchlist and monitor signal recency';
     }
 
     return {
       totalScore,
       tier,
       velocityScore,
-      icpFitScore: signalScore,
+      icpFitScore,
       contactReachabilityScore,
       estimatedDealValue,
       conversionProbability,
@@ -116,6 +132,7 @@ export class ScoringEngine {
   /**
    * Evaluates an explainable opportunity score for a discovered place business.
    * Derives factors strictly from verifiable evidence (digital gaps, presence, reviews, ratings).
+   * Missing information does NOT automatically increase score.
    */
   public static evaluateDiscoveredPlace(
     place: {
@@ -135,65 +152,58 @@ export class ScoringEngine {
     factors: Array<{ type: string; value: number; evidence: string }>;
   } {
     const factors: Array<{ type: string; value: number; evidence: string }> = [];
-    let score = 50; // Base baseline for commercial entity discovery
+    let score = 15; // Grounded baseline for verified place entity
 
     // Factor 1: Verified Local Presence
     if (place.address) {
-      score += 12;
+      score += 15;
       factors.push({
         type: 'company_presence',
-        value: 12,
-        evidence: `Verified active commercial address: ${place.address}`
+        value: 15,
+        evidence: `Verified commercial address: ${place.address}`
       });
     }
 
-    // Factor 2: Digital Presence Gap or Web Maturity
-    if (!place.website) {
-      score += 20;
+    // Factor 2: Verified Direct Contact Channel
+    if (place.phone) {
+      score += 15;
       factors.push({
-        type: 'digital_gap_opportunity',
-        value: 20,
-        evidence: 'High conversion urgency: No verified website found on Google Maps'
-      });
-    } else if (audit?.gapScore && audit.gapScore >= 70) {
-      score += 18;
-      factors.push({
-        type: 'performance_gap_opportunity',
-        value: 18,
-        evidence: `Significant digital friction detected (Gap score: ${audit.gapScore}/100)`
-      });
-    } else {
-      score += 10;
-      factors.push({
-        type: 'digital_optimization',
-        value: 10,
-        evidence: 'Active digital presence ready for advanced optimization & modernization'
+        type: 'contact_reachability',
+        value: 15,
+        evidence: 'Verified telephone contact channel available'
       });
     }
 
-    // Factor 3: Google Maps Review Traction
+    // Factor 3: Google Maps Traction
     if (place.reviewCount && place.reviewCount > 0) {
-      const val = Math.min(15, Math.round(place.reviewCount / 5));
+      const val = Math.min(20, Math.round(place.reviewCount / 5) + 5);
       score += val;
       factors.push({
         type: 'market_traction',
         value: val,
-        evidence: `${place.reviewCount} customer reviews recorded on Google Maps`
+        evidence: `${place.reviewCount} customer reviews recorded (Rating: ${place.rating ?? 'N/A'})`
       });
     }
 
-    // Factor 4: Verified Contact Channel
-    if (place.phone) {
-      score += 8;
+    // Factor 4: Digital Gap & Performance Audit (Only from verified audit findings)
+    if (audit?.gapScore && audit.gapScore >= 70) {
+      score += 20;
       factors.push({
-        type: 'contact_reachability',
-        value: 8,
-        evidence: 'Verified direct business telephone channel available'
+        type: 'performance_gap_opportunity',
+        value: 20,
+        evidence: `Digital audit detected performance friction (Gap score: ${audit.gapScore}/100)`
+      });
+    } else if (place.website) {
+      score += 10;
+      factors.push({
+        type: 'web_presence',
+        value: 10,
+        evidence: 'Active domain discovered for reachability'
       });
     }
 
     return {
-      score: Math.min(98, score),
+      score: Math.min(85, score),
       factors
     };
   }

@@ -48,8 +48,31 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
   const [inspectingScoreOpp, setInspectingScoreOpp] = useState<OpportunityItem | null>(null);
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
 
+  // Search & Filter & UI States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isStarred, setIsStarred] = useState(false);
+  const [dateRange, setDateRange] = useState('May 16, 2025 - May 30, 2025');
+  const [isDateMenuOpen, setIsDateMenuOpen] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState<{
+    minScore: number;
+    selectedIndustries: string[];
+    selectedLocations: string[];
+    selectedSignals: string[];
+  } | null>(null);
+
   // Live dataset from Huntiq engine
   const [opportunities, setOpportunities] = useState<OpportunityItem[]>(() => dynamicOpportunities);
+
+  const handleApplyFilters = (filters: {
+    minScore: number;
+    selectedIndustries: string[];
+    selectedLocations: string[];
+    selectedSignals: string[];
+  }) => {
+    setAppliedFilters(filters);
+    setSyncToast(`Filters applied: Min Score ${filters.minScore} | ${filters.selectedIndustries.length} industries | ${filters.selectedLocations.length} regions`);
+    setTimeout(() => setSyncToast(null), 3500);
+  };
 
   // Reactively synchronize whenever live backend data refreshes
   React.useEffect(() => {
@@ -130,15 +153,49 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
     );
   };
 
-  // Filter opportunities based on active tab
+  // Filter opportunities based on search query, active tab, and modal filters
   const filteredOpportunities = opportunities.filter((opp) => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'hot') return opp.priority === 'Hot';
-    if (activeTab === 'high') return opp.priority === 'High';
-    if (activeTab === 'medium') return opp.priority === 'Medium';
-    if (activeTab === 'low') return opp.priority === 'Low';
-    if (activeTab === 'won') return opp.stage === 'Closed Won';
-    if (activeTab === 'lost') return opp.stage === 'Closed Lost';
+    // Search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        opp.companyName.toLowerCase().includes(q) ||
+        opp.industry.toLowerCase().includes(q) ||
+        opp.location.toLowerCase().includes(q) ||
+        opp.whyNow.toLowerCase().includes(q) ||
+        (opp.tags && opp.tags.some((t) => t.toLowerCase().includes(q)));
+      if (!matchesSearch) return false;
+    }
+
+    // Active tab filter
+    if (activeTab === 'hot' && opp.priority !== 'Hot') return false;
+    if (activeTab === 'high' && opp.priority !== 'High') return false;
+    if (activeTab === 'medium' && opp.priority !== 'Medium') return false;
+    if (activeTab === 'low' && opp.priority !== 'Low') return false;
+    if (activeTab === 'won' && opp.stage !== 'Closed Won') return false;
+    if (activeTab === 'lost' && opp.stage !== 'Closed Lost') return false;
+
+    // Applied modal filters
+    if (appliedFilters) {
+      if (opp.score < appliedFilters.minScore) return false;
+      if (
+        appliedFilters.selectedIndustries.length > 0 &&
+        !appliedFilters.selectedIndustries.some((ind) =>
+          opp.industry.toLowerCase().includes(ind.toLowerCase())
+        )
+      ) {
+        return false;
+      }
+      if (
+        appliedFilters.selectedLocations.length > 0 &&
+        !appliedFilters.selectedLocations.some((loc) =>
+          opp.location.toLowerCase().includes(loc.toLowerCase())
+        )
+      ) {
+        return false;
+      }
+    }
+
     return true;
   });
 
@@ -194,17 +251,19 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
                 Opportunities
               </h1>
               <button
+                onClick={() => setIsStarred(!isStarred)}
+                title={isStarred ? 'Unfavorite view' : 'Favorite view'}
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: isStarred ? '#f59e0b' : '#94a3b8',
                   cursor: 'pointer',
                   padding: '2px',
                   display: 'flex',
                   alignItems: 'center'
                 }}
               >
-                <Star size={16} />
+                <Star size={16} fill={isStarred ? '#f59e0b' : 'none'} />
               </button>
               <div style={{
                 display: 'inline-flex',
@@ -279,7 +338,9 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
               <Search size={15} color="#94a3b8" />
               <input
                 type="text"
-                placeholder="Search companies, people, signals..."
+                placeholder="Search opportunities, industries, tags..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   border: 'none',
                   outline: 'none',
@@ -289,16 +350,33 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
                   width: '100%'
                 }}
               />
-              <span className="desktop-only" style={{
-                fontSize: '10.5px',
-                fontWeight: 700,
-                color: '#94a3b8',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
-                padding: '1px 4px'
-              }}>
-                ⌘ K
-              </span>
+              {searchQuery ? (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#94a3b8',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    padding: 0
+                  }}
+                >
+                  ✕
+                </button>
+              ) : (
+                <span className="desktop-only" style={{
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  color: '#94a3b8',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '4px',
+                  padding: '1px 4px'
+                }}>
+                  ⌘ K
+                </span>
+              )}
             </div>
 
             {/* Ask AI Copilot Button */}
@@ -327,6 +405,8 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
             {/* Notification Bell */}
             <div style={{ position: 'relative' }}>
               <button
+                onClick={() => onNavigate('signals')}
+                title="View signals & live notifications"
                 style={{
                   width: '38px',
                   height: '38px',
@@ -351,49 +431,98 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
                 fontSize: '10px',
                 fontWeight: 800,
                 borderRadius: '10px',
-                padding: '1px 5px'
+                padding: '1px 5px',
+                pointerEvents: 'none'
               }}>
                 12
               </span>
             </div>
 
             {/* User Avatar */}
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              backgroundColor: '#f1f5f9',
-              border: '1px solid #cbd5e1',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12.5px',
-              fontWeight: 800,
-              color: '#334155'
-            }}>
+            <div
+              onClick={() => onNavigate('profile')}
+              title="View your profile & account settings"
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: '#f1f5f9',
+                border: '1px solid #cbd5e1',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12.5px',
+                fontWeight: 800,
+                color: '#334155',
+                cursor: 'pointer',
+                userSelect: 'none'
+              }}
+            >
               AA
             </div>
 
-            {/* Date Range Selector */}
-            <button
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                height: '38px',
-                padding: '0 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#334155',
-                cursor: 'pointer'
-              }}
-            >
-              <Calendar size={14} color="#64748b" />
-              <span>May 16, 2025 - May 30, 2025</span>
-            </button>
+            {/* Date Range Selector Dropdown */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setIsDateMenuOpen(!isDateMenuOpen)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  height: '38px',
+                  padding: '0 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#334155',
+                  cursor: 'pointer'
+                }}
+              >
+                <Calendar size={14} color="#64748b" />
+                <span>{dateRange}</span>
+              </button>
+
+              {isDateMenuOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '44px',
+                  right: 0,
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
+                  zIndex: 50,
+                  minWidth: '200px',
+                  padding: '6px'
+                }}>
+                  {['Today', 'Last 7 Days', 'Last 30 Days', 'May 16, 2025 - May 30, 2025', 'This Quarter'].map((range) => (
+                    <button
+                      key={range}
+                      onClick={() => {
+                        setDateRange(range);
+                        setIsDateMenuOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 12px',
+                        fontSize: '12px',
+                        fontWeight: dateRange === range ? 700 : 500,
+                        color: dateRange === range ? '#4f46e5' : '#334155',
+                        backgroundColor: dateRange === range ? '#f5f3ff' : 'transparent',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {range}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Filters Button */}
             <button
@@ -547,7 +676,7 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
       <OpportunityFiltersModal
         isOpen={isFiltersModalOpen}
         onClose={() => setIsFiltersModalOpen(false)}
-        onApply={() => {}}
+        onApply={handleApplyFilters}
       />
 
       <AiCopilotModal

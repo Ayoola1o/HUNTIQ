@@ -25,6 +25,7 @@ import { authRouter } from './routes/auth';
 import { scraperRouter } from './routes/scraper';
 import { emailIntegrationRouter } from './routes/emailIntegration';
 import { leadIngestRouter } from './routes/leadIngest';
+import { emailDiscoveryRouter } from './routes/emailDiscovery';
 import { registerDefaultJobProviders } from './providers/jobs';
 
 export const createApp = () => {
@@ -73,6 +74,8 @@ export const createApp = () => {
   app.use('/api/v1', emailIntegrationRouter);
   app.use('/api', leadIngestRouter);
   app.use('/api/v1', leadIngestRouter);
+  app.use('/api', emailDiscoveryRouter);
+  app.use('/api/v1', emailDiscoveryRouter);
 
   // Root fallback info
   app.get('/', (_req, res) => {

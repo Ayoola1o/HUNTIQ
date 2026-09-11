@@ -12,7 +12,8 @@ import {
   Star, 
   ArrowUpRight, 
   Loader2, 
-  SlidersHorizontal 
+  SlidersHorizontal,
+  Users
 } from 'lucide-react';
 import type { 
   DiscoveredBusiness, 
@@ -25,6 +26,7 @@ import { discoverBusinesses, getDiscoveryTemplates } from '../../api/discovery';
 import { SeoAuditModal } from './SeoAuditModal';
 import { CompetitorAnalysisModal } from './CompetitorAnalysisModal';
 import { OpportunityScoreModal } from './OpportunityScoreModal';
+import { ContactDiscoveryModal } from './ContactDiscoveryModal';
 import { useHuntiq } from '../../context/HuntiqContext';
 import type { ProspectPitchPayload } from '../../types/outreach';
 
@@ -88,6 +90,8 @@ export const BusinessNicheDiscovery: React.FC<BusinessNicheDiscoveryProps> = ({
   const [selectedCompetitorBusiness, setSelectedCompetitorBusiness] = useState<DiscoveredBusiness | null>(null);
   // Selected Opportunity Scoring modal
   const [selectedScoringBusiness, setSelectedScoringBusiness] = useState<DiscoveredBusiness | null>(null);
+  // Selected Contact Discovery modal
+  const [selectedDiscoveryBusiness, setSelectedDiscoveryBusiness] = useState<DiscoveredBusiness | null>(null);
 
   const handleExecuteSearch = useCallback(async (
     targetMode: DiscoveryMode = mode,
@@ -717,6 +721,28 @@ export const BusinessNicheDiscovery: React.FC<BusinessNicheDiscoveryProps> = ({
                         <span>Generate Lead Magnet</span>
                       </button>
 
+                      {Boolean(biz.website || biz.hasWebsite) && (
+                        <button
+                          onClick={() => setSelectedDiscoveryBusiness(biz)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            backgroundColor: '#eff6ff',
+                            color: '#1d4ed8',
+                            border: '1px solid #bfdbfe',
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Users size={13} />
+                          <span>Find Contacts</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
                           if (onSelectBusinessForAudit) onSelectBusinessForAudit(biz);
@@ -1090,12 +1116,26 @@ export const BusinessNicheDiscovery: React.FC<BusinessNicheDiscoveryProps> = ({
             prospectName: selectedScoringBusiness.name,
             domain: selectedScoringBusiness.website,
             location: selectedScoringBusiness.location,
-            niche: selectedScoringBusiness.category || selectedScoringBusiness.industry,
             hasWebsite: selectedScoringBusiness.hasWebsite
           }}
           onNavigateToOutreach={() => {
             handlePitchProspect(selectedScoringBusiness);
             setSelectedScoringBusiness(null);
+          }}
+        />
+      )}
+
+      {/* Contact Discovery Modal (HUNTIQ + Email Scraper Integration) */}
+      {selectedDiscoveryBusiness && (
+        <ContactDiscoveryModal
+          isOpen={!!selectedDiscoveryBusiness}
+          onClose={() => setSelectedDiscoveryBusiness(null)}
+          target={{
+            name: selectedDiscoveryBusiness.name,
+            website: selectedDiscoveryBusiness.website,
+            domain: selectedDiscoveryBusiness.website ? selectedDiscoveryBusiness.website.replace(/^https?:\/\//, '').split('/')[0] : undefined,
+            category: selectedDiscoveryBusiness.category || selectedDiscoveryBusiness.industry,
+            address: selectedDiscoveryBusiness.address || selectedDiscoveryBusiness.location
           }}
         />
       )}

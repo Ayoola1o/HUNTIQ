@@ -163,7 +163,13 @@ contactsRouter.delete('/contacts/:id', async (req: AuthenticatedRequest, res: Re
  * Trigger automated decision-maker and email enrichment for a company
  */
 contactsRouter.post('/contacts/enrich', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const { companyId } = req.body || {};
 
   if (!companyId) {

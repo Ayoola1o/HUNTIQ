@@ -22,8 +22,7 @@ export const corsMiddleware = cors({
     'Content-Type', 
     'Authorization', 
     'X-HUNTIQ-API-KEY', 
-    'x-huntiq-api-key', 
-    'X-Workspace-Id', 
-    'x-workspace-id'
+    'x-huntiq-api-key',
+    'Idempotency-Key'
   ]
 });

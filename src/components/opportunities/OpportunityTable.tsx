@@ -21,6 +21,7 @@ interface OpportunityTableProps {
   activeTab: string;
   onSelectTab: (tab: string) => void;
   onStageChange?: (id: string, stage: OpportunityStage) => void;
+  onExport?: () => void;
 }
 
 export const OpportunityTable: React.FC<OpportunityTableProps> = ({
@@ -29,7 +30,8 @@ export const OpportunityTable: React.FC<OpportunityTableProps> = ({
   onSelectOpportunity,
   onOpenNewModal,
   activeTab,
-  onSelectTab
+  onSelectTab,
+  onExport
 }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>(['opp-1']);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -321,6 +323,31 @@ export const OpportunityTable: React.FC<OpportunityTableProps> = ({
 
           {/* Export Button */}
           <button
+            onClick={() => {
+              if (onExport) {
+                onExport();
+              } else {
+                const headers = ['Company', 'Score', 'Priority', 'Why', 'Value', 'Stage', 'Location', 'Industry'];
+                const rows = opportunities.map(o => [
+                  `"${o.companyName}"`,
+                  o.score,
+                  `"${o.priority}"`,
+                  `"${(o.whyNow || '').replace(/"/g, '""')}"`,
+                  o.estimatedValue,
+                  `"${o.stage}"`,
+                  `"${o.location}"`,
+                  `"${o.industry}"`
+                ]);
+                const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement('a');
+                link.setAttribute('href', encodedUri);
+                link.setAttribute('download', `opportunities_export_${new Date().toISOString().slice(0, 10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',

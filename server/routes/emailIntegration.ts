@@ -6,12 +6,28 @@ import { outreachRepository } from '../repositories/outreach';
 
 export const emailIntegrationRouter = Router();
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 /**
  * GET /api/v1/integrations/email/config
- * Retrieves active email configuration status
+ * Retrieves active email configuration status scoped to authenticated workspace.
  */
 emailIntegrationRouter.get('/integrations/email/config', (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = (req.headers['x-workspace-id'] as string) || req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
+
   const cfg = EmailDispatchService.getConfig(workspaceId);
 
   // Return safe config (mask passwords and API keys)
@@ -36,7 +52,14 @@ emailIntegrationRouter.get('/integrations/email/config', (req: AuthenticatedRequ
  * Updates email integration credentials for the workspace
  */
 emailIntegrationRouter.post('/integrations/email/config', (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = (req.headers['x-workspace-id'] as string) || req.user?.workspaceId || 'ws-main';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
+
   const {
     provider,
     fromName,
@@ -84,9 +107,15 @@ emailIntegrationRouter.post('/integrations/email/config', (req: AuthenticatedReq
  */
 emailIntegrationRouter.post('/integrations/email/test', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const workspaceId = (req.headers['x-workspace-id'] as string) || req.user?.workspaceId || 'ws-main';
-    const { toEmail } = req.body || {};
+    const workspaceId = req.user?.workspaceId;
+    if (!workspaceId) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      });
+    }
 
+    const { toEmail } = req.body || {};
     const targetEmail = toEmail || req.user?.email;
     if (!targetEmail) {
       return res.status(400).json({
@@ -111,11 +140,19 @@ emailIntegrationRouter.post('/integrations/email/test', async (req: Authenticate
 
 /**
  * POST /api/v1/integrations/email/send
- * Dispatches a live outreach email to an extracted prospect
+ * Dispatches a live outreach email to an extracted prospect.
+ * Strictly verifies recipient belongs to a contact in the authenticated workspace.
  */
 emailIntegrationRouter.post('/integrations/email/send', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const workspaceId = (req.headers['x-workspace-id'] as string) || req.user?.workspaceId || 'ws-main';
+    const workspaceId = req.user?.workspaceId;
+    if (!workspaceId) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      });
+    }
+
     const {
       to,
       toName,
@@ -133,13 +170,33 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
       });
     }
 
+    const cleanTo = to.toLowerCase().trim();
+
+    // Security Guard: Verify recipient exists in the authenticated workspace
+    const matchingContact = db.contacts.find(
+      c => c.workspaceId === workspaceId && c.email.toLowerCase() === cleanTo
+    );
+    if (!matchingContact) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'RECIPIENT_NOT_IN_WORKSPACE',
+          message: 'Recipient email must belong to a contact within the authenticated workspace'
+        }
+      });
+    }
+
+    // Sanitize and escape HTML
+    const sanitizedContent = escapeHtml(content);
+    const safeHtml = `<div style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #1e293b;">${sanitizedContent.replace(/\n/g, '<br/>')}</div>`;
+
     // 1. Dispatch actual email via integration
     const dispatchResult = await EmailDispatchService.sendEmail({
-      to,
+      to: cleanTo,
       toName,
       subject,
       text: content,
-      html: `<div style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #1e293b;">${content.replace(/\n/g, '<br/>')}</div>`
+      html: safeHtml
     }, workspaceId);
 
     if (!dispatchResult.success) {
@@ -153,16 +210,16 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
       });
     }
 
-    // 2. Persist / Log Outreach Thread in CRM
+    // 2. Persist Outreach Thread in CRM
     const threadId = `outreach-dispatch-${Date.now()}`;
-    const senderName = req.user?.fullName || 'Ayoola Ade';
+    const senderName = req.user?.fullName || 'Account Executive';
 
     const newOutreach = await outreachRepository.create({
       id: threadId,
-      companyName: companyName || to.split('@')[1],
-      contactName: toName || to.split('@')[0],
-      contactRole: 'Verified Prospect',
-      email: to,
+      companyName: companyName || cleanTo.split('@')[1],
+      contactName: toName || matchingContact.firstName ? `${matchingContact.firstName} ${matchingContact.lastName || ''}`.trim() : cleanTo.split('@')[0],
+      contactRole: matchingContact.jobTitle || 'Prospect',
+      email: cleanTo,
       emailStatus: 'verified',
       avatarBg: '#eff6ff',
       avatarColor: '#2563eb',
@@ -171,8 +228,8 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
       lastMessageTime: 'Just now',
       status: 'contacted',
       channel: 'email',
-      campaignName: campaignName || 'Cold Scraper Outreach',
-      opportunityScore: opportunityScore || 85,
+      campaignName: campaignName || 'Outreach Campaign',
+      opportunityScore: opportunityScore || 75,
       unread: false,
       thread: [
         {
@@ -189,13 +246,17 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
     }, workspaceId);
 
     // 3. Log Activity
-    db.logActivity({
-      workspaceId,
-      userId: req.user?.id || 'usr-1',
-      type: 'OUTREACH_SENT',
-      title: `Dispatched Outreach Email to ${toName || to}`,
-      description: `Subject: "${subject}" | Delivered via ${dispatchResult.provider} (ID: ${dispatchResult.messageId}).`
-    });
+    if (req.user?.id) {
+      db.logActivity({
+        workspaceId,
+        userId: req.user.id,
+        companyId: matchingContact.companyId,
+        contactId: matchingContact.id,
+        type: 'OUTREACH_SENT',
+        title: `Dispatched Outreach Email to ${toName || cleanTo}`,
+        description: `Subject: "${subject}" | Delivered via ${dispatchResult.provider} (ID: ${dispatchResult.messageId}).`
+      });
+    }
 
     return res.json({
       success: true,

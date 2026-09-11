@@ -31,6 +31,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeKpiFilter, setActiveKpiFilter] = useState('generated');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Initial Mock Reports
   const [reports, setReports] = useState<ReportItem[]>([
@@ -166,6 +167,21 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
     setSelectedReport(newReport);
   };
 
+  const handleShareReport = (report: ReportItem) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(`${window.location.origin}/reports/${report.id}`);
+    }
+    setReports(prev => prev.map(r => r.id === report.id ? { ...r, isShared: true } : r));
+    setToastMessage(`Share link copied to clipboard for "${report.name}"!`);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleConfirmSchedule = () => {
+    setIsScheduleModalOpen(false);
+    setToastMessage('Report schedule saved successfully! Automated intelligence digest enabled.');
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
   return (
     <div style={{
       display: 'flex',
@@ -293,6 +309,39 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
           </div>
         </header>
 
+        {/* Feedback Toast */}
+        {toastMessage && (
+          <div style={{
+            margin: '0 32px',
+            padding: '10px 16px',
+            backgroundColor: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '13px',
+            fontWeight: 600,
+            color: '#1e40af',
+            boxShadow: '0 2px 6px rgba(59, 130, 246, 0.1)'
+          }}>
+            <span>{toastMessage}</span>
+            <button
+              onClick={() => setToastMessage(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#1d4ed8',
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '12px'
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* KPI Metrics Row */}
         <div>
           <ReportsKpiCards
@@ -307,7 +356,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
           <FeaturedReportCard
             report={reports[0]}
             onOpenReport={(r) => setSelectedReport(r)}
-            onShareReport={() => {}}
+            onShareReport={handleShareReport}
           />
         )}
 
@@ -323,7 +372,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
           onSelectReport={(r) => setSelectedReport(r)}
           onGenerateReport={() => handleOpenWizard('executive_brief')}
           onScheduleReport={() => setIsScheduleModalOpen(true)}
-          onShareReport={() => {}}
+          onShareReport={handleShareReport}
         />
       </div>
 
@@ -347,7 +396,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
       <ScheduleReportModal
         isOpen={isScheduleModalOpen}
         onClose={() => setIsScheduleModalOpen(false)}
-        onConfirmSchedule={() => {}}
+        onConfirmSchedule={handleConfirmSchedule}
       />
 
       {/* AI Copilot Modal */}

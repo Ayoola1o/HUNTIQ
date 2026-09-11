@@ -187,6 +187,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           {/* Notifications Button */}
           <div style={{ position: 'relative' }}>
             <button
+              onClick={() => navigateTo('signals')}
+              title="View Buying Signals & Alerts"
               style={{
                 width: '38px',
                 height: '38px',

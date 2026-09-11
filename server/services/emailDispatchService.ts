@@ -48,7 +48,7 @@ export class EmailDispatchService {
    * Retrieves active email integration config for a workspace.
    * Reads from environment variables or saved memory store.
    */
-  public static getConfig(workspaceId: string = 'ws-main'): EmailIntegrationConfig {
+  public static getConfig(workspaceId: string): EmailIntegrationConfig {
     if (this.workspaceConfigs.has(workspaceId)) {
       return this.workspaceConfigs.get(workspaceId)!;
     }
@@ -98,7 +98,7 @@ export class EmailDispatchService {
    * Updates and persists workspace email integration settings.
    */
   public static updateConfig(
-    workspaceId: string = 'ws-main',
+    workspaceId: string,
     updates: Partial<EmailIntegrationConfig>
   ): EmailIntegrationConfig {
     const current = this.getConfig(workspaceId);
@@ -118,7 +118,7 @@ export class EmailDispatchService {
    */
   public static async sendEmail(
     options: SendEmailOptions,
-    workspaceId: string = 'ws-main'
+    workspaceId: string
   ): Promise<SendEmailResult> {
     const { to, toName, subject, html, text, from, replyTo } = options;
     const cleanTo = to.toLowerCase().trim();
@@ -209,7 +209,7 @@ export class EmailDispatchService {
             pass: config.smtpPass
           },
           tls: {
-            rejectUnauthorized: false
+            rejectUnauthorized: process.env.NODE_ENV === 'production'
           }
         });
 
@@ -264,7 +264,7 @@ export class EmailDispatchService {
    */
   public static async sendTestEmail(
     toEmail: string,
-    workspaceId: string = 'ws-main'
+    workspaceId: string
   ): Promise<SendEmailResult> {
     const config = this.getConfig(workspaceId);
     const subject = `[HUNTIQ] Verification Test Email (${config.provider.toUpperCase()})`;
