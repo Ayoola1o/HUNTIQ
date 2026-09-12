@@ -1,25 +1,12 @@
-import app from "./app";
-import { logger } from "./lib/logger";
+import { createApp } from './app';
+import { config, validateProductionConfig } from './config/env';
 
-const rawPort = process.env["PORT"];
+// Fail fast in standalone production server if required configuration is missing
+validateProductionConfig();
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+const app = createApp();
 
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
-
-  logger.info({ port }, "Server listening");
+app.listen(config.port, () => {
+  console.log(`[HUNTIQ-API] Server running on port ${config.port} in ${config.nodeEnv} mode`);
+  console.log(`[HUNTIQ-API] Health Telemetry: http://localhost:${config.port}/api/health`);
 });

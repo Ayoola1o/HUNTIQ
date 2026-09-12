@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "HUNTIQ"
+description = "An AI-powered sales intelligence workspace for discovering prospects, tracking buying signals, researching companies, and managing outreach, pipeline, tasks, and meetings."
+version = "1.0.0"
+id = "artifacts/huntiq"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24566
+
+[services.development]
+run = "pnpm --filter @workspace/huntiq run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/huntiq", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/huntiq/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24566"
+BASE_PATH = "/"
