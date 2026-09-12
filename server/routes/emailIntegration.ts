@@ -3,6 +3,8 @@ import type { AuthenticatedRequest } from '../middleware/auth';
 import { EmailDispatchService, EmailProviderType } from '../services/emailDispatchService';
 import { db } from '../db/memoryStore';
 import { outreachRepository } from '../repositories/outreach';
+import { createContactRepository } from '../repositories/contacts';
+import { createActivityLogRepository } from '../repositories/activity-logs';
 
 export const emailIntegrationRouter = Router();
 
@@ -173,9 +175,28 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
     const cleanTo = to.toLowerCase().trim();
 
     // Security Guard: Verify recipient exists in the authenticated workspace
-    const matchingContact = db.contacts.find(
+    let matchingContact = db.contacts.find(
       c => c.workspaceId === workspaceId && c.email.toLowerCase() === cleanTo
     );
+    if (!matchingContact) {
+      try {
+        const contactRepo = createContactRepository();
+        const contacts = await contactRepo.listByUser(req.user?.id || '', workspaceId);
+        const found = contacts.find(c => c.email && c.email.toLowerCase() === cleanTo);
+        if (found) {
+          matchingContact = {
+            id: found.id,
+            workspaceId,
+            firstName: (found.name || '').split(' ')[0] || '',
+            lastName: (found.name || '').split(' ').slice(1).join(' ') || '',
+            email: found.email!,
+            jobTitle: found.role || 'Contact',
+            companyId: null
+          } as any;
+        }
+      } catch {}
+    }
+
     if (!matchingContact) {
       return res.status(403).json({
         success: false,
@@ -217,7 +238,11 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
     const newOutreach = await outreachRepository.create({
       id: threadId,
       companyName: companyName || cleanTo.split('@')[1],
-      contactName: toName || matchingContact.firstName ? `${matchingContact.firstName} ${matchingContact.lastName || ''}`.trim() : cleanTo.split('@')[0],
+      contactName: toName 
+        ? toName 
+        : (matchingContact?.firstName 
+            ? `${matchingContact.firstName} ${matchingContact.lastName || ''}`.trim() 
+            : cleanTo.split('@')[0]),
       contactRole: matchingContact.jobTitle || 'Prospect',
       email: cleanTo,
       emailStatus: 'verified',
@@ -256,6 +281,18 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
         title: `Dispatched Outreach Email to ${toName || cleanTo}`,
         description: `Subject: "${subject}" | Delivered via ${dispatchResult.provider} (ID: ${dispatchResult.messageId}).`
       });
+
+      try {
+        const activityRepo = createActivityLogRepository();
+        await activityRepo.log({
+          workspaceId,
+          userId: req.user.id,
+          action: 'OUTREACH_SENT',
+          entityType: 'contact',
+          entityId: matchingContact.id,
+          details: `Dispatched Outreach Email to ${toName || cleanTo}: "${subject}"`
+        });
+      } catch {}
     }
 
     return res.json({

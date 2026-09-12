@@ -227,7 +227,7 @@ export class LeadIngestionService {
         const newContact: DbContact = {
           id: targetContactId,
           workspaceId,
-          companyId: resolvedCompany?.id || 'comp-unresolved',
+          companyId: resolvedCompany?.id || null,
           firstName,
           lastName,
           jobTitle: item.jobTitle || 'Business Contact',
@@ -261,7 +261,7 @@ export class LeadIngestionService {
         evidenceToSave.push({
           workspaceId,
           contactId: targetContactId,
-          companyId: resolvedCompany?.id || 'comp-unresolved',
+          companyId: resolvedCompany?.id || null,
           discoveryJobId: matchedJobId,
           email: cleanEmail,
           emailType: item.emailType || 'UNKNOWN',
@@ -412,7 +412,7 @@ export class LeadIngestionService {
       const contactRecord: DbContact = {
         id: contactId,
         workspaceId,
-        companyId: resolvedCompany?.id || 'comp-unresolved',
+        companyId: resolvedCompany?.id || null,
         firstName,
         lastName,
         jobTitle,

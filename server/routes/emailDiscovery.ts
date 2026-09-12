@@ -43,7 +43,7 @@ emailDiscoveryRouter.post(
         data: job
       });
     } catch (err: any) {
-      const statusCode = err.message?.includes('SSRF') ? 400 : 500;
+      const statusCode = err.message?.includes('SSRF') ? 400 : (err.statusCode || 500);
       return res.status(statusCode).json({
         success: false,
         error: {

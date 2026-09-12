@@ -1,5 +1,8 @@
 import { createApp } from './app';
-import { config } from './config/env';
+import { config, validateProductionConfig } from './config/env';
+
+// Fail fast in standalone production server if required configuration is missing
+validateProductionConfig();
 
 const app = createApp();
 

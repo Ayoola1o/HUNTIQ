@@ -77,7 +77,7 @@ export interface DbJob {
 export interface DbContact {
   id: string;
   workspaceId: string;
-  companyId: string;
+  companyId?: string | null;
   firstName: string;
   lastName: string;
   jobTitle: string;

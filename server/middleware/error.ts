@@ -16,13 +16,13 @@ export class AppError extends Error {
 }
 
 export const errorHandler = (
-  err: Error | AppError,
+  err: any,
   _req: Request,
   res: Response,
   _next: NextFunction
 ) => {
-  const statusCode = err instanceof AppError ? err.statusCode : 500;
-  const code = err instanceof AppError ? err.code : 'INTERNAL_SERVER_ERROR';
+  const statusCode = err.statusCode || (err instanceof AppError ? err.statusCode : 500);
+  const code = err.code || (err instanceof AppError ? err.code : 'INTERNAL_SERVER_ERROR');
 
   const response: ApiResponse = {
     success: false,

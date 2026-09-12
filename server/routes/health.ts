@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { ApiResponse, HealthResponse } from '../types/api';
-import { config } from '../config/env';
+import { config, getProductionConfigErrors } from '../config/env';
 
 export const healthRouter = Router();
 
@@ -10,6 +10,7 @@ const startTime = Date.now();
 healthRouter.get('/health', async (_req: Request, res: Response) => {
   const uptimeSeconds = Math.floor((Date.now() - startTime) / 1000);
   const memoryUsageMb = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+  const configErrors = getProductionConfigErrors();
 
   let dbStatus = 'unconfigured';
   if (config.databaseUrl) {
@@ -24,8 +25,10 @@ healthRouter.get('/health', async (_req: Request, res: Response) => {
     }
   }
 
+  const isDegraded = dbStatus === 'degraded' || configErrors.length > 0;
+
   const healthData: HealthResponse = {
-    status: dbStatus === 'degraded' ? 'degraded' : 'ok',
+    status: isDegraded ? 'degraded' : 'ok',
     service: 'huntiq-api',
     version: config.apiVersion,
     uptimeSeconds,
@@ -35,7 +38,8 @@ healthRouter.get('/health', async (_req: Request, res: Response) => {
     dependencies: {
       database: dbStatus,
       providers: ['greenhouse', 'lever', 'ashby']
-    }
+    },
+    ...(configErrors.length > 0 ? { configErrors } : {})
   } as any;
 
   const response: ApiResponse<HealthResponse> = {

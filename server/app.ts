@@ -28,6 +28,7 @@ import { leadIngestRouter } from './routes/leadIngest';
 import { emailDiscoveryRouter } from './routes/emailDiscovery';
 import { registerDefaultJobProviders } from './providers/jobs';
 import { ensureDatabaseMigrated } from './database/migrate';
+import { config, getProductionConfigErrors } from './config/env';
 
 export const createApp = () => {
   registerDefaultJobProviders();
@@ -44,20 +45,42 @@ export const createApp = () => {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
 
-  // Migration readiness middleware: ensure database migrations complete before requests query DB
+  // Production configuration and migration readiness middleware
   app.use(async (req, res, next) => {
-    if (req.path === '/health' || req.path === '/api/health' || req.path === '/') {
+    // Health, API root, and root info endpoints are always available for monitoring/diagnosis
+    if (req.path.endsWith('/health') || req.path === '/' || req.path === '/api') {
       return next();
     }
+
+    const configErrors = getProductionConfigErrors();
+    if (configErrors.length > 0) {
+      return res.status(503).json({
+        success: false,
+        error: `Production Configuration Error: ${configErrors.join(' ')} Please configure missing environment variables in your deployment dashboard.`,
+        code: 'DATABASE_UNAVAILABLE'
+      });
+    }
+
+    const isProd = config.nodeEnv === 'production' || process.env.VERCEL === '1';
+
     if (process.env.DATABASE_URL) {
-      try {
-        await ensureDatabaseMigrated();
-      } catch (err: any) {
-        return res.status(503).json({
-          success: false,
-          error: 'Database initialization is in progress or failed. Please retry shortly.',
-          code: 'DATABASE_UNAVAILABLE'
-        });
+      if (isProd) {
+        try {
+          await ensureDatabaseMigrated();
+        } catch (err: any) {
+          return res.status(503).json({
+            success: false,
+            error: 'Database initialization is in progress or failed. Please retry shortly.',
+            code: 'DATABASE_UNAVAILABLE'
+          });
+        }
+      } else {
+        // In local development or test without live Postgres, attempt migration non-blocking
+        try {
+          await ensureDatabaseMigrated();
+        } catch {
+          // Dev/test continues with in-memory stores
+        }
       }
     }
     next();

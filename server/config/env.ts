@@ -19,20 +19,26 @@ export interface ServerConfig {
 
 const nodeEnv = (process.env.NODE_ENV as ServerConfig['nodeEnv']) || 'development';
 
-export function validateProductionConfig(env: Record<string, string | undefined> = process.env): void {
+export function getProductionConfigErrors(env: Record<string, string | undefined> = process.env): string[] {
   const isProd = env.NODE_ENV === 'production' || env.VERCEL === '1';
+  const errors: string[] = [];
   if (isProd) {
     if (!env.JWT_SECRET) {
-      throw new Error('[HUNTIQ-CONFIG] Mandatory configuration missing: JWT_SECRET must be set in production.');
+      errors.push('JWT_SECRET must be set in production.');
     }
     if (!env.DATABASE_URL) {
-      throw new Error('[HUNTIQ-CONFIG] Mandatory configuration missing: DATABASE_URL must be set in production.');
+      errors.push('DATABASE_URL must be set in production.');
     }
   }
+  return errors;
 }
 
-// Validate production configuration on boot
-validateProductionConfig();
+export function validateProductionConfig(env: Record<string, string | undefined> = process.env): void {
+  const errors = getProductionConfigErrors(env);
+  if (errors.length > 0) {
+    throw new Error(`[HUNTIQ-CONFIG] Mandatory configuration missing in production: ${errors.join(' ')}`);
+  }
+}
 
 export const config: ServerConfig = {
   port: Number(process.env.PORT) || 3001,

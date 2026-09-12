@@ -95,7 +95,7 @@ async function runSuite() {
       });
 
       const body = await res.json();
-      assert.strictEqual(res.status, 201, `Expected 201, got ${res.status}`);
+      assert.strictEqual(res.status, 201, `Expected 201, got ${res.status}: ${JSON.stringify(body)}`);
       assert.strictEqual(body.success, true);
       assert.strictEqual(body.data.workspaceId, workspaceA);
       assert.strictEqual(body.data.targetDomain, 'acme-corp.com');

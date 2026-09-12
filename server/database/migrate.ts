@@ -15,7 +15,15 @@ export const runMigrations = async (poolOrUrl?: Pool | string) => {
     throw new Error('DATABASE_URL is required to run database migrations.');
   }
 
-  const pool = poolOrUrl instanceof Pool ? poolOrUrl : new Pool({ connectionString });
+  const isLocal = !connectionString || 
+    connectionString.includes('localhost') || 
+    connectionString.includes('127.0.0.1');
+  const pool = poolOrUrl instanceof Pool 
+    ? poolOrUrl 
+    : new Pool({ 
+        connectionString,
+        ssl: isLocal ? false : { rejectUnauthorized: false }
+      });
   const shouldClosePool = !(poolOrUrl instanceof Pool);
   const client = await pool.connect();
 
