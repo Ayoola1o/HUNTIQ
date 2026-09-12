@@ -9,7 +9,7 @@
     "dev:all": "npx concurrently \"npm run server\" \"npm run dev\"",
     "start": "npx concurrently \"npm run server\" \"npm run dev\"",
     "db:migrate": "tsx server/database/migrate.ts",
-    "test": "tsx server/tests/email_scraper_integration.test.ts",
+    "test": "tsx server/tests/email_scraper_integration.test.ts && tsx server/tests/api_key_management.test.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"

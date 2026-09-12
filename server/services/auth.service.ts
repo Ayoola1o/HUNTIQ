@@ -258,32 +258,54 @@ export class AuthService {
   }
 
   public async createApiKey(userId: string, workspaceId: string, name: string) {
-    const randomHex = crypto.randomBytes(16).toString('hex');
-    const secretKey = `hnt_live_${randomHex}`;
-    const keyPrefix = secretKey.substring(0, 13);
-    const keyHash = crypto.createHash('sha256').update(secretKey).digest('hex');
+    let attempts = 0;
+    let lastError: any = null;
 
-    const record = await this.apiKeyRepository.create({
-      userId,
-      workspaceId,
-      name,
-      keyPrefix,
-      keyHash
-    });
+    while (attempts < 3) {
+      attempts++;
+      const randomHex = crypto.randomBytes(16).toString('hex');
+      const secretKey = `hnt_live_${randomHex}`;
+      const keyPrefix = secretKey.substring(0, 13);
+      const keyHash = crypto.createHash('sha256').update(secretKey).digest('hex');
 
-    await this.activityLogRepository.log({
-      userId,
-      workspaceId,
-      action: 'API Key Created',
-      entityType: 'api_key',
-      entityId: record.id,
-      details: `Generated live API key '${name}' with prefix '${keyPrefix}'.`
-    });
+      try {
+        const record = await this.apiKeyRepository.create({
+          userId,
+          workspaceId,
+          name,
+          keyPrefix,
+          keyHash
+        });
 
-    return {
-      ...record,
-      apiKey: secretKey
-    };
+        // Non-blocking failsafed audit log so logging errors never fail key generation
+        this.activityLogRepository.log({
+          userId,
+          workspaceId,
+          action: 'API Key Created',
+          entityType: 'api_key',
+          entityId: record.id,
+          details: `Generated live API key '${name}' with prefix '${keyPrefix}'.`
+        }).catch(() => {});
+
+        return {
+          id: record.id,
+          name: record.name,
+          keyPrefix: record.keyPrefix,
+          secretKey,
+          apiKey: secretKey,
+          createdAt: record.createdAt
+        };
+      } catch (err: any) {
+        lastError = err;
+        // Retry only on unique keyHash collision
+        if (err.code === '23505' || err.statusCode === 409 || err.message?.includes('collision')) {
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw lastError || new Error('Failed to generate unique API key after multiple attempts.');
   }
 
   public async deleteApiKey(userId: string, keyId: string) {

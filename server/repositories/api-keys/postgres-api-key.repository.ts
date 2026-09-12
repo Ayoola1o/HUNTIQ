@@ -1,11 +1,19 @@
 import type { Pool } from 'pg';
 import type { ApiKeyRepository, ApiKeyItem } from './api-key-repository';
 import { InMemoryApiKeyRepository } from './in-memory-api-key.repository';
+import { config } from '../../config/env';
 
 export class PostgresApiKeyRepository implements ApiKeyRepository {
   private fallback = new InMemoryApiKeyRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   public async listByUser(userId: string): Promise<ApiKeyItem[]> {
     try {
@@ -16,9 +24,6 @@ export class PostgresApiKeyRepository implements ApiKeyRepository {
         ORDER BY created_at DESC
       `;
       const result = await this.pool.query(query, [userId]);
-      if (result.rows.length === 0) {
-        return this.fallback.listByUser(userId);
-      }
       return result.rows.map((r) => ({
         id: r.id,
         name: r.name,
@@ -26,7 +31,13 @@ export class PostgresApiKeyRepository implements ApiKeyRepository {
         createdAt: new Date(r.created_at).toISOString(),
         lastUsedAt: r.last_used_at ? new Date(r.last_used_at).toISOString() : undefined
       }));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing API keys: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.listByUser(userId);
     }
   }
@@ -58,7 +69,20 @@ export class PostgresApiKeyRepository implements ApiKeyRepository {
         keyPrefix: row.key_prefix,
         createdAt: new Date(row.created_at).toISOString()
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(
+          err.code === '42P01'
+            ? 'Database table api_keys does not exist. Please ensure migrations are applied.'
+            : err.code === '23505'
+            ? 'Duplicate API key hash collision.'
+            : `Database error generating API key: ${err.message}`
+        );
+        (error as any).code = err.code === '23505' ? '23505' : 'DATABASE_UNAVAILABLE';
+        (error as any).statusCode = err.code === '23505' ? 409 : 503;
+        (error as any).dbCode = err.code;
+        throw error;
+      }
       return this.fallback.create(params);
     }
   }
@@ -73,7 +97,7 @@ export class PostgresApiKeyRepository implements ApiKeyRepository {
       `;
       const result = await this.pool.query(query, [keyHash]);
       if (result.rows.length === 0) {
-        return this.fallback.findByHash(keyHash);
+        return this.isProduction() ? null : this.fallback.findByHash(keyHash);
       }
       const row = result.rows[0];
 
@@ -84,7 +108,13 @@ export class PostgresApiKeyRepository implements ApiKeyRepository {
         userId: row.user_id,
         workspaceId: row.workspace_id
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error querying API key: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.findByHash(keyHash);
     }
   }
@@ -93,11 +123,14 @@ export class PostgresApiKeyRepository implements ApiKeyRepository {
     try {
       const query = 'DELETE FROM api_keys WHERE id = $1 AND user_id = $2';
       const result = await this.pool.query(query, [id, userId]);
-      if ((result.rowCount ?? 0) === 0) {
-        return this.fallback.delete(id, userId);
-      }
       return (result.rowCount ?? 0) > 0;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error deleting API key: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.delete(id, userId);
     }
   }

@@ -27,9 +27,15 @@ import { emailIntegrationRouter } from './routes/emailIntegration';
 import { leadIngestRouter } from './routes/leadIngest';
 import { emailDiscoveryRouter } from './routes/emailDiscovery';
 import { registerDefaultJobProviders } from './providers/jobs';
+import { ensureDatabaseMigrated } from './database/migrate';
 
 export const createApp = () => {
   registerDefaultJobProviders();
+  if (process.env.DATABASE_URL) {
+    ensureDatabaseMigrated().catch((err) => {
+      console.warn('[HUNTIQ] Warning: Auto-migration during boot deferred or failed:', err.message || err);
+    });
+  }
 
   const app = express();
 

@@ -216,7 +216,15 @@ authRouter.post('/onboarding', async (req: AuthenticatedRequest, res: Response):
  */
 authRouter.get('/api-keys', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id || DEFAULT_USER_ID;
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required to list API keys' }
+      });
+      return;
+    }
+
     const keys = await authService.listApiKeys(userId);
     res.status(200).json({
       success: true,
@@ -225,13 +233,15 @@ authRouter.get('/api-keys', async (req: AuthenticatedRequest, res: Response): Pr
         name: k.name,
         keyPrefix: k.keyPrefix,
         createdAt: k.createdAt,
+        lastUsedAt: k.lastUsedAt || null,
         lastUsed: k.lastUsedAt || 'Never'
       }))
     });
   } catch (err: any) {
-    res.status(500).json({
+    const statusCode = err.statusCode || (err.message?.includes('Database') ? 503 : 500);
+    res.status(statusCode).json({
       success: false,
-      error: { code: 'LIST_API_KEYS_FAILED', message: err.message || 'Failed to list API keys' }
+      error: { code: err.code || 'LIST_API_KEYS_FAILED', message: err.message || 'Failed to list API keys' }
     });
   }
 });
@@ -242,9 +252,17 @@ authRouter.get('/api-keys', async (req: AuthenticatedRequest, res: Response): Pr
  */
 authRouter.post('/api-keys', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id || DEFAULT_USER_ID;
-    const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID;
-    const name = req.body?.name || 'Custom Integration Key';
+    const userId = req.user?.id;
+    const workspaceId = req.user?.workspaceId;
+    if (!userId || !workspaceId) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required to generate an API key' }
+      });
+      return;
+    }
+
+    const name = (req.body?.name || 'Custom Integration Key').trim();
     const newKey = await authService.createApiKey(userId, workspaceId, name);
     res.status(201).json({
       success: true,
@@ -259,9 +277,10 @@ authRouter.post('/api-keys', async (req: AuthenticatedRequest, res: Response): P
       }
     });
   } catch (err: any) {
-    res.status(500).json({
+    const statusCode = err.statusCode || (err.message?.includes('Database') ? 503 : 500);
+    res.status(statusCode).json({
       success: false,
-      error: { code: 'CREATE_API_KEY_FAILED', message: err.message || 'Failed to create API key' }
+      error: { code: err.code || 'CREATE_API_KEY_FAILED', message: err.message || 'Failed to create API key' }
     });
   }
 });
@@ -272,11 +291,22 @@ authRouter.post('/api-keys', async (req: AuthenticatedRequest, res: Response): P
  */
 authRouter.delete('/api-keys/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id || DEFAULT_USER_ID;
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required to revoke an API key' }
+      });
+      return;
+    }
+
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const deleted = await authService.deleteApiKey(userId, id);
     if (!deleted) {
-      res.status(404).json({ error: 'Key not found' });
+      res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'API key not found or not owned by user' }
+      });
       return;
     }
     res.status(200).json({
@@ -284,9 +314,10 @@ authRouter.delete('/api-keys/:id', async (req: AuthenticatedRequest, res: Respon
       message: 'API Key revoked successfully.'
     });
   } catch (err: any) {
-    res.status(500).json({
+    const statusCode = err.statusCode || (err.message?.includes('Database') ? 503 : 500);
+    res.status(statusCode).json({
       success: false,
-      error: { code: 'DELETE_API_KEY_FAILED', message: err.message || 'Failed to revoke API key' }
+      error: { code: err.code || 'DELETE_API_KEY_FAILED', message: err.message || 'Failed to revoke API key' }
     });
   }
 });
