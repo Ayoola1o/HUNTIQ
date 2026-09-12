@@ -65,10 +65,19 @@ const mapCompanyRow = (row: CompanyRow): CompanyItem => {
   };
 };
 
+import { config } from '../../config/env';
+
 export class PostgresCompanyRepository implements CompanyRepository {
   private fallback = new InMemoryCompanyRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   async list(params: CompanySearchParams = {}, workspaceId = 'ws-default-001'): Promise<CompanyItem[]> {
     try {
@@ -90,10 +99,16 @@ export class PostgresCompanyRepository implements CompanyRepository {
         values,
       );
       if (result.rows.length === 0) {
-        return this.fallback.list(params, workspaceId);
+        return this.isProduction() ? [] : this.fallback.list(params, workspaceId);
       }
       return result.rows.map(mapCompanyRow);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing companies: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.list(params, workspaceId);
     }
   }
@@ -105,10 +120,16 @@ export class PostgresCompanyRepository implements CompanyRepository {
         [workspaceId, companyId],
       );
       if (!result.rows[0]) {
-        return this.fallback.getById(companyId, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.getById(companyId, workspaceId);
       }
       return mapCompanyRow(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error retrieving company: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getById(companyId, workspaceId);
     }
   }
@@ -151,7 +172,13 @@ export class PostgresCompanyRepository implements CompanyRepository {
         ],
       );
       return mapCompanyRow(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating company: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.create(input, workspaceId);
     }
   }

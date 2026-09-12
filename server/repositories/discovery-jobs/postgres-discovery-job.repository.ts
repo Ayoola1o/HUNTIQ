@@ -11,10 +11,19 @@ import type {
 
 import { InMemoryDiscoveryJobRepository } from './in-memory-discovery-job.repository';
 
+import { config } from '../../config/env';
+
 export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
   private fallback = new InMemoryDiscoveryJobRepository();
 
-  constructor(private pool: Pool) {}
+  constructor(private pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   private mapRowToJob(row: any): EmailDiscoveryJob {
     return {
@@ -60,7 +69,13 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
 
       const result = await this.pool.query(query, values);
       return this.mapRowToJob(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating discovery job: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.createJob(data);
     }
   }
@@ -72,9 +87,17 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         WHERE id = $1 AND workspace_id = $2;
       `;
       const result = await this.pool.query(query, [id, workspaceId]);
-      if (result.rows.length === 0) return this.fallback.getJobById(id, workspaceId);
+      if (result.rows.length === 0) {
+        return this.isProduction() ? null : this.fallback.getJobById(id, workspaceId);
+      }
       return this.mapRowToJob(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error retrieving discovery job: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getJobById(id, workspaceId);
     }
   }
@@ -121,9 +144,17 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
       `;
 
       const result = await this.pool.query(query, values);
-      if (result.rows.length === 0) return this.fallback.updateJobStatus(id, workspaceId, status, updates);
+      if (result.rows.length === 0) {
+        return this.isProduction() ? null : this.fallback.updateJobStatus(id, workspaceId, status, updates);
+      }
       return this.mapRowToJob(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating discovery job status: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.updateJobStatus(id, workspaceId, status, updates);
     }
   }
@@ -137,9 +168,17 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         LIMIT $2;
       `;
       const result = await this.pool.query(query, [workspaceId, limit]);
-      if (result.rows.length === 0) return this.fallback.listJobs(workspaceId, limit);
+      if (result.rows.length === 0) {
+        return this.isProduction() ? [] : this.fallback.listJobs(workspaceId, limit);
+      }
       return result.rows.map(r => this.mapRowToJob(r));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing discovery jobs: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.listJobs(workspaceId, limit);
     }
   }
@@ -165,7 +204,13 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         result.duplicateCount
       ];
       await this.pool.query(query, values);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error saving discovery result: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.saveDiscoveryResult(result);
     }
   }
@@ -177,7 +222,9 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         WHERE request_id = $1 AND workspace_id = $2;
       `;
       const res = await this.pool.query(query, [requestId, workspaceId]);
-      if (res.rows.length === 0) return this.fallback.getDiscoveryResultByRequestId(requestId, workspaceId);
+      if (res.rows.length === 0) {
+        return this.isProduction() ? null : this.fallback.getDiscoveryResultByRequestId(requestId, workspaceId);
+      }
       const row = res.rows[0];
       return {
         jobId: row.job_id,
@@ -190,7 +237,13 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         rejectedCount: row.rejected_count,
         duplicateCount: row.duplicate_count
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error retrieving discovery result: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getDiscoveryResultByRequestId(requestId, workspaceId);
     }
   }
@@ -237,7 +290,13 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         ];
         await this.pool.query(query, values);
       }
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error saving contact evidence: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.saveContactEvidence(evidenceList);
     }
   }
@@ -250,7 +309,9 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         ORDER BY discovered_at DESC;
       `;
       const res = await this.pool.query(query, [contactId, workspaceId]);
-      if (res.rows.length === 0) return this.fallback.listEvidenceForContact(contactId, workspaceId);
+      if (res.rows.length === 0) {
+        return this.isProduction() ? [] : this.fallback.listEvidenceForContact(contactId, workspaceId);
+      }
       return res.rows.map(r => ({
         id: r.id,
         workspaceId: r.workspace_id,
@@ -272,7 +333,13 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         contextSnippet: r.context_snippet,
         discoveredAt: r.discovered_at ? new Date(r.discovered_at).toISOString() : ''
       }));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing contact evidence: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.listEvidenceForContact(contactId, workspaceId);
     }
   }
@@ -285,7 +352,9 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         ORDER BY discovered_at DESC;
       `;
       const res = await this.pool.query(query, [companyId, workspaceId]);
-      if (res.rows.length === 0) return this.fallback.listEvidenceForCompany(companyId, workspaceId);
+      if (res.rows.length === 0) {
+        return this.isProduction() ? [] : this.fallback.listEvidenceForCompany(companyId, workspaceId);
+      }
       return res.rows.map(r => ({
         id: r.id,
         workspaceId: r.workspace_id,
@@ -307,7 +376,13 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         contextSnippet: r.context_snippet,
         discoveredAt: r.discovered_at ? new Date(r.discovered_at).toISOString() : ''
       }));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing company evidence: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.listEvidenceForCompany(companyId, workspaceId);
     }
   }
@@ -327,7 +402,13 @@ export class PostgresDiscoveryJobRepository implements DiscoveryJobRepository {
         JSON.stringify(event.payload || {})
       ];
       await this.pool.query(query, values);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error recording integration event: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.recordIntegrationEvent(event);
     }
   }

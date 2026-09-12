@@ -44,6 +44,25 @@ export const createApp = () => {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
 
+  // Migration readiness middleware: ensure database migrations complete before requests query DB
+  app.use(async (req, res, next) => {
+    if (req.path === '/health' || req.path === '/api/health' || req.path === '/') {
+      return next();
+    }
+    if (process.env.DATABASE_URL) {
+      try {
+        await ensureDatabaseMigrated();
+      } catch (err: any) {
+        return res.status(503).json({
+          success: false,
+          error: 'Database initialization is in progress or failed. Please retry shortly.',
+          code: 'DATABASE_UNAVAILABLE'
+        });
+      }
+    }
+    next();
+  });
+
   // Global Auth / API Key inspector
   app.use(authenticateApiKeyOrJwt);
 

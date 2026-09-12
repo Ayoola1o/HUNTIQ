@@ -3,10 +3,19 @@ import type { OutreachItem, OutreachMessage } from '../../../src/types/outreach'
 import type { OutreachRepository, OutreachFilterOptions } from './outreach-repository';
 import { InMemoryOutreachRepository } from './in-memory-outreach.repository';
 
+import { config } from '../../config/env';
+
 export class PostgresOutreachRepository implements OutreachRepository {
   private fallback = new InMemoryOutreachRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   public async list(workspaceId: string, filter?: OutreachFilterOptions): Promise<OutreachItem[]> {
     try {
@@ -33,7 +42,7 @@ export class PostgresOutreachRepository implements OutreachRepository {
       `;
       const result = await this.pool.query(query, params);
       if (result.rows.length === 0) {
-        return this.fallback.list(workspaceId, filter);
+        return this.isProduction() ? [] : this.fallback.list(workspaceId, filter);
       }
 
       return result.rows.map(r => ({
@@ -56,7 +65,13 @@ export class PostgresOutreachRepository implements OutreachRepository {
         unread: Boolean(r.metadata?.unread),
         thread: r.messages || []
       }));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing outreach threads: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.list(workspaceId, filter);
     }
   }
@@ -70,7 +85,7 @@ export class PostgresOutreachRepository implements OutreachRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId]);
       if (!result.rows[0]) {
-        return this.fallback.getById(id, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.getById(id, workspaceId);
       }
       const r = result.rows[0];
       return {
@@ -93,7 +108,13 @@ export class PostgresOutreachRepository implements OutreachRepository {
         unread: Boolean(r.metadata?.unread),
         thread: r.messages || []
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error retrieving outreach thread: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getById(id, workspaceId);
     }
   }
@@ -154,7 +175,13 @@ export class PostgresOutreachRepository implements OutreachRepository {
         unread: false,
         thread: r.messages || []
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating outreach thread: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.create(outreach, workspaceId, userId);
     }
   }
@@ -179,13 +206,20 @@ export class PostgresOutreachRepository implements OutreachRepository {
         workspaceId
       ]);
       if (!result.rows[0]) {
+        if (this.isProduction()) return undefined;
         return this.fallback.update(id, partial, workspaceId);
       }
       return {
         ...existing,
         ...partial
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating outreach thread: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.update(id, partial, workspaceId);
     }
   }
@@ -221,6 +255,7 @@ export class PostgresOutreachRepository implements OutreachRepository {
         workspaceId
       ]);
       if (!result.rows[0]) {
+        if (this.isProduction()) return undefined;
         return this.fallback.addMessage(id, message, workspaceId);
       }
 
@@ -230,7 +265,13 @@ export class PostgresOutreachRepository implements OutreachRepository {
         lastMessageSnippet: newMsg.content.substring(0, 80),
         lastMessageTime: 'Just now'
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error adding message to outreach thread: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.addMessage(id, message, workspaceId);
     }
   }
@@ -240,10 +281,17 @@ export class PostgresOutreachRepository implements OutreachRepository {
       const query = `DELETE FROM outreach_threads WHERE id = $1 AND workspace_id = $2`;
       const result = await this.pool.query(query, [id, workspaceId]);
       if ((result.rowCount ?? 0) === 0) {
+        if (this.isProduction()) return false;
         return this.fallback.delete(id, workspaceId);
       }
       return true;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error deleting outreach thread: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.delete(id, workspaceId);
     }
   }

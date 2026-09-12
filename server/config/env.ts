@@ -19,9 +19,20 @@ export interface ServerConfig {
 
 const nodeEnv = (process.env.NODE_ENV as ServerConfig['nodeEnv']) || 'development';
 
-if (nodeEnv === 'production' && !process.env.JWT_SECRET) {
-  console.warn('[HUNTIQ] Warning: JWT_SECRET environment variable is not set. Using fallback secret for deployment stability.');
+export function validateProductionConfig(env: Record<string, string | undefined> = process.env): void {
+  const isProd = env.NODE_ENV === 'production' || env.VERCEL === '1';
+  if (isProd) {
+    if (!env.JWT_SECRET) {
+      throw new Error('[HUNTIQ-CONFIG] Mandatory configuration missing: JWT_SECRET must be set in production.');
+    }
+    if (!env.DATABASE_URL) {
+      throw new Error('[HUNTIQ-CONFIG] Mandatory configuration missing: DATABASE_URL must be set in production.');
+    }
+  }
 }
+
+// Validate production configuration on boot
+validateProductionConfig();
 
 export const config: ServerConfig = {
   port: Number(process.env.PORT) || 3001,
@@ -30,7 +41,9 @@ export const config: ServerConfig = {
     ? process.env.CORS_ORIGINS.split(',').map(s => s.trim()) 
     : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
   apiVersion: '1.0.0',
-  jwtSecret: process.env.JWT_SECRET || 'hnt_dev_secret_jwt_key_98a7fbc2',
+  jwtSecret: (nodeEnv === 'production' || process.env.VERCEL === '1')
+    ? (process.env.JWT_SECRET || '')
+    : (process.env.JWT_SECRET || 'hnt_dev_secret_jwt_key_98a7fbc2'),
   databaseUrl: process.env.DATABASE_URL,
   apifyApiToken: process.env.APIFY_API_TOKEN?.trim() || undefined,
   apifyActorId: process.env.APIFY_MAPS_ACTOR_ID?.trim() || 'scrapeai~google-maps-places-scraper',

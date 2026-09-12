@@ -2,10 +2,19 @@ import type { Pool } from 'pg';
 import type { UserRepository, UserEntity, CreateUserWithWorkspaceParams } from './user-repository';
 import { InMemoryUserRepository } from './in-memory-user.repository';
 
+import { config } from '../../config/env';
+
 export class PostgresUserRepository implements UserRepository {
   private fallback = new InMemoryUserRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   private mapRowToUser(row: any): UserEntity {
     return {
@@ -29,10 +38,16 @@ export class PostgresUserRepository implements UserRepository {
       const query = 'SELECT * FROM users WHERE email = $1 LIMIT 1';
       const result = await this.pool.query(query, [email.toLowerCase().trim()]);
       if (result.rows.length === 0) {
-        return this.fallback.findByEmail(email);
+        return this.isProduction() ? null : this.fallback.findByEmail(email);
       }
       return this.mapRowToUser(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error querying user by email: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.findByEmail(email);
     }
   }
@@ -42,10 +57,16 @@ export class PostgresUserRepository implements UserRepository {
       const query = 'SELECT * FROM users WHERE id = $1 LIMIT 1';
       const result = await this.pool.query(query, [id]);
       if (result.rows.length === 0) {
-        return this.fallback.findById(id);
+        return this.isProduction() ? null : this.fallback.findById(id);
       }
       return this.mapRowToUser(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error querying user by id: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.findById(id);
     }
   }
@@ -101,7 +122,13 @@ export class PostgresUserRepository implements UserRepository {
       } finally {
         client.release();
       }
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating user and workspace: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.createWithWorkspace(params);
     }
   }
@@ -126,7 +153,13 @@ export class PostgresUserRepository implements UserRepository {
       ]);
       if (result.rows.length === 0) return null;
       return this.mapRowToUser(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating profile: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.updateProfile(userId, updates);
     }
   }
@@ -142,7 +175,13 @@ export class PostgresUserRepository implements UserRepository {
       const result = await this.pool.query(query, [avatarUrl, userId]);
       if (result.rows.length === 0) return null;
       return this.mapRowToUser(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating avatar: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.updateAvatar(userId, avatarUrl);
     }
   }
@@ -159,9 +198,17 @@ export class PostgresUserRepository implements UserRepository {
         await this.pool.query('UPDATE workspaces SET name = $1 WHERE id = $2', [data.workspaceName, workspaceId]).catch(() => {});
         await this.pool.query('UPDATE users SET company_name = $1 WHERE id = $2', [data.workspaceName, userId]).catch(() => {});
       }
-      this.fallback.saveOnboarding(userId, workspaceId, data);
+      if (!this.isProduction()) {
+        this.fallback.saveOnboarding(userId, workspaceId, data);
+      }
       return true;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error saving onboarding: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.saveOnboarding(userId, workspaceId, data);
     }
   }
@@ -175,10 +222,16 @@ export class PostgresUserRepository implements UserRepository {
       `;
       const result = await this.pool.query(query, [userId, workspaceId]);
       if (result.rows.length === 0) {
-        return this.fallback.getOnboarding(userId, workspaceId);
+        return this.isProduction() ? null : this.fallback.getOnboarding(userId, workspaceId);
       }
       return result.rows[0].metadata;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error querying onboarding: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getOnboarding(userId, workspaceId);
     }
   }

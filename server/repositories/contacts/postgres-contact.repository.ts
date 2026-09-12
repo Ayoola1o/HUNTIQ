@@ -3,10 +3,19 @@ import type { ContactItem, DecisionRole, VerificationStatus, ContactSource } fro
 import type { ContactRepository } from './contact-repository';
 import { InMemoryContactRepository } from './in-memory-contact.repository';
 
+import { config } from '../../config/env';
+
 export class PostgresContactRepository implements ContactRepository {
   private fallback = new InMemoryContactRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   private mapRowToContact(row: any): ContactItem {
     return {
@@ -53,10 +62,16 @@ export class PostgresContactRepository implements ContactRepository {
       `;
       const result = await this.pool.query(query, [workspaceId, userId]);
       if (result.rows.length === 0) {
-        return this.fallback.listByUser(userId, workspaceId);
+        return this.isProduction() ? [] : this.fallback.listByUser(userId, workspaceId);
       }
       return result.rows.map((r) => this.mapRowToContact(r));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing contacts: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.listByUser(userId, workspaceId);
     }
   }
@@ -70,10 +85,16 @@ export class PostgresContactRepository implements ContactRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId, userId]);
       if (result.rows.length === 0) {
-        return this.fallback.getById(id, userId, workspaceId);
+        return this.isProduction() ? null : this.fallback.getById(id, userId, workspaceId);
       }
       return this.mapRowToContact(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error retrieving contact: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getById(id, userId, workspaceId);
     }
   }
@@ -113,7 +134,13 @@ export class PostgresContactRepository implements ContactRepository {
 
       const result = await this.pool.query(query, values);
       return this.mapRowToContact(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating contact: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.create(userId, workspaceId, contact);
     }
   }
@@ -154,7 +181,13 @@ export class PostgresContactRepository implements ContactRepository {
       const result = await this.pool.query(query, values);
       if (result.rows.length === 0) return null;
       return this.mapRowToContact(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating contact: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.update(id, userId, workspaceId, updates);
     }
   }
@@ -167,7 +200,13 @@ export class PostgresContactRepository implements ContactRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId, userId]);
       return (result.rowCount ?? 0) > 0;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error deleting contact: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.delete(id, userId, workspaceId);
     }
   }

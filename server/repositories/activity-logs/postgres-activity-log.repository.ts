@@ -2,10 +2,19 @@ import type { Pool } from 'pg';
 import type { ActivityLogRepository, ActivityLogItem } from './activity-log-repository';
 import { InMemoryActivityLogRepository } from './in-memory-activity-log.repository';
 
+import { config } from '../../config/env';
+
 export class PostgresActivityLogRepository implements ActivityLogRepository {
   private fallback = new InMemoryActivityLogRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   public async listByUser(userId: string, limit = 20): Promise<ActivityLogItem[]> {
     try {
@@ -17,7 +26,7 @@ export class PostgresActivityLogRepository implements ActivityLogRepository {
       `;
       const result = await this.pool.query(query, [userId, limit]);
       if (result.rows.length === 0) {
-        return this.fallback.listByUser(userId, limit);
+        return this.isProduction() ? [] : this.fallback.listByUser(userId, limit);
       }
       return result.rows.map((r) => ({
         id: r.id,
@@ -30,7 +39,13 @@ export class PostgresActivityLogRepository implements ActivityLogRepository {
         metadata: r.metadata || {},
         createdAt: new Date(r.created_at).toISOString()
       }));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing activity logs: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.listByUser(userId, limit);
     }
   }
@@ -71,7 +86,13 @@ export class PostgresActivityLogRepository implements ActivityLogRepository {
         metadata: r.metadata || {},
         createdAt: new Date(r.created_at).toISOString()
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error logging activity: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.log(params);
     }
   }
