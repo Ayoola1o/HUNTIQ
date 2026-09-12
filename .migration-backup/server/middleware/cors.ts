@@ -9,7 +9,9 @@ export const corsMiddleware = cors({
       config.corsOrigins.includes(origin) || 
       origin.startsWith('http://localhost:') || 
       origin.startsWith('http://127.0.0.1:') || 
-      origin.endsWith('.vercel.app')
+      origin.endsWith('.vercel.app') ||
+      origin.endsWith('.replit.dev') ||
+      origin.endsWith('.replit.app')
     ) {
       callback(null, true);
     } else {
