@@ -284,7 +284,7 @@ export async function saveUserOnboarding(data: any): Promise<any> {
 
   try {
     localStorage.setItem(cacheKey, JSON.stringify(data));
-    localStorage.setItem('huntiq_onboarding_completed', 'true');
+    localStorage.setItem(`${cacheKey}_completed`, 'true');
     if (user && data.workspaceName) {
       user.companyName = data.workspaceName;
       if (token) setStoredSession(token, user);

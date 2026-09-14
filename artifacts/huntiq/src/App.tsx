@@ -29,14 +29,59 @@ import { IntegrationsPage } from './components/integrations/IntegrationsPage';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { ProfilePage } from './components/profile/ProfilePage';
 import { HuntiqProvider, useHuntiq } from './context/HuntiqContext';
-import { saveUserOnboarding } from './api/auth';
+import { AuthModal } from './components/auth/AuthModal';
+import {
+  fetchCurrentUser,
+  fetchUserOnboarding,
+  getStoredToken,
+  saveUserOnboarding,
+  type UserAccount
+} from './api/auth';
 import type { OnboardingData } from './types/onboarding';
 import { initialOnboardingData } from './types/onboarding';
 
 function AppContent() {
-  const { currentView, navigateTo, currentUser, updateCurrentUser, onboardingData, saveOnboardingData } = useHuntiq();
+  const {
+    currentView,
+    navigateTo,
+    currentUser,
+    setCurrentUser,
+    updateCurrentUser,
+    onboardingData,
+    saveOnboardingData,
+    resetOnboarding,
+    isOnboardingCompleted,
+    isOnboardingHydrated
+  } = useHuntiq();
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<OnboardingData>(() => onboardingData || initialOnboardingData);
+  const [authChecked, setAuthChecked] = useState(false);
+  const hasAuthSession = Boolean(currentUser && getStoredToken());
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!getStoredToken()) {
+      setAuthChecked(true);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    fetchCurrentUser()
+      .then((user) => {
+        if (isMounted && user) {
+          setCurrentUser(user);
+        }
+      })
+      .finally(() => {
+        if (isMounted) setAuthChecked(true);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [setCurrentUser]);
 
   // Sync formData with context hydration and user profile
   useEffect(() => {
@@ -53,6 +98,38 @@ function AppContent() {
       }));
     }
   }, [onboardingData, currentUser?.id, currentUser?.companyName, currentUser?.fullName]);
+
+  useEffect(() => {
+    if (hasAuthSession && isOnboardingHydrated && !isOnboardingCompleted && currentView !== 'onboarding') {
+      setCurrentStep(1);
+      navigateTo('onboarding');
+    }
+  }, [
+    currentView,
+    hasAuthSession,
+    isOnboardingCompleted,
+    isOnboardingHydrated,
+    navigateTo
+  ]);
+
+  const handleAuthSuccess = async (user: UserAccount, mode: 'login' | 'signup') => {
+    resetOnboarding();
+    setCurrentUser(user);
+
+    if (mode === 'signup') {
+      setCurrentStep(1);
+      navigateTo('onboarding');
+      return;
+    }
+
+    const savedOnboarding = await fetchUserOnboarding();
+    if (savedOnboarding) {
+      navigateTo('dashboard');
+    } else {
+      setCurrentStep(1);
+      navigateTo('onboarding');
+    }
+  };
 
   const handleDataChange = (updates: Partial<OnboardingData>) => {
     setFormData((prev) => {
@@ -91,6 +168,32 @@ function AppContent() {
   const handleNavigate = (nav: string) => {
     navigateTo(nav);
   };
+
+  if (!authChecked) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        background: '#f4f6fa',
+        color: '#475569',
+        fontFamily: 'var(--font-primary)'
+      }}>
+        Checking your HUNTIQ session…
+      </div>
+    );
+  }
+
+  if (!hasAuthSession) {
+    return (
+      <AuthModal
+        isOpen
+        initialMode="signup"
+        onClose={() => {}}
+        onAuthSuccess={handleAuthSuccess}
+      />
+    );
+  }
 
   if (currentView === 'profile') {
     return (

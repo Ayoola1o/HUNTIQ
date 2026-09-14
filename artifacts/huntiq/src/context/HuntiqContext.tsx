@@ -109,6 +109,8 @@ interface HuntiqContextType {
   // Onboarding Profile State
   onboardingData: OnboardingData;
   isOnboardingCompleted: boolean;
+  isOnboardingHydrated: boolean;
+  resetOnboarding: () => void;
   saveOnboardingData: (data: OnboardingData) => Promise<void>;
 }
 
@@ -179,6 +181,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
 
   // Onboarding Profile State Scoped to Current Profile & Workspace
   const [onboardingData, setOnboardingData] = useState<OnboardingData>(initialOnboardingData);
+  const [isOnboardingHydrated, setIsOnboardingHydrated] = useState(false);
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState<boolean>(() => {
     try {
       return localStorage.getItem('huntiq_onboarding_completed') === 'true';
@@ -190,6 +193,17 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   // Load and hydrate onboarding data for current user / profile
   useEffect(() => {
     let isMounted = true;
+    setIsOnboardingHydrated(false);
+
+    if (!currentUser) {
+      setOnboardingData(initialOnboardingData);
+      setIsOnboardingCompleted(false);
+      setIsOnboardingHydrated(true);
+      return () => {
+        isMounted = false;
+      };
+    }
+
     fetchUserOnboarding()
       .then((saved) => {
         if (!isMounted) return;
@@ -205,15 +219,35 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
             ...prev,
             workspaceName: currentUser.companyName || prev.workspaceName
           }));
+          setIsOnboardingCompleted(false);
         }
+        setIsOnboardingHydrated(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (isMounted) {
+          setIsOnboardingCompleted(false);
+          setIsOnboardingHydrated(true);
+        }
+      });
     return () => { isMounted = false; };
   }, [currentUser?.id, currentUser?.companyName]);
+
+  const resetOnboarding = useCallback(() => {
+    setOnboardingData(initialOnboardingData);
+    setIsOnboardingCompleted(false);
+    setIsOnboardingHydrated(false);
+    try {
+      localStorage.removeItem('huntiq_onboarding_completed');
+      if (currentUser?.id) {
+        localStorage.removeItem(`huntiq_onboarding_${currentUser.id}`);
+      }
+    } catch {}
+  }, [currentUser?.id]);
 
   const saveOnboardingData = useCallback(async (data: OnboardingData) => {
     setOnboardingData(data);
     setIsOnboardingCompleted(true);
+    setIsOnboardingHydrated(true);
     try {
       await saveUserOnboarding(data);
     } catch (err) {
@@ -449,6 +483,10 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
 
   // Data Hydration & Live Sync
   const refreshData = useCallback(async () => {
+    if (!localStorage.getItem('huntiq_auth_token')) {
+      setIsDataLoading(false);
+      return;
+    }
     setIsDataLoading(true);
     try {
       const health = await checkApiHealth();
@@ -693,6 +731,8 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     clearActivePitchDraft,
     onboardingData,
     isOnboardingCompleted,
+    isOnboardingHydrated,
+    resetOnboarding,
     saveOnboardingData
   }), [
     currentView,
@@ -735,6 +775,8 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     clearActivePitchDraft,
     onboardingData,
     isOnboardingCompleted,
+    isOnboardingHydrated,
+    resetOnboarding,
     saveOnboardingData
   ]);
 
