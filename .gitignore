@@ -1,3 +1,5 @@
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
 # Dependencies
 node_modules/
 .pnpm-store/
@@ -9,7 +11,10 @@ dist/
 dist-ssr/
 build/
 out/
+out-tsc/
 .vercel/
+.expo/
+.expo-shared/
 
 # Environment Variables & Secrets (NEVER COMMIT)
 .env
@@ -35,9 +40,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+testem.log
+/libpeerconnection.log
 
 # Test Coverage & Temp
 coverage/
+/coverage
 .nyc_output/
 .temp/
 tmp/
@@ -49,9 +57,17 @@ next-env.d.ts
 
 # IDE & Editor Files
 .vscode/*
-!.vscode/extensions.json
 !.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+/.idea
 .idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
 *.sublime-project
 *.sublime-workspace
 *.sw?
@@ -64,3 +80,16 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Misc
+/.sass-cache
+/connect.lock
+/typings
+
+# Cursor / GitHub AI rules
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
+
+# Replit
+.cache/
+.local/
