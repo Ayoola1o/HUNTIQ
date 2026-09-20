@@ -1,4 +1,4 @@
-import type { Config, Context } from '@netlify/functions'
+import type { Context } from '@netlify/functions'
 import serverlessHttp from 'serverless-http'
 
 type LambdaResponse = {
@@ -14,7 +14,9 @@ let expressHandler: ReturnType<typeof serverlessHttp> | undefined
 async function getExpressHandler() {
   if (!expressHandler) {
     const { createApp } = await import('../../artifacts/api-server/src/app.ts')
-    expressHandler = serverlessHttp(createApp())
+    expressHandler = serverlessHttp(createApp(), {
+      basePath: '/.netlify/functions/api',
+    })
   }
 
   return expressHandler
@@ -74,8 +76,4 @@ export default async function api(request: Request, context: Context) {
     status: result.statusCode ?? 200,
     headers,
   })
-}
-
-export const config: Config = {
-  path: '/api/*',
 }
