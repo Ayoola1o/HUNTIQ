@@ -24,6 +24,7 @@ import { opportunityScoringRouter } from './routes/opportunityScoring';
 import { authRouter } from './routes/auth';
 import { scraperRouter } from './routes/scraper';
 import { emailIntegrationRouter } from './routes/emailIntegration';
+import { googleAuthRouter } from './routes/googleAuth';
 import { leadIngestRouter } from './routes/leadIngest';
 import { emailDiscoveryRouter } from './routes/emailDiscovery';
 import { registerDefaultJobProviders } from './providers/jobs';
@@ -91,9 +92,13 @@ export const createApp = () => {
 
   // Mount Auth Endpoints
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/auth', googleAuthRouter);
   app.use('/api/auth', authRouter);
+  app.use('/api/auth', googleAuthRouter);
   app.use('/v1/auth', authRouter);
+  app.use('/v1/auth', googleAuthRouter);
   app.use('/auth', authRouter);
+  app.use('/auth', googleAuthRouter);
 
   // Mount API Endpoints under /api and root serverless aliases
   app.use('/api', healthRouter);
@@ -120,6 +125,8 @@ export const createApp = () => {
   app.use('/api/v1', scraperRouter);
   app.use('/api', emailIntegrationRouter);
   app.use('/api/v1', emailIntegrationRouter);
+  app.use('/api', googleAuthRouter);
+  app.use('/api/v1', googleAuthRouter);
   app.use('/api', leadIngestRouter);
   app.use('/api/v1', leadIngestRouter);
   app.use('/api', emailDiscoveryRouter);

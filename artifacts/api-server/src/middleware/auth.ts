@@ -93,7 +93,11 @@ export const authenticateApiKeyOrJwt = async (
     '/api/v1/auth/signup',
     '/api/auth/login',
     '/api/auth/signup',
-    '/api/v1/integrations/email-scraper/webhook'
+    '/api/v1/integrations/email-scraper/webhook',
+    '/api/v1/auth/google/callback',
+    '/api/auth/google/callback',
+    '/v1/auth/google/callback',
+    '/auth/google/callback'
   ];
 
   if (publicPaths.includes(req.path)) {

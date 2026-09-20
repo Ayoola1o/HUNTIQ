@@ -456,6 +456,29 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
                 <span>Call Battlecard</span>
               </button>
             </div>
+
+            {channel === 'email' && (
+              <div style={{
+                marginTop: '10px',
+                padding: '7px 12px',
+                borderRadius: '8px',
+                backgroundColor: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '11px',
+                color: '#475569'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Mail size={12} color="#ea4335" />
+                  <span>Outbox: <strong>Google Gmail API (OAuth 2.0)</strong></span>
+                </div>
+                <span style={{ fontSize: '10.5px', color: '#16a34a', fontWeight: 700 }}>
+                  Personal Inbox Delivery
+                </span>
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleSubmit}>

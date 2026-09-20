@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { IntegrationsKpiCards } from './IntegrationsKpiCards';
 import { IntegrationsGrid } from './IntegrationsGrid';
@@ -10,6 +10,7 @@ import {
   Puzzle, 
   Sparkles 
 } from 'lucide-react';
+import { fetchGoogleAuthStatus } from '../../api/googleAuth';
 
 interface IntegrationsPageProps {
   onNavigate: (nav: string) => void;
@@ -23,7 +24,23 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
   const [connectingItem, setConnectingItem] = useState<IntegrationItem | null>(null);
   const [managingItem, setManagingItem] = useState<IntegrationItem | null>(null);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
-  const [activeKpiFilter, setActiveKpiFilter] = useState('connected');
+  const [activeKpiFilter, setActiveKpiFilter] = useState('all');
+
+  // Synchronize live Gmail OAuth status
+  useEffect(() => {
+    fetchGoogleAuthStatus().then((googleStatus) => {
+      setIntegrations(prev => prev.map(item => {
+        if (item.id === 'int-gmail') {
+          return {
+            ...item,
+            status: googleStatus.isConnected ? 'connected' : 'available',
+            connectedAccount: googleStatus.accountEmail || (googleStatus.isConnected ? 'Connected via Gmail API' : undefined)
+          };
+        }
+        return item;
+      }));
+    }).catch(() => {});
+  }, []);
 
   // Initial Integrations
   const [integrations, setIntegrations] = useState<IntegrationItem[]>([

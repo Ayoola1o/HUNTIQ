@@ -3,6 +3,7 @@ import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { OutreachKpiCards } from './OutreachKpiCards';
 import { OutreachConversationView } from './OutreachConversationView';
 import { NewOutreachModal } from './NewOutreachModal';
+import { GmailConnectionBadge } from './GmailConnectionBadge';
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import type { OutreachItem, OutreachKpiSummary } from '../../types/outreach';
 import { 
@@ -41,6 +42,28 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
       setIsNewOutreachModalOpen(true);
     }
   }, [activePitchDraft]);
+
+  // Handle Google OAuth callback feedback in URL
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const googleAuth = url.searchParams.get('google_auth');
+    const email = url.searchParams.get('email');
+    const reason = url.searchParams.get('reason');
+
+    if (googleAuth === 'success') {
+      setActionToast(`🎉 Google Gmail account connected successfully${email ? ` (${email})` : ''}!`);
+      setTimeout(() => setActionToast(null), 5000);
+      url.searchParams.delete('google_auth');
+      url.searchParams.delete('email');
+      window.history.replaceState({}, '', url.toString());
+    } else if (googleAuth === 'error') {
+      setErrorMessage(`Google OAuth error: ${reason || 'Authorization was cancelled or failed'}`);
+      setTimeout(() => setErrorMessage(null), 6000);
+      url.searchParams.delete('google_auth');
+      url.searchParams.delete('reason');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, []);
 
   // Live Conversations & KPI State
   const [conversations, setConversations] = useState<OutreachItem[]>([]);
@@ -205,6 +228,9 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Gmail OAuth Integration Badge */}
+            <GmailConnectionBadge />
+
             {/* Sync Button */}
             <button
               onClick={() => loadOutreach(true)}

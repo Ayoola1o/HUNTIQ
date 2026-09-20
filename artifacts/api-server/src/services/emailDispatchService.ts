@@ -2,6 +2,8 @@ import nodemailer from 'nodemailer';
 import { randomUUID } from 'crypto';
 import { hasValidTld } from '../engine/scraper/emailExtractor';
 import { verifyDomainMx } from '../engine/scraper/mxValidator';
+import { GoogleAuthService } from './googleAuthService';
+import { GmailService } from './gmailService';
 
 export type EmailProviderType = 'resend' | 'gmail' | 'smtp' | 'simulation';
 
@@ -150,6 +152,54 @@ export class EmailDispatchService {
 
     const emailHtml = html || `<p style="font-family: sans-serif; font-size: 15px; color: #1e293b;">${(text || '').replace(/\n/g, '<br/>')}</p>`;
     const emailText = text || html?.replace(/<[^>]+>/g, ' ').trim() || '';
+
+    // Priority Provider: Official Google Gmail API (OAuth 2.0)
+    const googleIntegration = await GoogleAuthService.getIntegration(workspaceId);
+    if (googleIntegration && googleIntegration.isActive) {
+      try {
+        const gmailResult = await GmailService.sendEmail({
+          workspaceId,
+          to: cleanTo,
+          toName,
+          subject,
+          html: emailHtml,
+          text: emailText,
+          replyTo: replyTo || googleIntegration.accountEmail
+        });
+
+        if (gmailResult.success) {
+          return {
+            success: true,
+            messageId: gmailResult.messageId,
+            provider: 'gmail',
+            status: 'sent',
+            to: cleanTo,
+            deliveredAt: gmailResult.deliveredAt
+          };
+        } else {
+          return {
+            success: false,
+            messageId: gmailResult.messageId,
+            provider: 'gmail',
+            status: 'failed',
+            to: cleanTo,
+            deliveredAt: gmailResult.deliveredAt,
+            error: gmailResult.error
+          };
+        }
+      } catch (err: any) {
+        console.error(`[EMAIL_DISPATCH] Gmail API dispatch failed: ${err.message}`);
+        return {
+          success: false,
+          messageId: `err-${Date.now()}`,
+          provider: 'gmail',
+          status: 'failed',
+          to: cleanTo,
+          deliveredAt: new Date().toISOString(),
+          error: err.message
+        };
+      }
+    }
 
     // Provider 1: Resend API
     if (config.provider === 'resend' && config.resendApiKey) {
