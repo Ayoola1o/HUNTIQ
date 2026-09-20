@@ -144,9 +144,15 @@ importers:
 
   .:
     dependencies:
+      '@netlify/functions':
+        specifier: ^6.0.0
+        version: 6.0.0
       '@replit/connectors-sdk':
         specifier: ^0.4.1
         version: 0.4.1
+      serverless-http:
+        specifier: ^4.0.0
+        version: 4.0.0
     devDependencies:
       prettier:
         specifier: ^3.9.6
@@ -849,6 +855,14 @@ packages:
 
   '@maplibre/vt-pbf@4.3.2':
     resolution: {integrity: sha512-j6p0AdjvAR19Z3XaCysle7A4ZSo08tYOzxD0Y9NQylwPAkwJJeYub5b2eVucdeDh7erhv69DahoLOevDRERRUw==}
+
+  '@netlify/functions@6.0.0':
+    resolution: {integrity: sha512-Pee+FoFnAtdejTkl62a7mZxj6Wx4eqVNuYyDc5T4XPJN9GaAWaUf4cZQFlf2m4Fqq0HoghjtcPKo+BZviVPPKA==}
+    engines: {node: '>=22.12.0'}
+
+  '@netlify/types@3.0.0':
+    resolution: {integrity: sha512-zRCidsQgI4CZWrZB/kmwdPf0QbSNljakfNSLizFvrsSA3UcUrTWSBNMVKmZnob92/8ESeUN0ewXLOlffJU+ATQ==}
+    engines: {node: '>=22.12.0'}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -2980,6 +2994,10 @@ packages:
     resolution: {integrity: sha512-xRXBn0pPqQTVQiC8wyQrKs2MOlX24zQ0POGaj0kultvoOCstBQM5yvOhAVSUwOMjQtTvsPWoNCHfPGwaaQJhTw==}
     engines: {node: '>= 18'}
 
+  serverless-http@4.0.0:
+    resolution: {integrity: sha512-KKl9h1+VApX9y2vHsVMogf906UXBwO3FDYiWPzqS0mCjEEx4Sx91JrssbWA7RN43HBuxrtoh8MkocZPvjyGnLg==}
+    engines: {node: '>=12.0'}
+
   setprototypeof@1.2.0:
     resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
 
@@ -3480,6 +3498,12 @@ snapshots:
       '@mapbox/point-geometry': 1.1.0
       '@types/geojson': 7946.0.16
       pbf: 5.1.2
+
+  '@netlify/functions@6.0.0':
+    dependencies:
+      '@netlify/types': 3.0.0
+
+  '@netlify/types@3.0.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -5646,6 +5670,8 @@ snapshots:
       send: 1.2.1
     transitivePeerDependencies:
       - supports-color
+
+  serverless-http@4.0.0: {}
 
   setprototypeof@1.2.0: {}
 
