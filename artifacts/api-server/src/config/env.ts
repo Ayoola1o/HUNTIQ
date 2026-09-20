@@ -1,5 +1,15 @@
+import path from 'path';
+
 try {
   (process as any).loadEnvFile?.();
+} catch {}
+
+try {
+  (process as any).loadEnvFile?.(path.resolve(process.cwd(), '../../.env'));
+} catch {}
+
+try {
+  (process as any).loadEnvFile?.(path.resolve(process.cwd(), '../.env'));
 } catch {}
 
 export interface ServerConfig {
@@ -15,6 +25,13 @@ export interface ServerConfig {
   mapsMaxResults: number;
   mapsMaxRadiusKm: number;
   mapsMaxConcurrentJobs: number;
+}
+
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'development';
+}
+if (process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_AUTH_BYPASS === undefined) {
+  process.env.ALLOW_DEV_AUTH_BYPASS = 'true';
 }
 
 const nodeEnv = (process.env.NODE_ENV as ServerConfig['nodeEnv']) || 'development';
