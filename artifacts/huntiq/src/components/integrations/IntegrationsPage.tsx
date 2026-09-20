@@ -8,9 +8,12 @@ import { AiCopilotModal } from '../dashboard/AiCopilotModal';
 import type { IntegrationItem, IntegrationsKpiSummary } from '../../types/integrations';
 import { 
   Puzzle, 
-  Sparkles 
+  Sparkles,
+  CheckCircle2,
+  AlertTriangle,
+  X
 } from 'lucide-react';
-import { fetchGoogleAuthStatus } from '../../api/googleAuth';
+import { fetchGoogleAuthStatus, disconnectGoogleAuth } from '../../api/googleAuth';
 
 interface IntegrationsPageProps {
   onNavigate: (nav: string) => void;
@@ -25,16 +28,45 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
   const [managingItem, setManagingItem] = useState<IntegrationItem | null>(null);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeKpiFilter, setActiveKpiFilter] = useState('all');
+  const [bannerNotification, setBannerNotification] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
 
-  // Synchronize live Gmail OAuth status
+  // Synchronize live Gmail OAuth status & check query parameters
   useEffect(() => {
+    // 1. Check URL parameters for OAuth redirect results
+    const urlParams = new URLSearchParams(window.location.search);
+    const googleAuthParam = urlParams.get('google_auth');
+    const googleEmail = urlParams.get('email');
+    const googleError = urlParams.get('reason');
+
+    if (googleAuthParam === 'success') {
+      setBannerNotification({
+        type: 'success',
+        message: `Gmail authenticated successfully${googleEmail ? ` (${googleEmail})` : ''}! Your inbox is now connected for direct outreach and reply tracking.`
+      });
+      // Clean query params from address bar without reloading
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    } else if (googleAuthParam === 'error') {
+      setBannerNotification({
+        type: 'error',
+        message: `Gmail connection failed: ${googleError || 'Unknown OAuth error'}. Please verify your Google Cloud credentials.`
+      });
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+
+    // 2. Fetch live status from backend
     fetchGoogleAuthStatus().then((googleStatus) => {
       setIntegrations(prev => prev.map(item => {
         if (item.id === 'int-gmail') {
           return {
             ...item,
             status: googleStatus.isConnected ? 'connected' : 'available',
-            connectedAccount: googleStatus.accountEmail || (googleStatus.isConnected ? 'Connected via Gmail API' : undefined)
+            connectedAccount: googleStatus.accountEmail || (googleStatus.isConnected ? 'Connected via Gmail API' : undefined),
+            lastSync: googleStatus.isConnected ? 'Live' : undefined
           };
         }
         return item;
@@ -75,11 +107,11 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
       brandColor: '#ea4335',
       bgColor: '#fef2f2',
       category: 'communication',
-      description: 'Sync email threads, prospect replies, and communication engagement directly to HUNTIQ outreach.',
-      status: 'connected',
-      connectedAccount: 'ayoola@huntiq.ai',
-      lastSync: '2 minutes ago',
-      recordsProcessed: 4820,
+      description: 'Send personalized outreach and sync email threads & prospect replies directly via your authentic Gmail mailbox.',
+      status: 'available',
+      connectedAccount: undefined,
+      lastSync: undefined,
+      recordsProcessed: 0,
       syncDirection: 'two_way',
       syncFrequency: 'Real-time (Webhooks)',
       syncConfig: { emailActivity: true, contacts: true, calendar: false, deals: false, pushSignals: false },
@@ -88,10 +120,7 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
         { externalField: 'SubjectLine', huntiqField: 'threadSubject' },
         { externalField: 'SentTimestamp', huntiqField: 'activityTime' }
       ],
-      activityLog: [
-        { id: 'l1', timestamp: '2 mins ago', message: 'Synchronized 14 email thread replies and updated prospect status to Replied', type: 'success', recordsCount: 14 },
-        { id: 'l2', timestamp: '1 hour ago', message: 'Routine webhook ping verified: 0 errors', type: 'info', recordsCount: 0 }
-      ]
+      activityLog: []
     },
     {
       id: 'int-gcal',
@@ -326,7 +355,14 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
     setIntegrations(integrations.map(i => i.id === updatedItem.id ? updatedItem : i));
   };
 
-  const handleDisconnect = (itemId: string) => {
+  const handleDisconnect = async (itemId: string) => {
+    if (itemId === 'int-gmail') {
+      try {
+        await disconnectGoogleAuth();
+      } catch (err) {
+        console.warn('Failed to disconnect Google Auth via API:', err);
+      }
+    }
     setIntegrations(integrations.map(i => {
       if (i.id === itemId) {
         return {
@@ -338,6 +374,10 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
       }
       return i;
     }));
+    setBannerNotification({
+      type: 'info',
+      message: `${itemId === 'int-gmail' ? 'Gmail account' : 'Integration'} disconnected. API access has been revoked.`
+    });
   };
 
   return (
@@ -425,6 +465,63 @@ export const IntegrationsPage: React.FC<IntegrationsPageProps> = ({
             </button>
           </div>
         </header>
+
+        {/* Dynamic Status / Feedback Banner */}
+        {bannerNotification && (
+          <div style={{
+            margin: '0 32px -8px 32px',
+            backgroundColor: bannerNotification.type === 'success' 
+              ? '#f0fdf4' 
+              : bannerNotification.type === 'error' 
+                ? '#fef2f2' 
+                : '#eff6ff',
+            border: `1px solid ${
+              bannerNotification.type === 'success' 
+                ? '#bbf7d0' 
+                : bannerNotification.type === 'error' 
+                  ? '#fee2e2' 
+                  : '#bfdbfe'
+            }`,
+            borderRadius: '10px',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            color: bannerNotification.type === 'success' 
+              ? '#166534' 
+              : bannerNotification.type === 'error' 
+                ? '#991b1b' 
+                : '#1e40af',
+            fontSize: '12.5px',
+            fontWeight: 600
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {bannerNotification.type === 'success' ? (
+                <CheckCircle2 size={16} color="#16a34a" />
+              ) : bannerNotification.type === 'error' ? (
+                <AlertTriangle size={16} color="#dc2626" />
+              ) : (
+                <Puzzle size={16} color="#2563eb" />
+              )}
+              <span>{bannerNotification.message}</span>
+            </div>
+
+            <button
+              onClick={() => setBannerNotification(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '2px',
+                color: 'currentColor',
+                opacity: 0.7
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {/* KPI Metrics Row */}
         <div>

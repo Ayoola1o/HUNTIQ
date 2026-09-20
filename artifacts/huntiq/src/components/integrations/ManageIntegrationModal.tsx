@@ -7,9 +7,14 @@ import {
   ArrowRight, 
   Database, 
   Sliders, 
-  List 
+  List,
+  Send,
+  Loader2,
+  Mail,
+  AlertCircle
 } from 'lucide-react';
 import type { IntegrationItem, SyncConfig } from '../../types/integrations';
+import { sendGoogleTestEmail, disconnectGoogleAuth } from '../../api/googleAuth';
 
 interface ManageIntegrationModalProps {
   integration: IntegrationItem | null;
@@ -39,6 +44,14 @@ export const ManageIntegrationModal: React.FC<ManageIntegrationModalProps> = ({
     }
   );
 
+  // Gmail test email state
+  const [testEmail, setTestEmail] = useState(integration?.connectedAccount || '');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  const isGmail = integration?.id === 'int-gmail';
+
   if (!isOpen || !integration) return null;
 
   const handleToggle = (key: keyof SyncConfig) => {
@@ -48,6 +61,53 @@ export const ManageIntegrationModal: React.FC<ManageIntegrationModalProps> = ({
       ...integration,
       syncConfig: updatedConfig
     });
+  };
+
+  const handleSendTestEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testEmail.trim() || isSendingTest) return;
+
+    setIsSendingTest(true);
+    setTestResult(null);
+
+    try {
+      const res = await sendGoogleTestEmail(testEmail.trim());
+      if (res.success) {
+        setTestResult({
+          success: true,
+          message: `Verification email sent via Gmail API! Message ID: ${res.data?.messageId || 'sent'}`
+        });
+      } else {
+        setTestResult({
+          success: false,
+          message: res.error?.message || 'Failed to dispatch test email.'
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || 'Error communicating with Gmail API.'
+      });
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
+  const handleDisconnectItem = async () => {
+    setIsDisconnecting(true);
+    try {
+      if (isGmail) {
+        await disconnectGoogleAuth();
+      }
+      onDisconnect(integration.id);
+      onClose();
+    } catch (err) {
+      console.error('Failed to disconnect integration:', err);
+      onDisconnect(integration.id);
+      onClose();
+    } finally {
+      setIsDisconnecting(false);
+    }
   };
 
   return (
@@ -192,6 +252,106 @@ export const ManageIntegrationModal: React.FC<ManageIntegrationModalProps> = ({
           {/* TAB 1: Configuration */}
           {activeTab === 'config' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Gmail Specific Verification & Test Dispatcher */}
+              {isGmail && (
+                <div style={{
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Mail size={16} color="#ea4335" />
+                      <strong style={{ fontSize: '12.5px', color: '#0f172a' }}>
+                        Send Gmail API Verification Test
+                      </strong>
+                    </div>
+                    <span style={{
+                      fontSize: '10.5px',
+                      fontWeight: 700,
+                      backgroundColor: '#ecfdf5',
+                      color: '#059669',
+                      padding: '2px 8px',
+                      borderRadius: '4px'
+                    }}>
+                      OAuth Scopes Active
+                    </span>
+                  </div>
+
+                  <p style={{ fontSize: '11.5px', color: '#64748b', margin: 0, lineHeight: 1.4 }}>
+                    Dispatch a real RFC 2822 multipart email directly through your authenticated Gmail API token to verify outbox deliverability.
+                  </p>
+
+                  <form onSubmit={handleSendTestEmail} style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="email"
+                      placeholder="recipient@example.com"
+                      value={testEmail}
+                      onChange={(e) => setTestEmail(e.target.value)}
+                      required
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontFamily: 'inherit',
+                        outline: 'none'
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSendingTest || !testEmail.trim()}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: '#ea4335',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 16px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: isSendingTest ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {isSendingTest ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Send size={13} />
+                      )}
+                      <span>{isSendingTest ? 'Sending...' : 'Send Test'}</span>
+                    </button>
+                  </form>
+
+                  {testResult && (
+                    <div style={{
+                      backgroundColor: testResult.success ? '#f0fdf4' : '#fef2f2',
+                      border: `1px solid ${testResult.success ? '#bbf7d0' : '#fee2e2'}`,
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      fontSize: '11.5px',
+                      color: testResult.success ? '#166534' : '#b91c1c',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      {testResult.success ? (
+                        <CheckCircle2 size={14} color="#16a34a" />
+                      ) : (
+                        <AlertCircle size={14} color="#dc2626" />
+                      )}
+                      <span>{testResult.message}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <h4 style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', margin: '0 0 10px 0' }}>
                   Active Data Streams & Features
@@ -199,10 +359,10 @@ export const ManageIntegrationModal: React.FC<ManageIntegrationModalProps> = ({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {[
-                    { key: 'emailActivity' as const, title: 'Email & Thread Engagement', desc: 'Sync prospect emails, opens and replies directly to HUNTIQ outreach' },
-                    { key: 'contacts' as const, title: 'Contacts & Account Records', desc: 'Import decision-makers and synchronize updates bidirectionally' },
-                    { key: 'calendar' as const, title: 'Calendar & Meeting Scheduler', desc: 'Sync scheduled discovery calls and automatically link pre-call briefs' },
-                    { key: 'deals' as const, title: 'Pipeline Deals & Revenue Stages', desc: 'Mirror opportunity stages and won deals between systems' },
+                    { key: 'emailActivity' as const, title: isGmail ? 'Direct Gmail API Delivery' : 'Email & Thread Engagement', desc: isGmail ? 'Send campaigns directly from your authenticated Gmail address with authentic SPF/DKIM headers' : 'Sync prospect emails, opens and replies directly to HUNTIQ outreach' },
+                    { key: 'contacts' as const, title: isGmail ? 'Prospect Reply & Bounce Tracking' : 'Contacts & Account Records', desc: isGmail ? 'Track prospect replies in real-time and automatically mark prospects as Replied' : 'Import decision-makers and synchronize updates bidirectionally' },
+                    { key: 'calendar' as const, title: isGmail ? 'Stop Sequences on Reply' : 'Calendar & Meeting Scheduler', desc: isGmail ? 'Automatically halt follow-up steps as soon as a prospect answers from this inbox' : 'Sync scheduled discovery calls and automatically link pre-call briefs' },
+                    { key: 'deals' as const, title: isGmail ? 'Sync to Gmail Sent Folder' : 'Pipeline Deals & Revenue Stages', desc: isGmail ? 'Automatically retain copies in your Gmail Sent mailbox for team transparency' : 'Mirror opportunity stages and won deals between systems' },
                     { key: 'pushSignals' as const, title: 'Push Verified Buying Signals', desc: 'Transmit detected hiring surges and expansions directly into CRM notes' }
                   ].map((stream) => {
                     const isEnabled = syncConfig[stream.key];
@@ -277,26 +437,28 @@ export const ManageIntegrationModal: React.FC<ManageIntegrationModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => {
-                    onDisconnect(integration.id);
-                    onClose();
-                  }}
+                  disabled={isDisconnecting}
+                  onClick={handleDisconnectItem}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
+                    gap: '6px',
                     backgroundColor: '#dc2626',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: '6px',
-                    padding: '6px 12px',
+                    padding: '6px 14px',
                     fontSize: '11.5px',
                     fontWeight: 700,
-                    cursor: 'pointer'
+                    cursor: isDisconnecting ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  <Trash2 size={12} />
-                  <span>Disconnect</span>
+                  {isDisconnecting ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={12} />
+                  )}
+                  <span>{isDisconnecting ? 'Disconnecting...' : 'Disconnect'}</span>
                 </button>
               </div>
             </div>

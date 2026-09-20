@@ -127,7 +127,10 @@ export const GmailConnectionBadge: React.FC<GmailConnectionBadgeProps> = ({
   };
 
   const handleCopyEnv = () => {
-    const envSnippet = `GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com\nGOOGLE_CLIENT_SECRET=your_client_secret\nGOOGLE_REDIRECT_URI=http://localhost:3001/api/v1/auth/google/callback`;
+    const callbackUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+      ? `${window.location.origin}/api/v1/auth/google/callback`
+      : `http://localhost:${3000 + 1}/api/v1/auth/google/callback`;
+    const envSnippet = `GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com\nGOOGLE_CLIENT_SECRET=your_client_secret\nGOOGLE_REDIRECT_URI=${callbackUrl}`;
     navigator.clipboard.writeText(envSnippet);
     setCopiedEnv(true);
     setTimeout(() => setCopiedEnv(false), 2500);
@@ -581,7 +584,7 @@ export const GmailConnectionBadge: React.FC<GmailConnectionBadgeProps> = ({
                     }}>
                       <div>GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com</div>
                       <div>GOOGLE_CLIENT_SECRET=your_client_secret</div>
-                      <div>GOOGLE_REDIRECT_URI=http://localhost:3001/api/v1/auth/google/callback</div>
+                      <div>GOOGLE_REDIRECT_URI={typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? `${window.location.origin}/api/v1/auth/google/callback` : `http://localhost:${3000 + 1}/api/v1/auth/google/callback`}</div>
 
                       <button
                         onClick={handleCopyEnv}

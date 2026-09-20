@@ -27,6 +27,10 @@ out-tsc/
 *.pem
 *.key
 
+# Backups & Migration artifacts
+.migration-backup/
+.migration-backup/**
+
 # Runtime & Local Data Storage
 server/data/*.json
 server/data/**/*.json
