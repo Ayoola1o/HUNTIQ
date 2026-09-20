@@ -289,7 +289,11 @@ async function runApiKeySuite() {
     // Test 12: Migration 007 SQL verification
     // -------------------------------------------------------------------------
     console.log('12. Checking migration 007 SQL structure and schema definitions...');
-    const migrationPath = path.join(process.cwd(), 'server', 'database', 'migrations', '007_create_api_keys.sql');
+    const migrationCandidates = [
+      path.join(process.cwd(), 'artifacts', 'api-server', 'src', 'database', 'migrations', '007_create_api_keys.sql'),
+      path.join(process.cwd(), 'server', 'database', 'migrations', '007_create_api_keys.sql')
+    ];
+    const migrationPath = migrationCandidates.find(p => fs.existsSync(p)) || migrationCandidates[0];
     assert.ok(fs.existsSync(migrationPath), 'Migration 007_create_api_keys.sql must exist');
     const sql = fs.readFileSync(migrationPath, 'utf8');
 

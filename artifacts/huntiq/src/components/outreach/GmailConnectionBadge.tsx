@@ -308,7 +308,7 @@ export const GmailConnectionBadge: React.FC<GmailConnectionBadgeProps> = ({
           </div>
 
           <div style={{
-            fontSize: '11.5px',
+            fontSize: '11px',
             color: '#475569',
             backgroundColor: '#f8fafc',
             padding: '8px 10px',
@@ -316,7 +316,7 @@ export const GmailConnectionBadge: React.FC<GmailConnectionBadgeProps> = ({
             marginBottom: '14px',
             lineHeight: 1.4
           }}>
-            ⚡ All outreach pitches and follow-up replies are dispatched directly through your personal Gmail with verified deliverability.
+            ⚡ <strong>Direct Gmail Delivery Active:</strong> Outbound outreach emails are sent through your official Gmail account via OAuth 2.0. Inbound reply tracking requires Google Cloud Pub/Sub configuration.
           </div>
 
           {/* Test Send Form */}

@@ -359,10 +359,10 @@ export const ManageIntegrationModal: React.FC<ManageIntegrationModalProps> = ({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {[
-                    { key: 'emailActivity' as const, title: isGmail ? 'Direct Gmail API Delivery' : 'Email & Thread Engagement', desc: isGmail ? 'Send campaigns directly from your authenticated Gmail address with authentic SPF/DKIM headers' : 'Sync prospect emails, opens and replies directly to HUNTIQ outreach' },
-                    { key: 'contacts' as const, title: isGmail ? 'Prospect Reply & Bounce Tracking' : 'Contacts & Account Records', desc: isGmail ? 'Track prospect replies in real-time and automatically mark prospects as Replied' : 'Import decision-makers and synchronize updates bidirectionally' },
-                    { key: 'calendar' as const, title: isGmail ? 'Stop Sequences on Reply' : 'Calendar & Meeting Scheduler', desc: isGmail ? 'Automatically halt follow-up steps as soon as a prospect answers from this inbox' : 'Sync scheduled discovery calls and automatically link pre-call briefs' },
-                    { key: 'deals' as const, title: isGmail ? 'Sync to Gmail Sent Folder' : 'Pipeline Deals & Revenue Stages', desc: isGmail ? 'Automatically retain copies in your Gmail Sent mailbox for team transparency' : 'Mirror opportunity stages and won deals between systems' },
+                    { key: 'emailActivity' as const, title: isGmail ? 'Direct Gmail API Delivery (Active)' : 'Email & Thread Engagement', desc: isGmail ? 'Send campaigns directly from your authenticated Gmail address with authentic SPF/DKIM headers' : 'Sync prospect emails, opens and replies directly to HUNTIQ outreach' },
+                    { key: 'contacts' as const, title: isGmail ? 'Inbound Reply Sync (Requires Pub/Sub)' : 'Contacts & Account Records', desc: isGmail ? 'Outbound dispatch is active. Inbound reply detection requires configuring Google Cloud Pub/Sub push notifications' : 'Import decision-makers and synchronize updates bidirectionally' },
+                    { key: 'calendar' as const, title: isGmail ? 'Stop Sequences on Reply (Requires Pub/Sub)' : 'Calendar & Meeting Scheduler', desc: isGmail ? 'Halts follow-up steps upon detected prospect reply once Pub/Sub reply sync is enabled' : 'Sync scheduled discovery calls and automatically link pre-call briefs' },
+                    { key: 'deals' as const, title: isGmail ? 'Sync to Gmail Sent Folder' : 'Pipeline Deals & Revenue Stages', desc: isGmail ? 'Outbound emails sent via Gmail API automatically appear in your personal Gmail Sent folder' : 'Mirror opportunity stages and won deals between systems' },
                     { key: 'pushSignals' as const, title: 'Push Verified Buying Signals', desc: 'Transmit detected hiring surges and expansions directly into CRM notes' }
                   ].map((stream) => {
                     const isEnabled = syncConfig[stream.key];

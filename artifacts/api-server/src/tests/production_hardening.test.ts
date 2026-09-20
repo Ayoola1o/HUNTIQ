@@ -130,14 +130,20 @@ async function runSuite() {
 
   // Test 5: Production JWT secret has zero hardcoded fallback
   await runTest('5. Production JWT secret never uses hardcoded dev fallback', async () => {
-    const envContent = readFileSync(join(rootDir, 'server/config/env.ts'), 'utf-8');
+    const filePath = [join(rootDir, 'src/config/env.ts'), join(rootDir, 'server/config/env.ts')].find(p => {
+      try { readFileSync(p); return true; } catch { return false; }
+    })!;
+    const envContent = readFileSync(filePath, 'utf-8');
     // Ensure that in production or Vercel, jwtSecret defaults to empty string if unset, not dev key
     assert.ok(envContent.includes("(process.env.JWT_SECRET || '')"));
   });
 
   // Test 6: Database migration contains PostgreSQL advisory lock
   await runTest('6. Database migration code uses pg_advisory_lock to prevent cold start races', async () => {
-    const migrateContent = readFileSync(join(rootDir, 'server/database/migrate.ts'), 'utf-8');
+    const filePath = [join(rootDir, 'src/database/migrate.ts'), join(rootDir, 'server/database/migrate.ts')].find(p => {
+      try { readFileSync(p); return true; } catch { return false; }
+    })!;
+    const migrateContent = readFileSync(filePath, 'utf-8');
     assert.ok(migrateContent.includes('pg_advisory_lock'), 'Missing pg_advisory_lock in migrate.ts');
     assert.ok(migrateContent.includes('pg_advisory_unlock'), 'Missing pg_advisory_unlock in migrate.ts');
     assert.ok(migrateContent.includes('huntiq_migrations_lock'), 'Missing lock identifier in migrate.ts');
@@ -145,14 +151,20 @@ async function runSuite() {
 
   // Test 7: LeadIngestionService uses null for unresolved company instead of synthetic IDs
   await runTest('7. LeadIngestionService uses null for unresolved companies (no comp-unresolved)', async () => {
-    const leadServiceContent = readFileSync(join(rootDir, 'server/services/leadIngestionService.ts'), 'utf-8');
+    const filePath = [join(rootDir, 'src/services/leadIngestionService.ts'), join(rootDir, 'server/services/leadIngestionService.ts')].find(p => {
+      try { readFileSync(p); return true; } catch { return false; }
+    })!;
+    const leadServiceContent = readFileSync(filePath, 'utf-8');
     assert.ok(!leadServiceContent.includes("'comp-unresolved'"), "Found lingering 'comp-unresolved' in leadIngestionService.ts");
     assert.ok(leadServiceContent.includes('resolvedCompany?.id || null'), 'Expected companyId: resolvedCompany?.id || null');
   });
 
   // Test 8: Outreach contact name operator precedence prioritizes toName
   await runTest('8. Email integration contactName operator precedence prioritizes toName', async () => {
-    const emailIntContent = readFileSync(join(rootDir, 'server/routes/emailIntegration.ts'), 'utf-8');
+    const filePath = [join(rootDir, 'src/routes/emailIntegration.ts'), join(rootDir, 'server/routes/emailIntegration.ts')].find(p => {
+      try { readFileSync(p); return true; } catch { return false; }
+    })!;
+    const emailIntContent = readFileSync(filePath, 'utf-8');
     // Ensure bug pattern 'toName || matchingContact.firstName ? ...' is absent
     assert.ok(!emailIntContent.includes('toName || matchingContact.firstName ?'), 'Found operator precedence bug in emailIntegration.ts');
     assert.ok(emailIntContent.includes('contactName: toName \n        ? toName'), 'Expected correct ternary precedence in emailIntegration.ts');
@@ -160,17 +172,22 @@ async function runSuite() {
 
   // Test 9: SSL support enabled for remote PostgreSQL connections
   await runTest('9. Remote PostgreSQL connections configure SSL with rejectUnauthorized: false', async () => {
-    const pgContent = readFileSync(join(rootDir, 'server/database/postgres.ts'), 'utf-8');
+    const filePath = [join(rootDir, 'src/database/postgres.ts'), join(rootDir, 'server/database/postgres.ts')].find(p => {
+      try { readFileSync(p); return true; } catch { return false; }
+    })!;
+    const pgContent = readFileSync(filePath, 'utf-8');
     assert.ok(pgContent.includes('rejectUnauthorized: false'), 'Missing SSL rejectUnauthorized in postgres.ts');
     assert.ok(pgContent.includes('isLocal'), 'Missing localhost SSL bypass in postgres.ts');
   });
 
-  // Test 10: Serverless api handler provides safe error recovery
-  await runTest('10. Serverless api/index.ts catches boot errors and responds with clean 503', async () => {
-    const apiIndexContent = readFileSync(join(rootDir, 'api/index.ts'), 'utf-8');
-    assert.ok(apiIndexContent.includes('try {'), 'Missing try/catch in api/index.ts');
-    assert.ok(apiIndexContent.includes('initError'), 'Missing initError handling in api/index.ts');
-    assert.ok(apiIndexContent.includes('503'), 'Missing 503 status code in api/index.ts');
+  // Test 10: App provides safe error recovery and responds with clean 503 on config or migration failure
+  await runTest('10. App readiness middleware catches boot/config errors and responds with clean 503', async () => {
+    const filePath = [join(rootDir, 'src/app.ts'), join(rootDir, 'server/app.ts')].find(p => {
+      try { readFileSync(p); return true; } catch { return false; }
+    })!;
+    const appContent = readFileSync(filePath, 'utf-8');
+    assert.ok(appContent.includes('DATABASE_UNAVAILABLE'), 'Missing DATABASE_UNAVAILABLE code in app.ts');
+    assert.ok(appContent.includes('503'), 'Missing 503 status code in app.ts');
   });
 
   console.log('\n========================================================================');

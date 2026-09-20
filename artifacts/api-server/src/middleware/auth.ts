@@ -63,6 +63,16 @@ export const authenticateApiKeyOrJwt = async (
         return next();
       }
     }
+
+    // If an explicit Bearer token was provided but is invalid / unverified, reject with 401
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'INVALID_CREDENTIALS',
+        message: 'The provided Bearer token is invalid or expired.'
+      },
+      meta: { timestamp: new Date().toISOString() }
+    });
   }
 
   // 2. Check Programmatic API Key Header
@@ -83,6 +93,15 @@ export const authenticateApiKeyOrJwt = async (
         return next();
       }
     }
+    // Explicit API key was provided but is invalid
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'INVALID_API_KEY',
+        message: 'The provided X-HUNTIQ-API-KEY header is invalid.'
+      },
+      meta: { timestamp: new Date().toISOString() }
+    });
   }
 
   // 3. Allow public unauthenticated routes
@@ -105,7 +124,8 @@ export const authenticateApiKeyOrJwt = async (
   }
 
   // 4. Strict Authentication Enforcement: Reject missing/invalid auth with 401
-  if (process.env.ALLOW_DEV_AUTH_BYPASS !== 'true') {
+  const isEnforced = config.nodeEnv === 'production' || process.env.NODE_ENV === 'test' || process.env.VERCEL === '1';
+  if (isEnforced || process.env.ALLOW_DEV_AUTH_BYPASS !== 'true') {
     return res.status(401).json({
       success: false,
       error: {
@@ -116,7 +136,7 @@ export const authenticateApiKeyOrJwt = async (
     });
   }
 
-  // 5. Explicit Development bypass (Only when ALLOW_DEV_AUTH_BYPASS === 'true')
+  // 5. Explicit Development bypass (Only when ALLOW_DEV_AUTH_BYPASS === 'true' in non-production)
   res.setHeader('X-Huntiq-Dev-Bypass', 'active');
   const defaultUser = await userRepository.findById(DEFAULT_USER_ID);
   req.user = {

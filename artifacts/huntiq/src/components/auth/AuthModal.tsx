@@ -78,8 +78,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     <div style={{
       position: 'fixed',
       inset: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.65)',
-      backdropFilter: 'blur(6px)',
+      backgroundImage: `radial-gradient(ellipse at 65% 50%, rgba(15, 23, 42, 0.45) 0%, rgba(9, 13, 22, 0.82) 100%), url('/huntiq_auth_background.jpg')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+      backdropFilter: 'blur(2px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -91,7 +94,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         borderRadius: '20px',
         width: '100%',
         maxWidth: '440px',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1)',
         border: '1px solid #e2e8f0',
         overflow: 'hidden',
         animation: 'modalSlideIn 0.2s ease-out'

@@ -1,7 +1,6 @@
 import { Router, Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import { EmailDispatchService, EmailProviderType } from '../services/emailDispatchService';
-import { db } from '../db/memoryStore';
 import { outreachRepository } from '../repositories/outreach';
 import { createContactRepository } from '../repositories/contacts';
 import { createActivityLogRepository } from '../repositories/activity-logs';
@@ -174,27 +173,35 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
 
     const cleanTo = to.toLowerCase().trim();
 
-    // Security Guard: Verify recipient exists in the authenticated workspace
-    let matchingContact = db.contacts.find(
-      c => c.workspaceId === workspaceId && c.email.toLowerCase() === cleanTo
-    );
-    if (!matchingContact) {
-      try {
-        const contactRepo = createContactRepository();
-        const contacts = await contactRepo.listByUser(req.user?.id || '', workspaceId);
-        const found = contacts.find(c => c.email && c.email.toLowerCase() === cleanTo);
-        if (found) {
-          matchingContact = {
-            id: found.id,
-            workspaceId,
-            firstName: (found.name || '').split(' ')[0] || '',
-            lastName: (found.name || '').split(' ').slice(1).join(' ') || '',
-            email: found.email!,
-            jobTitle: found.role || 'Contact',
-            companyId: null
-          } as any;
-        }
-      } catch {}
+    // Security Guard: Verify recipient exists in the authenticated workspace using the contact repository
+    let matchingContact: {
+      id: string;
+      workspaceId: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      jobTitle?: string;
+      companyId?: string | null;
+    } | null = null;
+
+    try {
+      const contactRepo = createContactRepository();
+      const contacts = await contactRepo.listByUser(req.user?.id || '', workspaceId);
+      const found = contacts.find(c => c.email && c.email.toLowerCase() === cleanTo);
+      if (found) {
+        const nameParts = (found.name || '').trim().split(/\s+/);
+        matchingContact = {
+          id: found.id,
+          workspaceId,
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          email: found.email!,
+          jobTitle: found.role || 'Prospect',
+          companyId: null
+        };
+      }
+    } catch (err: any) {
+      console.warn('[EMAIL_INTEGRATION] Failed to query contacts repository:', err.message);
     }
 
     if (!matchingContact) {
@@ -270,18 +277,8 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
       ]
     }, workspaceId);
 
-    // 3. Log Activity
+    // 3. Log Activity via ActivityLogRepository
     if (req.user?.id) {
-      db.logActivity({
-        workspaceId,
-        userId: req.user.id,
-        companyId: matchingContact.companyId,
-        contactId: matchingContact.id,
-        type: 'OUTREACH_SENT',
-        title: `Dispatched Outreach Email to ${toName || cleanTo}`,
-        description: `Subject: "${subject}" | Delivered via ${dispatchResult.provider} (ID: ${dispatchResult.messageId}).`
-      });
-
       try {
         const activityRepo = createActivityLogRepository();
         await activityRepo.log({
@@ -290,9 +287,11 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
           action: 'OUTREACH_SENT',
           entityType: 'contact',
           entityId: matchingContact.id,
-          details: `Dispatched Outreach Email to ${toName || cleanTo}: "${subject}"`
+          details: `Dispatched Outreach Email to ${toName || cleanTo}: "${subject}" via ${dispatchResult.provider}`
         });
-      } catch {}
+      } catch (err: any) {
+        console.warn('[EMAIL_INTEGRATION] Failed to log activity:', err.message);
+      }
     }
 
     return res.json({

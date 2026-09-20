@@ -25,12 +25,19 @@ export interface ServerConfig {
   mapsMaxResults: number;
   mapsMaxRadiusKm: number;
   mapsMaxConcurrentJobs: number;
+  googleTokenEncryptionKey?: string;
 }
 
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = 'development';
 }
-if (process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_AUTH_BYPASS === undefined) {
+
+const isProductionEnv = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+
+if (isProductionEnv) {
+  // Never permit dev bypass in production
+  delete process.env.ALLOW_DEV_AUTH_BYPASS;
+} else if (process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_AUTH_BYPASS === undefined) {
   process.env.ALLOW_DEV_AUTH_BYPASS = 'true';
 }
 
@@ -45,6 +52,14 @@ export function getProductionConfigErrors(env: Record<string, string | undefined
     }
     if (!env.DATABASE_URL) {
       errors.push('DATABASE_URL must be set in production.');
+    }
+    // If Google OAuth integration is enabled in production, encryption key is required
+    const hasGoogleAuth = Boolean(env.GOOGLE_CLIENT_ID?.trim() || env.GOOGLE_CLIENT_SECRET?.trim());
+    if (hasGoogleAuth && !env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim()) {
+      errors.push('GOOGLE_TOKEN_ENCRYPTION_KEY must be configured in production when Google integration is active.');
+    }
+    if (env.ALLOW_DEV_AUTH_BYPASS === 'true') {
+      errors.push('ALLOW_DEV_AUTH_BYPASS cannot be enabled in production.');
     }
   }
   return errors;
@@ -73,5 +88,6 @@ export const config: ServerConfig = {
   huntiqMapsMock: process.env.HUNTIQ_MAPS_MOCK === 'true' || (nodeEnv !== 'production' && !process.env.APIFY_API_TOKEN),
   mapsMaxResults: Number(process.env.MAPS_MAX_RESULTS) || 50,
   mapsMaxRadiusKm: Number(process.env.MAPS_MAX_RADIUS_KM) || 50,
-  mapsMaxConcurrentJobs: Number(process.env.MAPS_MAX_CONCURRENT_JOBS) || 3
+  mapsMaxConcurrentJobs: Number(process.env.MAPS_MAX_CONCURRENT_JOBS) || 3,
+  googleTokenEncryptionKey: process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim()
 };

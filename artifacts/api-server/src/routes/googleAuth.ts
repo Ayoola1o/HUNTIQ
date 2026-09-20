@@ -3,16 +3,58 @@ import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import { GoogleAuthService } from '../services/googleAuthService';
 import { GmailService } from '../services/gmailService';
+import { hasValidTld } from '../engine/scraper/emailExtractor';
 
 export const googleAuthRouter = Router();
+
+// Test email rate limiter: max 5 sends per 15 minutes per workspace
+interface RateLimitRecord {
+  count: number;
+  resetAt: number;
+}
+const testEmailRateLimits = new Map<string, RateLimitRecord>();
+
+function checkTestEmailRateLimit(workspaceId: string): { allowed: boolean; retryAfterSeconds: number } {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000; // 15 minutes
+  const limit = 5;
+
+  const current = testEmailRateLimits.get(workspaceId);
+  if (!current || now > current.resetAt) {
+    testEmailRateLimits.set(workspaceId, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  if (current.count >= limit) {
+    const retryAfterSeconds = Math.ceil((current.resetAt - now) / 1000);
+    return { allowed: false, retryAfterSeconds };
+  }
+
+  current.count++;
+  return { allowed: true, retryAfterSeconds: 0 };
+}
 
 /**
  * GET /api/v1/auth/google/url
  * Returns the OAuth 2.0 authorization URL for connecting Gmail.
+ * Cryptographically binds state to the authenticated user and workspace.
  */
-googleAuthRouter.get(['/auth/google/url', '/google/url'], (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
-  const returnUrl = typeof req.query.returnUrl === 'string' ? req.query.returnUrl : undefined;
+googleAuthRouter.get(['/auth/google/url', '/google/url'], async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  const userId = req.user?.id;
+
+  if (!workspaceId || !userId) {
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required. Please provide a valid session or token.'
+      }
+    });
+  }
+
+  const rawReturnUrl = typeof req.query.returnUrl === 'string' ? req.query.returnUrl : undefined;
+  const safeReturnUrl = GoogleAuthService.sanitizeReturnUrl(rawReturnUrl);
 
   if (!GoogleAuthService.isConfigured()) {
     return res.status(200).json({
@@ -35,7 +77,7 @@ googleAuthRouter.get(['/auth/google/url', '/google/url'], (req: AuthenticatedReq
   }
 
   try {
-    const authUrl = GoogleAuthService.getAuthUrl(workspaceId, returnUrl);
+    const authUrl = await GoogleAuthService.getAuthUrl(workspaceId, userId, safeReturnUrl);
     return res.json({
       success: true,
       data: {
@@ -44,9 +86,10 @@ googleAuthRouter.get(['/auth/google/url', '/google/url'], (req: AuthenticatedReq
       }
     });
   } catch (err: any) {
-    return res.status(500).json({
+    const status = err.statusCode || 500;
+    return res.status(status).json({
       success: false,
-      error: { code: 'OAUTH_URL_GENERATION_FAILED', message: err.message }
+      error: { code: err.code || 'OAUTH_URL_GENERATION_FAILED', message: err.message }
     });
   }
 });
@@ -54,6 +97,7 @@ googleAuthRouter.get(['/auth/google/url', '/google/url'], (req: AuthenticatedReq
 /**
  * GET /api/v1/auth/google/callback
  * Public redirect callback endpoint from Google OAuth consent screen.
+ * Consumes single-use server-side cryptographically bound state.
  */
 googleAuthRouter.get(['/auth/google/callback', '/google/callback'], async (req: Request, res: Response) => {
   const { code, state, error } = req.query as {
@@ -62,35 +106,29 @@ googleAuthRouter.get(['/auth/google/callback', '/google/callback'], async (req: 
     error?: string;
   };
 
-  let returnUrl = 'http://localhost:5173/?view=outreach';
-  if (state) {
-    try {
-      const decoded = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
-      if (decoded.returnUrl) returnUrl = decoded.returnUrl;
-    } catch {}
-  }
-
-  const joinChar = returnUrl.includes('?') ? '&' : '?';
+  const defaultReturnUrl = 'http://localhost:5173/?view=integrations';
 
   if (error) {
     console.warn('[GOOGLE_AUTH] Callback received error from Google:', error);
-    return res.redirect(`${returnUrl}${joinChar}google_auth=error&reason=${encodeURIComponent(error)}`);
+    return res.redirect(`${defaultReturnUrl}&google_auth=error&reason=${encodeURIComponent(error)}`);
   }
 
-  if (!code) {
-    return res.redirect(`${returnUrl}${joinChar}google_auth=error&reason=missing_code`);
+  if (!code || !state) {
+    return res.redirect(`${defaultReturnUrl}&google_auth=error&reason=missing_code_or_state`);
   }
 
   try {
-    const integration = await GoogleAuthService.exchangeCode(code, state);
-    console.log(`[GOOGLE_AUTH] Successfully authenticated Gmail for ${integration.accountEmail}`);
+    const { integration, returnPath } = await GoogleAuthService.exchangeCode(code, state);
+    const joinChar = returnPath.includes('?') ? '&' : '?';
+    console.log(`[GOOGLE_AUTH] Successfully authenticated Gmail for ${integration.accountEmail} in workspace ${integration.workspaceId}`);
     return res.redirect(
-      `${returnUrl}${joinChar}google_auth=success&email=${encodeURIComponent(integration.accountEmail)}`
+      `${returnPath}${joinChar}google_auth=success&email=${encodeURIComponent(integration.accountEmail)}`
     );
   } catch (err: any) {
     console.error('[GOOGLE_AUTH] Token exchange failed:', err.message);
+    const joinChar = defaultReturnUrl.includes('?') ? '&' : '?';
     return res.redirect(
-      `${returnUrl}${joinChar}google_auth=error&reason=${encodeURIComponent(err.message || 'token_exchange_failed')}`
+      `${defaultReturnUrl}${joinChar}google_auth=error&reason=${encodeURIComponent(err.message || 'token_exchange_failed')}`
     );
   }
 });
@@ -100,7 +138,14 @@ googleAuthRouter.get(['/auth/google/callback', '/google/callback'], async (req: 
  * Checks Gmail connection status for the authenticated workspace.
  */
 googleAuthRouter.get(['/auth/google/status', '/google/status'], async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
+
   try {
     const status = await GoogleAuthService.getStatus(workspaceId);
     return res.json({
@@ -108,29 +153,38 @@ googleAuthRouter.get(['/auth/google/status', '/google/status'], async (req: Auth
       data: status
     });
   } catch (err: any) {
-    return res.status(500).json({
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
       success: false,
-      error: { code: 'STATUS_CHECK_FAILED', message: err.message }
+      error: { code: err.code || 'STATUS_CHECK_FAILED', message: err.message }
     });
   }
 });
 
 /**
  * POST /api/v1/auth/google/disconnect
- * Disconnects the Google account for the authenticated workspace.
+ * Disconnects the Google account for the authenticated workspace, revoking tokens remotely and in DB.
  */
 googleAuthRouter.post(['/auth/google/disconnect', '/google/disconnect'], async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
+
   try {
     await GoogleAuthService.disconnect(workspaceId);
     return res.json({
       success: true,
-      data: { isConnected: false }
+      data: { isConnected: false, status: 'revoked' }
     });
   } catch (err: any) {
-    return res.status(500).json({
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
       success: false,
-      error: { code: 'DISCONNECT_FAILED', message: err.message }
+      error: { code: err.code || 'DISCONNECT_FAILED', message: err.message }
     });
   }
 });
@@ -138,16 +192,47 @@ googleAuthRouter.post(['/auth/google/disconnect', '/google/disconnect'], async (
 /**
  * POST /api/v1/auth/google/test
  * Sends a test verification email via the connected Gmail account.
+ * Rate limited to 5 tests per 15 minutes per workspace.
  */
 googleAuthRouter.post(['/auth/google/test', '/google/test'], async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
-  const { toEmail } = req.body || {};
-  const targetEmail = toEmail || req.user?.email;
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
 
-  if (!targetEmail) {
+  // Rate Limiting Check
+  const rateLimit = checkTestEmailRateLimit(workspaceId);
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', rateLimit.retryAfterSeconds);
+    return res.status(429).json({
+      success: false,
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: `Too many test emails sent. Please wait ${rateLimit.retryAfterSeconds} seconds before trying again.`
+      }
+    });
+  }
+
+  const { toEmail } = req.body || {};
+  const rawTargetEmail = toEmail || req.user?.email;
+
+  if (!rawTargetEmail || typeof rawTargetEmail !== 'string') {
     return res.status(400).json({
       success: false,
       error: { code: 'MISSING_EMAIL', message: 'Target email is required.' }
+    });
+  }
+
+  const targetEmail = rawTargetEmail.trim().toLowerCase();
+
+  // Strict email syntax and length validation
+  if (targetEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail) || !hasValidTld(targetEmail)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_EMAIL_SYNTAX', message: 'The provided test email address is invalid.' }
     });
   }
 
@@ -164,6 +249,7 @@ googleAuthRouter.post(['/auth/google/test', '/google/test'], async (req: Authent
           </p>
           <div style="background: #f8fafc; border-radius: 8px; padding: 12px 16px; margin: 16px 0; font-size: 13px; color: #475569;">
             <div><strong>Provider:</strong> Google Gmail API (OAuth 2.0)</div>
+            <div><strong>Recipient:</strong> ${targetEmail}</div>
             <div><strong>Timestamp:</strong> ${new Date().toUTCString()}</div>
           </div>
           <p style="color: #64748b; font-size: 13px; margin: 16px 0 0 0;">
