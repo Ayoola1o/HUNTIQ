@@ -2,11 +2,19 @@ import type { Pool } from 'pg';
 import type { MeetingItem } from '../../../src/types/meetings';
 import type { MeetingRepository, MeetingFilterOptions } from './meeting-repository';
 import { InMemoryMeetingRepository } from './in-memory-meeting.repository';
+import { config } from '../../config/env';
 
 export class PostgresMeetingRepository implements MeetingRepository {
   private fallback = new InMemoryMeetingRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   public async list(workspaceId: string, filter?: MeetingFilterOptions): Promise<MeetingItem[]> {
     try {
@@ -33,7 +41,7 @@ export class PostgresMeetingRepository implements MeetingRepository {
       `;
       const result = await this.pool.query(query, params);
       if (result.rows.length === 0) {
-        return this.fallback.list(workspaceId, filter);
+        return this.isProduction() ? [] : this.fallback.list(workspaceId, filter);
       }
 
       return result.rows.map(r => ({
@@ -60,7 +68,13 @@ export class PostgresMeetingRepository implements MeetingRepository {
         agenda: ['Introductions', 'Review scope & requirements', 'Next steps'],
         notes: r.description || ''
       }));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing meetings: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.list(workspaceId, filter);
     }
   }
@@ -74,7 +88,7 @@ export class PostgresMeetingRepository implements MeetingRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId]);
       if (!result.rows[0]) {
-        return this.fallback.getById(id, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.getById(id, workspaceId);
       }
       const r = result.rows[0];
       return {
@@ -101,7 +115,13 @@ export class PostgresMeetingRepository implements MeetingRepository {
         agenda: ['Introductions', 'Review scope & requirements', 'Next steps'],
         notes: r.description || ''
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error retrieving meeting: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getById(id, workspaceId);
     }
   }
@@ -162,7 +182,13 @@ export class PostgresMeetingRepository implements MeetingRepository {
         agenda: meeting.agenda || ['Introductions', 'Requirements discussion'],
         notes: r.description || ''
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating meeting: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.create(meeting, workspaceId, userId);
     }
   }
@@ -187,13 +213,19 @@ export class PostgresMeetingRepository implements MeetingRepository {
         workspaceId
       ]);
       if (!result.rows[0]) {
-        return this.fallback.update(id, partial, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.update(id, partial, workspaceId);
       }
       return {
         ...existing,
         ...partial
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating meeting: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.update(id, partial, workspaceId);
     }
   }
@@ -203,10 +235,16 @@ export class PostgresMeetingRepository implements MeetingRepository {
       const query = `DELETE FROM meetings WHERE id = $1 AND workspace_id = $2`;
       const result = await this.pool.query(query, [id, workspaceId]);
       if ((result.rowCount ?? 0) === 0) {
-        return this.fallback.delete(id, workspaceId);
+        return this.isProduction() ? false : this.fallback.delete(id, workspaceId);
       }
       return true;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error deleting meeting: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.delete(id, workspaceId);
     }
   }

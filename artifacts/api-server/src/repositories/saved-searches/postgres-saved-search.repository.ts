@@ -2,11 +2,19 @@ import type { Pool } from 'pg';
 import type { SavedSearchItem } from '../../../src/types/savedSearches';
 import type { SavedSearchRepository, SavedSearchFilterOptions } from './saved-search-repository';
 import { InMemorySavedSearchRepository } from './in-memory-saved-search.repository';
+import { config } from '../../config/env';
 
 export class PostgresSavedSearchRepository implements SavedSearchRepository {
   private fallback = new InMemorySavedSearchRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   public async list(workspaceId: string, filter?: SavedSearchFilterOptions): Promise<SavedSearchItem[]> {
     try {
@@ -37,7 +45,7 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
       `;
       const result = await this.pool.query(query, params);
       if (result.rows.length === 0) {
-        return this.fallback.list(workspaceId, filter);
+        return this.isProduction() ? [] : this.fallback.list(workspaceId, filter);
       }
 
       return result.rows.map(r => ({
@@ -63,7 +71,13 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
         matchedCompanies: [],
         recentActivity: []
       }));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing saved searches: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.list(workspaceId, filter);
     }
   }
@@ -77,7 +91,7 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId]);
       if (!result.rows[0]) {
-        return this.fallback.getById(id, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.getById(id, workspaceId);
       }
       const r = result.rows[0];
       return {
@@ -103,7 +117,13 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
         matchedCompanies: [],
         recentActivity: []
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error retrieving saved search: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getById(id, workspaceId);
     }
   }
@@ -152,7 +172,13 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
         matchedCompanies: [],
         recentActivity: []
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating saved search: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.create(search, workspaceId, userId);
     }
   }
@@ -177,13 +203,19 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
         workspaceId
       ]);
       if (!result.rows[0]) {
-        return this.fallback.update(id, partial, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.update(id, partial, workspaceId);
       }
       return {
         ...existing,
         ...partial
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating saved search: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.update(id, partial, workspaceId);
     }
   }
@@ -193,10 +225,16 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
       const query = `DELETE FROM saved_searches WHERE id = $1 AND workspace_id = $2`;
       const result = await this.pool.query(query, [id, workspaceId]);
       if ((result.rowCount ?? 0) === 0) {
-        return this.fallback.delete(id, workspaceId);
+        return this.isProduction() ? false : this.fallback.delete(id, workspaceId);
       }
       return true;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error deleting saved search: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.delete(id, workspaceId);
     }
   }

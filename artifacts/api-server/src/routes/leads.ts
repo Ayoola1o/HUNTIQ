@@ -17,7 +17,13 @@ const companyRepository = createCompanyRepository();
  * Query qualified leads
  */
 leadsRouter.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const { status } = req.query as { status?: string };
 
   const list = await leadService.listLeads(workspaceId, status);
@@ -37,7 +43,13 @@ leadsRouter.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
  * Evaluate company, score opportunity, and auto-generate lead & pipeline deal if threshold met
  */
 leadsRouter.post('/leads/evaluate', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const { companyId } = req.body || {};
 
   if (!companyId) {
@@ -96,7 +108,13 @@ leadsRouter.post('/leads/evaluate', async (req: AuthenticatedRequest, res: Respo
  * Runs autonomous qualification across all workspace accounts
  */
 leadsRouter.post('/leads/auto-qualify', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
 
   try {
     const result = await AutomaticLeadEngine.runAutoQualification(workspaceId);
@@ -109,7 +127,7 @@ leadsRouter.post('/leads/auto-qualify', async (req: AuthenticatedRequest, res: R
   } catch (err: any) {
     res.status(500).json({
       success: false,
-      error: { code: 'AUTO_QUALIFY_ERROR', message: err.message },
+      error: { code: 'AUTO_QUALIFY_ERROR', message: 'Failed to run automatic lead qualification.' },
       meta: { timestamp: new Date().toISOString() }
     });
   }
@@ -120,7 +138,13 @@ leadsRouter.post('/leads/auto-qualify', async (req: AuthenticatedRequest, res: R
  * Promotes a lead directly to the active CRM pipeline
  */
 leadsRouter.post('/leads/:id/promote', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const { id } = req.params;
   const { customDealValue } = req.body || {};
 
@@ -135,7 +159,7 @@ leadsRouter.post('/leads/:id/promote', async (req: AuthenticatedRequest, res: Re
   } catch (err: any) {
     res.status(500).json({
       success: false,
-      error: { code: 'PROMOTE_ERROR', message: err.message },
+      error: { code: 'PROMOTE_ERROR', message: 'Failed to promote lead to pipeline.' },
       meta: { timestamp: new Date().toISOString() }
     });
   }
@@ -146,7 +170,13 @@ leadsRouter.post('/leads/:id/promote', async (req: AuthenticatedRequest, res: Re
  * Updates lead status
  */
 leadsRouter.patch('/leads/:id/status', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const { id } = req.params;
   const { status } = req.body || {};
 

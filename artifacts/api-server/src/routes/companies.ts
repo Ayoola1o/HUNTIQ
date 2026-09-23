@@ -10,7 +10,13 @@ export const companiesRouter = Router();
 const companyRepository = createCompanyRepository();
 
 companiesRouter.get('/companies', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const query = typeof req.query.q === 'string' ? req.query.q : undefined;
   const industry = typeof req.query.industry === 'string' ? req.query.industry : undefined;
   
@@ -29,7 +35,13 @@ companiesRouter.get('/companies', async (req: AuthenticatedRequest, res: Respons
 });
 
 companiesRouter.post('/companies', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const {
     name,
     domain,
@@ -76,7 +88,13 @@ companiesRouter.post('/companies', async (req: AuthenticatedRequest, res: Respon
 });
 
 companiesRouter.get('/companies/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const companyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const company = await companyRepository.getById(companyId, workspaceId);
 

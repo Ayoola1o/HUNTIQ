@@ -1,11 +1,19 @@
 import type { Pool } from 'pg';
 import type { LeadRecord, LeadRepository } from './lead-repository';
 import { InMemoryLeadRepository } from './in-memory-lead.repository';
+import { config } from '../../config/env';
 
 export class PostgresLeadRepository implements LeadRepository {
   private fallback = new InMemoryLeadRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   async create(lead: Omit<LeadRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<LeadRecord> {
     try {
@@ -49,7 +57,13 @@ export class PostgresLeadRepository implements LeadRepository {
       );
 
       return result.rows[0];
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating lead: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.create(lead);
     }
   }
@@ -105,7 +119,13 @@ export class PostgresLeadRepository implements LeadRepository {
       );
 
       return result.rows[0];
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error upserting lead: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.upsert(lead);
     }
   }
@@ -158,10 +178,16 @@ export class PostgresLeadRepository implements LeadRepository {
       const params = workspaceId ? [companyId, workspaceId] : [companyId];
       const result = await this.pool.query(query, params);
       if (result.rows.length === 0) {
-        return this.fallback.findByCompanyId(companyId, workspaceId);
+        return this.isProduction() ? [] : this.fallback.findByCompanyId(companyId, workspaceId);
       }
       return result.rows;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error finding leads by company: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.findByCompanyId(companyId, workspaceId);
     }
   }
@@ -214,10 +240,16 @@ export class PostgresLeadRepository implements LeadRepository {
       const params = workspaceId ? [id, workspaceId] : [id];
       const result = await this.pool.query(query, params);
       if (!result.rows[0]) {
-        return this.fallback.findById(id, workspaceId);
+        return this.isProduction() ? null : this.fallback.findById(id, workspaceId);
       }
       return result.rows[0];
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error finding lead by id: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.findById(id, workspaceId);
     }
   }
@@ -271,10 +303,16 @@ export class PostgresLeadRepository implements LeadRepository {
       const params = workspaceId ? [workspaceId, limit, offset] : [limit, offset];
       const result = await this.pool.query(query, params);
       if (result.rows.length === 0) {
-        return this.fallback.list(workspaceId, limit, offset);
+        return this.isProduction() ? [] : this.fallback.list(workspaceId, limit, offset);
       }
       return result.rows;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing leads: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.list(workspaceId, limit, offset);
     }
   }
@@ -327,10 +365,16 @@ export class PostgresLeadRepository implements LeadRepository {
       const params = workspaceId ? [status, id, workspaceId] : [status, id];
       const result = await this.pool.query(query, params);
       if (!result.rows[0]) {
-        return this.fallback.updateStatus(id, status, workspaceId);
+        return this.isProduction() ? null : this.fallback.updateStatus(id, status, workspaceId);
       }
       return result.rows[0];
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating lead status: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.updateStatus(id, status, workspaceId);
     }
   }

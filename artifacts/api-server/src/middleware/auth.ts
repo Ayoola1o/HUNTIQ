@@ -113,6 +113,8 @@ export const authenticateApiKeyOrJwt = async (
     '/api/auth/login',
     '/api/auth/signup',
     '/api/v1/integrations/email-scraper/webhook',
+    '/api/v1/integrations/gmail/webhook',
+    '/api/integrations/gmail/webhook',
     '/api/v1/auth/google/callback',
     '/api/auth/google/callback',
     '/v1/auth/google/callback',

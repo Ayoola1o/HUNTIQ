@@ -9,7 +9,13 @@ const taskRepository = createTaskRepository();
 
 // 1. List tasks with optional filters & KPI summary
 tasksRouter.get('/tasks', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const priority = typeof req.query.priority === 'string' ? req.query.priority : undefined;
   const dueCategory = typeof req.query.dueCategory === 'string' ? req.query.dueCategory : undefined;
@@ -51,7 +57,13 @@ tasksRouter.get('/tasks', async (req: AuthenticatedRequest, res: Response) => {
 
 // 2. Get task by ID
 tasksRouter.get('/tasks/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const task = await taskRepository.getById(id, workspaceId);
 
@@ -79,7 +91,13 @@ tasksRouter.get('/tasks/:id', async (req: AuthenticatedRequest, res: Response) =
 
 // 3. Create a new task
 tasksRouter.post('/tasks', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const userId = req.user?.id;
   const payload = req.body;
 
@@ -109,7 +127,13 @@ tasksRouter.post('/tasks', async (req: AuthenticatedRequest, res: Response) => {
 
 // 4. Update task details or status
 tasksRouter.patch('/tasks/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const updates = req.body;
 
@@ -139,7 +163,13 @@ tasksRouter.patch('/tasks/:id', async (req: AuthenticatedRequest, res: Response)
 
 // 5. Toggle task completion
 tasksRouter.post('/tasks/:id/toggle', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const existing = await taskRepository.getById(id, workspaceId);
 
@@ -174,7 +204,13 @@ tasksRouter.post('/tasks/:id/toggle', async (req: AuthenticatedRequest, res: Res
 
 // 6. Delete a task
 tasksRouter.delete('/tasks/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const deleted = await taskRepository.delete(id, workspaceId);
 

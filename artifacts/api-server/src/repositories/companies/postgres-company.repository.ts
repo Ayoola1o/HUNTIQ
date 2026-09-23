@@ -79,9 +79,20 @@ export class PostgresCompanyRepository implements CompanyRepository {
     return config.nodeEnv === 'production' || process.env.VERCEL === '1';
   }
 
-  async list(params: CompanySearchParams = {}, workspaceId = 'ws-default-001'): Promise<CompanyItem[]> {
+  async list(params: CompanySearchParams = {}, workspaceId?: string): Promise<CompanyItem[]> {
+    const effectiveWorkspaceId = workspaceId || (this.isProduction() ? '' : 'ws-default-001');
+    if (!effectiveWorkspaceId) {
+      if (this.isProduction()) {
+        const error = new Error('workspaceId is required in production');
+        (error as any).statusCode = 401;
+        (error as any).code = 'UNAUTHORIZED';
+        throw error;
+      }
+      return [];
+    }
+
     try {
-      const values: unknown[] = [workspaceId];
+      const values: unknown[] = [effectiveWorkspaceId];
       const conditions = ['workspace_id = $1'];
 
       if (params.query) {
@@ -99,28 +110,31 @@ export class PostgresCompanyRepository implements CompanyRepository {
         values,
       );
       if (result.rows.length === 0) {
-        return this.isProduction() ? [] : this.fallback.list(params, workspaceId);
+        return this.isProduction() ? [] : this.fallback.list(params, effectiveWorkspaceId);
       }
       return result.rows.map(mapCompanyRow);
     } catch (err: any) {
       if (this.isProduction()) {
         const error = new Error(`Database error listing companies: ${err.message}`);
-        (error as any).statusCode = 503;
-        (error as any).code = 'DATABASE_UNAVAILABLE';
+        (error as any).statusCode = (err as any).statusCode || 503;
+        (error as any).code = (err as any).code || 'DATABASE_UNAVAILABLE';
         throw error;
       }
-      return this.fallback.list(params, workspaceId);
+      return this.fallback.list(params, effectiveWorkspaceId);
     }
   }
 
-  async getById(companyId: string, workspaceId = 'ws-default-001'): Promise<CompanyItem | undefined> {
+  async getById(companyId: string, workspaceId?: string): Promise<CompanyItem | undefined> {
+    const effectiveWorkspaceId = workspaceId || (this.isProduction() ? '' : 'ws-default-001');
+    if (!effectiveWorkspaceId) return undefined;
+
     try {
       const result = await this.pool.query<CompanyRow>(
         'select * from companies where workspace_id = $1 and id = $2 limit 1',
-        [workspaceId, companyId],
+        [effectiveWorkspaceId, companyId],
       );
       if (!result.rows[0]) {
-        return this.isProduction() ? undefined : this.fallback.getById(companyId, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.getById(companyId, effectiveWorkspaceId);
       }
       return mapCompanyRow(result.rows[0]);
     } catch (err: any) {
@@ -130,11 +144,18 @@ export class PostgresCompanyRepository implements CompanyRepository {
         (error as any).code = 'DATABASE_UNAVAILABLE';
         throw error;
       }
-      return this.fallback.getById(companyId, workspaceId);
+      return this.fallback.getById(companyId, effectiveWorkspaceId);
     }
   }
 
-  async create(input: CreateCompanyInput, workspaceId = 'ws-default-001'): Promise<CompanyItem> {
+  async create(input: CreateCompanyInput, workspaceId?: string): Promise<CompanyItem> {
+    const effectiveWorkspaceId = workspaceId || (this.isProduction() ? '' : 'ws-default-001');
+    if (!effectiveWorkspaceId) {
+      const error = new Error('workspaceId is required in production');
+      (error as any).statusCode = 401;
+      (error as any).code = 'UNAUTHORIZED';
+      throw error;
+    }
     try {
       const result = await this.pool.query<CompanyRow>(
         `insert into companies (
@@ -156,7 +177,7 @@ export class PostgresCompanyRepository implements CompanyRepository {
           updated_at = now()
         returning *`,
         [
-          workspaceId,
+          effectiveWorkspaceId,
           input.name,
           input.domain ?? null,
           input.website ?? null,
@@ -179,7 +200,7 @@ export class PostgresCompanyRepository implements CompanyRepository {
         (error as any).code = 'DATABASE_UNAVAILABLE';
         throw error;
       }
-      return this.fallback.create(input, workspaceId);
+      return this.fallback.create(input, effectiveWorkspaceId);
     }
   }
 }

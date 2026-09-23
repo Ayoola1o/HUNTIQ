@@ -66,7 +66,13 @@ prospectsRouter.post(['/prospects/discover-maps', '/discover-maps'], async (req:
     });
   }
 
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const userId = req.user?.id || 'user-default-001';
 
   // Concurrency & Rate Limiting Check (Phase 15)
@@ -258,7 +264,13 @@ prospectsRouter.post('/prospects/capture', async (req: AuthenticatedRequest, res
   }
 
   const uId = req.user?.id || 'user-default-001';
-  const wId = req.user?.workspaceId || 'ws-default-001';
+  const wId = req.user?.workspaceId;
+  if (!wId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const ownerName = req.user?.fullName || 'Ayoola Ade';
 
   const capturedResults = [];

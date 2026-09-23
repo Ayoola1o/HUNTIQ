@@ -9,7 +9,13 @@ const meetingRepository = createMeetingRepository();
 
 // 1. List meetings with optional filters & KPI summary
 meetingsRouter.get('/meetings', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const meetingType = typeof req.query.meetingType === 'string' ? req.query.meetingType : undefined;
   const query = typeof req.query.q === 'string' ? req.query.q : (typeof req.query.query === 'string' ? req.query.query : undefined);
@@ -49,7 +55,13 @@ meetingsRouter.get('/meetings', async (req: AuthenticatedRequest, res: Response)
 
 // 2. Get specific meeting by ID
 meetingsRouter.get('/meetings/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const meeting = await meetingRepository.getById(id, workspaceId);
 
@@ -77,7 +89,13 @@ meetingsRouter.get('/meetings/:id', async (req: AuthenticatedRequest, res: Respo
 
 // 3. Schedule a new meeting
 meetingsRouter.post('/meetings', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const userId = req.user?.id;
   const payload = req.body;
 
@@ -107,7 +125,13 @@ meetingsRouter.post('/meetings', async (req: AuthenticatedRequest, res: Response
 
 // 4. Update meeting details or status
 meetingsRouter.patch('/meetings/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const updates = req.body;
 
@@ -137,7 +161,13 @@ meetingsRouter.patch('/meetings/:id', async (req: AuthenticatedRequest, res: Res
 
 // 5. Cancel meeting
 meetingsRouter.post('/meetings/:id/cancel', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const updated = await meetingRepository.update(id, { status: 'cancelled' }, workspaceId);
 
@@ -165,7 +195,13 @@ meetingsRouter.post('/meetings/:id/cancel', async (req: AuthenticatedRequest, re
 
 // 6. Delete meeting
 meetingsRouter.delete('/meetings/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const deleted = await meetingRepository.delete(id, workspaceId);
 

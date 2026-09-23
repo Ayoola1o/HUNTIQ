@@ -2,11 +2,19 @@ import type { Pool } from 'pg';
 import type { CampaignItem } from '../../../src/types/campaign';
 import type { CampaignRepository, CampaignFilterOptions } from './campaign-repository';
 import { InMemoryCampaignRepository } from './in-memory-campaign.repository';
+import { config } from '../../config/env';
 
 export class PostgresCampaignRepository implements CampaignRepository {
   private fallback = new InMemoryCampaignRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   public async list(workspaceId: string, filter?: CampaignFilterOptions): Promise<CampaignItem[]> {
     try {
@@ -33,7 +41,7 @@ export class PostgresCampaignRepository implements CampaignRepository {
       `;
       const result = await this.pool.query(query, params);
       if (result.rows.length === 0) {
-        return this.fallback.list(workspaceId, filter);
+        return this.isProduction() ? [] : this.fallback.list(workspaceId, filter);
       }
 
       return result.rows.map(r => ({
@@ -54,7 +62,13 @@ export class PostgresCampaignRepository implements CampaignRepository {
         sequence: r.sequence_steps || [],
         prospects: r.target_prospects || []
       }));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing campaigns: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.list(workspaceId, filter);
     }
   }
@@ -68,7 +82,7 @@ export class PostgresCampaignRepository implements CampaignRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId]);
       if (!result.rows[0]) {
-        return this.fallback.getById(id, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.getById(id, workspaceId);
       }
       const r = result.rows[0];
       return {
@@ -89,7 +103,13 @@ export class PostgresCampaignRepository implements CampaignRepository {
         sequence: r.sequence_steps || [],
         prospects: r.target_prospects || []
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error retrieving campaign: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getById(id, workspaceId);
     }
   }
@@ -137,7 +157,13 @@ export class PostgresCampaignRepository implements CampaignRepository {
         sequence: r.sequence_steps || [],
         prospects: r.target_prospects || []
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating campaign: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.create(campaign, workspaceId, userId);
     }
   }
@@ -164,13 +190,19 @@ export class PostgresCampaignRepository implements CampaignRepository {
         workspaceId
       ]);
       if (!result.rows[0]) {
-        return this.fallback.update(id, partial, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.update(id, partial, workspaceId);
       }
       return {
         ...existing,
         ...partial
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating campaign: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.update(id, partial, workspaceId);
     }
   }
@@ -180,10 +212,16 @@ export class PostgresCampaignRepository implements CampaignRepository {
       const query = `DELETE FROM campaigns WHERE id = $1 AND workspace_id = $2`;
       const result = await this.pool.query(query, [id, workspaceId]);
       if ((result.rowCount ?? 0) === 0) {
-        return this.fallback.delete(id, workspaceId);
+        return this.isProduction() ? false : this.fallback.delete(id, workspaceId);
       }
       return true;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error deleting campaign: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.delete(id, workspaceId);
     }
   }

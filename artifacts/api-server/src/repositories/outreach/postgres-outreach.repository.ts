@@ -63,6 +63,10 @@ export class PostgresOutreachRepository implements OutreachRepository {
         campaignName: r.metadata?.campaignName,
         opportunityScore: r.opportunity_score,
         unread: Boolean(r.metadata?.unread),
+        provider: r.provider || 'gmail',
+        providerThreadId: r.provider_thread_id || null,
+        providerMessageId: r.provider_message_id || null,
+        stopSequenceOnReply: r.stop_sequence_on_reply !== false,
         thread: r.messages || []
       }));
     } catch (err: any) {
@@ -124,9 +128,10 @@ export class PostgresOutreachRepository implements OutreachRepository {
       const query = `
         INSERT INTO outreach_threads (
           workspace_id, user_id, contact_name, contact_role, company_name, domain,
-          email, phone, channel, status, opportunity_score, messages, metadata
+          email, phone, channel, status, opportunity_score, messages, metadata,
+          provider, provider_thread_id, provider_message_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         RETURNING *
       `;
       const metadata = {
@@ -151,7 +156,10 @@ export class PostgresOutreachRepository implements OutreachRepository {
         outreach.status || 'due_today',
         outreach.opportunityScore || 75,
         JSON.stringify(outreach.thread || []),
-        JSON.stringify(metadata)
+        JSON.stringify(metadata),
+        (outreach as any).provider || 'gmail',
+        (outreach as any).providerThreadId || null,
+        (outreach as any).providerMessageId || null
       ]);
 
       const r = result.rows[0];

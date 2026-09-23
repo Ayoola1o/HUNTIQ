@@ -9,7 +9,13 @@ const savedSearchRepository = createSavedSearchRepository();
 
 // 1. List saved searches with optional filters & KPI summary
 savedSearchesRouter.get('/saved-searches', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
   const searchType = typeof req.query.searchType === 'string' ? req.query.searchType : undefined;
   const query = typeof req.query.q === 'string' ? req.query.q : (typeof req.query.query === 'string' ? req.query.query : undefined);
@@ -51,7 +57,13 @@ savedSearchesRouter.get('/saved-searches', async (req: AuthenticatedRequest, res
 
 // 2. Get specific saved search by ID
 savedSearchesRouter.get('/saved-searches/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const search = await savedSearchRepository.getById(id, workspaceId);
 
@@ -79,7 +91,13 @@ savedSearchesRouter.get('/saved-searches/:id', async (req: AuthenticatedRequest,
 
 // 3. Create a new saved search
 savedSearchesRouter.post('/saved-searches', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const userId = req.user?.id;
   const payload = req.body;
 
@@ -109,7 +127,13 @@ savedSearchesRouter.post('/saved-searches', async (req: AuthenticatedRequest, re
 
 // 4. Update an existing saved search
 savedSearchesRouter.patch('/saved-searches/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const updates = req.body;
 
@@ -139,7 +163,13 @@ savedSearchesRouter.patch('/saved-searches/:id', async (req: AuthenticatedReques
 
 // 5. Toggle autonomous monitoring
 savedSearchesRouter.post('/saved-searches/:id/toggle-monitoring', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const existing = await savedSearchRepository.getById(id, workspaceId);
 
@@ -171,7 +201,13 @@ savedSearchesRouter.post('/saved-searches/:id/toggle-monitoring', async (req: Au
 
 // 6. Delete saved search
 savedSearchesRouter.delete('/saved-searches/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const workspaceId = req.user?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const deleted = await savedSearchRepository.delete(id, workspaceId);
 

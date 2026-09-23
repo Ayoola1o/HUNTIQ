@@ -2,11 +2,19 @@ import type { Pool } from 'pg';
 import type { TaskItem } from '../../../src/types/tasks';
 import type { TaskRepository, TaskFilterOptions } from './task-repository';
 import { InMemoryTaskRepository } from './in-memory-task.repository';
+import { config } from '../../config/env';
 
 export class PostgresTaskRepository implements TaskRepository {
   private fallback = new InMemoryTaskRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   public async list(workspaceId: string, filter?: TaskFilterOptions): Promise<TaskItem[]> {
     try {
@@ -37,7 +45,7 @@ export class PostgresTaskRepository implements TaskRepository {
       `;
       const result = await this.pool.query(query, params);
       if (result.rows.length === 0) {
-        return this.fallback.list(workspaceId, filter);
+        return this.isProduction() ? [] : this.fallback.list(workspaceId, filter);
       }
 
       return result.rows.map(r => ({
@@ -56,7 +64,13 @@ export class PostgresTaskRepository implements TaskRepository {
         ownerAvatarColor: r.metadata?.ownerAvatarColor || '#1d4ed8',
         completedAt: r.metadata?.completedAt
       }));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing tasks: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.list(workspaceId, filter);
     }
   }
@@ -70,7 +84,7 @@ export class PostgresTaskRepository implements TaskRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId]);
       if (!result.rows[0]) {
-        return this.fallback.getById(id, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.getById(id, workspaceId);
       }
       const r = result.rows[0];
       return {
@@ -89,7 +103,13 @@ export class PostgresTaskRepository implements TaskRepository {
         ownerAvatarColor: r.metadata?.ownerAvatarColor || '#1d4ed8',
         completedAt: r.metadata?.completedAt
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error retrieving task: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getById(id, workspaceId);
     }
   }
@@ -141,7 +161,13 @@ export class PostgresTaskRepository implements TaskRepository {
         ownerAvatarBg: metadata.ownerAvatarBg,
         ownerAvatarColor: metadata.ownerAvatarColor
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating task: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.create(task, workspaceId, userId);
     }
   }
@@ -166,13 +192,19 @@ export class PostgresTaskRepository implements TaskRepository {
         workspaceId
       ]);
       if (!result.rows[0]) {
-        return this.fallback.update(id, partial, workspaceId);
+        return this.isProduction() ? undefined : this.fallback.update(id, partial, workspaceId);
       }
       return {
         ...existing,
         ...partial
       };
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating task: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.update(id, partial, workspaceId);
     }
   }
@@ -182,10 +214,16 @@ export class PostgresTaskRepository implements TaskRepository {
       const query = `DELETE FROM tasks WHERE id = $1 AND workspace_id = $2`;
       const result = await this.pool.query(query, [id, workspaceId]);
       if ((result.rowCount ?? 0) === 0) {
-        return this.fallback.delete(id, workspaceId);
+        return this.isProduction() ? false : this.fallback.delete(id, workspaceId);
       }
       return true;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error deleting task: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.delete(id, workspaceId);
     }
   }

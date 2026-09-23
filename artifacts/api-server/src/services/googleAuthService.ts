@@ -18,6 +18,10 @@ export interface GoogleIntegrationData {
   status: 'active' | 'reauth_required' | 'revoked' | 'error';
   lastError?: string;
   lastSyncedAt?: string;
+  watchHistoryId?: string;
+  watchExpiration?: string;
+  syncStatus?: string;
+  stopSequenceOnReply?: boolean;
   connectedAt: string;
 }
 
@@ -31,6 +35,10 @@ export interface GoogleAuthStatus {
   connectedAt?: string;
   lastSyncedAt?: string;
   lastError?: string;
+  watchHistoryId?: string;
+  watchExpiration?: string;
+  syncStatus?: string;
+  stopSequenceOnReply?: boolean;
   scopes?: string[];
   clientId?: string;
 }
@@ -349,6 +357,10 @@ export class GoogleAuthService {
             status: row.status || (row.is_active ? 'active' : 'revoked'),
             lastError: row.last_error || undefined,
             lastSyncedAt: row.last_synced_at ? new Date(row.last_synced_at).toISOString() : undefined,
+            watchHistoryId: row.watch_history_id || undefined,
+            watchExpiration: row.watch_expiration ? new Date(row.watch_expiration).toISOString() : undefined,
+            syncStatus: row.sync_status || 'idle',
+            stopSequenceOnReply: row.stop_sequence_on_reply !== undefined ? Boolean(row.stop_sequence_on_reply) : true,
             connectedAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
           };
 
@@ -419,7 +431,7 @@ export class GoogleAuthService {
         })
       });
 
-      const refreshData = await refreshRes.json();
+      const refreshData = await refreshRes.json() as any;
       if (!refreshRes.ok) {
         const errorMsg = refreshData.error_description || refreshData.error || 'Failed to refresh Google token';
         await this.markReauthRequired(workspaceId, errorMsg);
@@ -503,6 +515,10 @@ export class GoogleAuthService {
       connectedAt: integration?.connectedAt,
       lastSyncedAt: integration?.lastSyncedAt,
       lastError: integration?.lastError,
+      watchHistoryId: integration?.watchHistoryId,
+      watchExpiration: integration?.watchExpiration,
+      syncStatus: integration?.syncStatus || 'idle',
+      stopSequenceOnReply: integration?.stopSequenceOnReply ?? true,
       scopes: integration?.scopes,
       clientId: this.getPublicClientId()
     };
@@ -510,14 +526,21 @@ export class GoogleAuthService {
 
   /**
    * Disconnects integration:
-   * 1. Remotely revokes token at Google OAuth endpoint.
-   * 2. Wipes encrypted tokens from database and sets status = 'revoked', is_active = false.
-   * 3. Clears dev memory cache.
+   * 1. Stops Gmail Watch subscription.
+   * 2. Remotely revokes token at Google OAuth endpoint.
+   * 3. Wipes encrypted tokens from database and sets status = 'revoked', is_active = false.
+   * 4. Clears dev memory cache.
    */
   public static async disconnect(workspaceId: string): Promise<void> {
+    // 1. Stop watch subscription cleanly
+    try {
+      const { GmailReplySyncService } = await import('./gmailReplySyncService');
+      await GmailReplySyncService.stopWatch(workspaceId);
+    } catch {}
+
     const integration = await this.getIntegration(workspaceId);
 
-    // 1. Remote Google Token Revocation
+    // 2. Remote Google Token Revocation
     const tokenToRevoke = integration?.refreshToken || integration?.accessToken;
     if (tokenToRevoke) {
       try {

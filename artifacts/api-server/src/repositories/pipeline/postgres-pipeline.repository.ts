@@ -2,11 +2,19 @@ import type { Pool } from 'pg';
 import type { PipelineDealItem } from '../../../src/types/pipeline';
 import type { PipelineRepository } from './pipeline-repository';
 import { InMemoryPipelineRepository } from './in-memory-pipeline.repository';
+import { config } from '../../config/env';
 
 export class PostgresPipelineRepository implements PipelineRepository {
   private fallback = new InMemoryPipelineRepository();
 
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
+
+  private isProduction(): boolean {
+    if (this.forceProduction !== undefined) {
+      return this.forceProduction;
+    }
+    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
 
   private mapRowToDeal(row: any): PipelineDealItem {
     return {
@@ -48,10 +56,16 @@ export class PostgresPipelineRepository implements PipelineRepository {
       `;
       const result = await this.pool.query(query, [workspaceId, userId]);
       if (result.rows.length === 0) {
-        return this.fallback.listByUser(userId, workspaceId);
+        return this.isProduction() ? [] : this.fallback.listByUser(userId, workspaceId);
       }
       return result.rows.map((r) => this.mapRowToDeal(r));
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error listing pipeline deals: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.listByUser(userId, workspaceId);
     }
   }
@@ -65,10 +79,16 @@ export class PostgresPipelineRepository implements PipelineRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId, userId]);
       if (result.rows.length === 0) {
-        return this.fallback.getById(id, userId, workspaceId);
+        return this.isProduction() ? null : this.fallback.getById(id, userId, workspaceId);
       }
       return this.mapRowToDeal(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error retrieving pipeline deal: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.getById(id, userId, workspaceId);
     }
   }
@@ -121,7 +141,13 @@ export class PostgresPipelineRepository implements PipelineRepository {
 
       const result = await this.pool.query(query, values);
       return this.mapRowToDeal(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error creating pipeline deal: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.create(userId, workspaceId, deal);
     }
   }
@@ -164,7 +190,13 @@ export class PostgresPipelineRepository implements PipelineRepository {
       const result = await this.pool.query(query, values);
       if (result.rows.length === 0) return null;
       return this.mapRowToDeal(result.rows[0]);
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating pipeline deal: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.update(id, userId, workspaceId, updates);
     }
   }
@@ -177,7 +209,13 @@ export class PostgresPipelineRepository implements PipelineRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId, userId]);
       return (result.rowCount ?? 0) > 0;
-    } catch {
+    } catch (err: any) {
+      if (this.isProduction()) {
+        const error = new Error(`Database error deleting pipeline deal: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
       return this.fallback.delete(id, userId, workspaceId);
     }
   }

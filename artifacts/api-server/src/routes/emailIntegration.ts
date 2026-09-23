@@ -127,14 +127,22 @@ emailIntegrationRouter.post('/integrations/email/test', async (req: Authenticate
 
     const result = await EmailDispatchService.sendTestEmail(targetEmail, workspaceId);
 
+    if (!result.success) {
+      return res.status(502).json({
+        success: false,
+        error: { code: 'TEST_EMAIL_FAILED', message: 'Failed to dispatch verification email.' }
+      });
+    }
+
     return res.json({
       success: result.success,
       data: result
     });
   } catch (err: any) {
+    console.error('[EMAIL_INTEGRATION] Test email dispatch failed securely');
     return res.status(500).json({
       success: false,
-      error: { code: 'TEST_EMAIL_FAILED', message: err.message }
+      error: { code: 'TEST_EMAIL_FAILED', message: 'Failed to send verification test email. Please check provider configuration.' }
     });
   }
 });
@@ -263,6 +271,9 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
       campaignName: campaignName || 'Outreach Campaign',
       opportunityScore: opportunityScore || 75,
       unread: false,
+      provider: dispatchResult.provider,
+      providerThreadId: (dispatchResult as any).threadId || null,
+      providerMessageId: dispatchResult.messageId,
       thread: [
         {
           id: `msg-${Date.now()}`,
@@ -272,10 +283,13 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
           timestamp: 'Just now',
           channel: 'email',
           status: dispatchResult.status === 'sent' ? 'delivered' : 'sent',
-          deliveredAt: dispatchResult.deliveredAt
+          deliveredAt: dispatchResult.deliveredAt,
+          provider: dispatchResult.provider,
+          providerMessageId: dispatchResult.messageId,
+          providerThreadId: (dispatchResult as any).threadId || null
         }
       ]
-    }, workspaceId);
+    } as any, workspaceId);
 
     // 3. Log Activity via ActivityLogRepository
     if (req.user?.id) {

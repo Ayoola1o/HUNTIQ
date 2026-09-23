@@ -3,7 +3,9 @@ import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import { GoogleAuthService } from '../services/googleAuthService';
 import { GmailService } from '../services/gmailService';
+import { GmailReplySyncService } from '../services/gmailReplySyncService';
 import { hasValidTld } from '../engine/scraper/emailExtractor';
+import { postgresPool, pool } from '../database/postgres';
 
 export const googleAuthRouter = Router();
 
@@ -47,8 +49,8 @@ googleAuthRouter.get(['/auth/google/url', '/google/url'], async (req: Authentica
     return res.status(401).json({
       success: false,
       error: {
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required. Please provide a valid session or token.'
+        code: 'GOOGLE_AUTH_REQUIRED',
+        message: 'Authentication required. Please log in to connect Google services.'
       }
     });
   }
@@ -60,7 +62,7 @@ googleAuthRouter.get(['/auth/google/url', '/google/url'], async (req: Authentica
     return res.status(200).json({
       success: false,
       error: {
-        code: 'GOOGLE_OAUTH_NOT_CONFIGURED',
+        code: 'GOOGLE_NOT_CONFIGURED',
         message: 'Google OAuth Client ID and Secret are not configured in environment variables.'
       },
       data: {
@@ -86,10 +88,15 @@ googleAuthRouter.get(['/auth/google/url', '/google/url'], async (req: Authentica
       }
     });
   } catch (err: any) {
+    console.error('[GOOGLE_AUTH] Failed to generate OAuth consent URL');
     const status = err.statusCode || 500;
+    const code = err.code || 'OAUTH_URL_GENERATION_FAILED';
     return res.status(status).json({
       success: false,
-      error: { code: err.code || 'OAUTH_URL_GENERATION_FAILED', message: err.message }
+      error: {
+        code,
+        message: 'Unable to initialize Google authentication consent. Please try again.'
+      }
     });
   }
 });
@@ -109,26 +116,33 @@ googleAuthRouter.get(['/auth/google/callback', '/google/callback'], async (req: 
   const defaultReturnUrl = 'http://localhost:5173/?view=integrations';
 
   if (error) {
-    console.warn('[GOOGLE_AUTH] Callback received error from Google:', error);
-    return res.redirect(`${defaultReturnUrl}&google_auth=error&reason=${encodeURIComponent(error)}`);
+    console.warn('[GOOGLE_AUTH] Callback received error from Google');
+    return res.redirect(`${defaultReturnUrl}&google_auth=error&code=GOOGLE_ACCESS_DENIED`);
   }
 
   if (!code || !state) {
-    return res.redirect(`${defaultReturnUrl}&google_auth=error&reason=missing_code_or_state`);
+    return res.redirect(`${defaultReturnUrl}&google_auth=error&code=MISSING_OAUTH_PARAMETERS`);
   }
 
   try {
     const { integration, returnPath } = await GoogleAuthService.exchangeCode(code, state);
     const joinChar = returnPath.includes('?') ? '&' : '?';
-    console.log(`[GOOGLE_AUTH] Successfully authenticated Gmail for ${integration.accountEmail} in workspace ${integration.workspaceId}`);
+
+    // Automatically initialize Gmail Watch / history baseline upon successful connection
+    GmailReplySyncService.setupWatch(integration.workspaceId).catch((watchErr) => {
+      console.warn('[GOOGLE_AUTH] Watch setup deferred:', watchErr.message || watchErr);
+    });
+
+    console.log(`[GOOGLE_AUTH] Successfully authenticated Gmail for workspace ${integration.workspaceId}`);
     return res.redirect(
       `${returnPath}${joinChar}google_auth=success&email=${encodeURIComponent(integration.accountEmail)}`
     );
   } catch (err: any) {
-    console.error('[GOOGLE_AUTH] Token exchange failed:', err.message);
+    console.error('[GOOGLE_AUTH] Token exchange failed securely:', err.code || 'UNKNOWN_ERROR');
+    const safeCode = err.code || 'OAUTH_EXCHANGE_FAILED';
     const joinChar = defaultReturnUrl.includes('?') ? '&' : '?';
     return res.redirect(
-      `${defaultReturnUrl}${joinChar}google_auth=error&reason=${encodeURIComponent(err.message || 'token_exchange_failed')}`
+      `${defaultReturnUrl}${joinChar}google_auth=error&code=${encodeURIComponent(safeCode)}`
     );
   }
 });
@@ -142,7 +156,7 @@ googleAuthRouter.get(['/auth/google/status', '/google/status'], async (req: Auth
   if (!workspaceId) {
     return res.status(401).json({
       success: false,
-      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      error: { code: 'GOOGLE_AUTH_REQUIRED', message: 'Authentication required' }
     });
   }
 
@@ -153,10 +167,14 @@ googleAuthRouter.get(['/auth/google/status', '/google/status'], async (req: Auth
       data: status
     });
   } catch (err: any) {
+    console.error('[GOOGLE_AUTH] Status check failed for workspace:', workspaceId);
     const statusCode = err.statusCode || 500;
     return res.status(statusCode).json({
       success: false,
-      error: { code: err.code || 'STATUS_CHECK_FAILED', message: err.message }
+      error: {
+        code: err.code || 'STATUS_CHECK_FAILED',
+        message: 'Unable to check Gmail connection status. Please try again later.'
+      }
     });
   }
 });
@@ -170,7 +188,7 @@ googleAuthRouter.post(['/auth/google/disconnect', '/google/disconnect'], async (
   if (!workspaceId) {
     return res.status(401).json({
       success: false,
-      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      error: { code: 'GOOGLE_AUTH_REQUIRED', message: 'Authentication required' }
     });
   }
 
@@ -181,11 +199,160 @@ googleAuthRouter.post(['/auth/google/disconnect', '/google/disconnect'], async (
       data: { isConnected: false, status: 'revoked' }
     });
   } catch (err: any) {
+    console.error('[GOOGLE_AUTH] Disconnect failed for workspace:', workspaceId);
     const statusCode = err.statusCode || 500;
     return res.status(statusCode).json({
       success: false,
-      error: { code: err.code || 'DISCONNECT_FAILED', message: err.message }
+      error: {
+        code: err.code || 'GOOGLE_DISCONNECT_FAILED',
+        message: 'Failed to disconnect Gmail account. Please try again.'
+      }
     });
+  }
+});
+
+/**
+ * POST /api/v1/auth/google/settings
+ * Updates Gmail integration settings (e.g. stopSequenceOnReply).
+ */
+googleAuthRouter.post(['/auth/google/settings', '/google/settings'], async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'GOOGLE_AUTH_REQUIRED', message: 'Authentication required' }
+    });
+  }
+
+  const { stopSequenceOnReply } = req.body || {};
+  if (stopSequenceOnReply === undefined || typeof stopSequenceOnReply !== 'boolean') {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'INVALID_PARAMETER', message: 'stopSequenceOnReply boolean parameter is required.' }
+    });
+  }
+
+  const activePool = postgresPool || pool;
+  if (activePool) {
+    try {
+      await activePool.query(
+        `UPDATE workspace_integrations 
+         SET stop_sequence_on_reply = $1, updated_at = now() 
+         WHERE workspace_id = $2 AND provider = 'gmail'`,
+        [stopSequenceOnReply, workspaceId]
+      );
+    } catch (err: any) {
+      return res.status(503).json({
+        success: false,
+        error: { code: 'DATABASE_UNAVAILABLE', message: 'Failed to update integration settings.' }
+      });
+    }
+  }
+
+  return res.json({
+    success: true,
+    data: { stopSequenceOnReply }
+  });
+});
+
+/**
+ * POST /api/v1/auth/google/sync
+ * Manually triggers Gmail mailbox sync for the authenticated workspace.
+ */
+googleAuthRouter.post(['/auth/google/sync', '/google/sync'], async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'GOOGLE_AUTH_REQUIRED', message: 'Authentication required' }
+    });
+  }
+
+  const integration = await GoogleAuthService.getIntegration(workspaceId);
+  if (!integration || !integration.isActive) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'GOOGLE_NOT_CONNECTED', message: 'Gmail is not connected for this workspace.' }
+    });
+  }
+
+  try {
+    const result = await GmailReplySyncService.syncMailbox(workspaceId, integration.accountEmail);
+    return res.json({
+      success: result.success,
+      data: result
+    });
+  } catch (err: any) {
+    console.error('[GOOGLE_AUTH] Sync error for workspace:', workspaceId);
+    return res.status(500).json({
+      success: false,
+      error: { code: 'SYNC_FAILED', message: 'Mailbox synchronization encountered an error.' }
+    });
+  }
+});
+
+/**
+ * POST /api/v1/integrations/gmail/webhook
+ * Google Cloud Pub/Sub Push Webhook for Gmail mailbox change notifications.
+ */
+googleAuthRouter.post(['/integrations/gmail/webhook', '/gmail/webhook'], async (req: Request, res: Response) => {
+  // 1. Optional token verification if GOOGLE_PUBSUB_VERIFICATION_TOKEN is set
+  const expectedToken = process.env.GOOGLE_PUBSUB_VERIFICATION_TOKEN?.trim();
+  if (expectedToken) {
+    const queryToken = req.query.token;
+    const headerToken = req.headers['x-goog-pubsub-token'];
+    if (queryToken !== expectedToken && headerToken !== expectedToken) {
+      console.warn('[GMAIL_WEBHOOK] Rejected Pub/Sub webhook with invalid verification token');
+      return res.status(403).json({ error: 'Invalid verification token' });
+    }
+  }
+
+  // 2. Validate envelope format
+  const pubsubMessage = req.body?.message;
+  if (!pubsubMessage || !pubsubMessage.data) {
+    return res.status(400).json({ error: 'Malformed Pub/Sub message payload' });
+  }
+
+  try {
+    // 3. Decode base64 notification payload
+    const decodedString = Buffer.from(pubsubMessage.data, 'base64').toString('utf8');
+    const parsedData = JSON.parse(decodedString);
+    const { emailAddress, historyId } = parsedData;
+
+    if (!emailAddress) {
+      return res.status(400).json({ error: 'Missing emailAddress in Pub/Sub data' });
+    }
+
+    // 4. Safely locate workspace integration from database using account email (never trusting client-supplied workspace ID)
+    const activePool = postgresPool || pool;
+    if (activePool) {
+      const matchRes = await activePool.query(
+        `SELECT workspace_id, account_email, status, is_active 
+         FROM workspace_integrations 
+         WHERE account_email = $1 AND provider = 'gmail' AND is_active = true 
+         LIMIT 1`,
+        [emailAddress.toLowerCase().trim()]
+      );
+
+      if (matchRes.rows.length === 0) {
+        // Return 200 so Pub/Sub does not endlessly retry notifications for disconnected accounts
+        return res.status(200).json({ success: true, message: 'No active integration found for account' });
+      }
+
+      const row = matchRes.rows[0];
+      const workspaceId = row.workspace_id;
+
+      // 5. Trigger idempotent history synchronization
+      await GmailReplySyncService.syncMailbox(workspaceId, row.account_email, historyId ? String(historyId) : undefined);
+    }
+
+    // Acknowledge receipt to Google Pub/Sub
+    return res.status(200).json({ success: true, message: 'Notification processed' });
+  } catch (err: any) {
+    console.error('[GMAIL_WEBHOOK] Error processing push notification:', err.message);
+    // Return 200 to acknowledge unrecoverable parse errors, or 500 for transient DB failure
+    const status = err.code === 'DATABASE_UNAVAILABLE' ? 500 : 200;
+    return res.status(status).json({ success: false, error: 'Processing error' });
   }
 });
 
@@ -199,7 +366,7 @@ googleAuthRouter.post(['/auth/google/test', '/google/test'], async (req: Authent
   if (!workspaceId) {
     return res.status(401).json({
       success: false,
-      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      error: { code: 'GOOGLE_AUTH_REQUIRED', message: 'Authentication required' }
     });
   }
 
@@ -260,14 +427,22 @@ googleAuthRouter.post(['/auth/google/test', '/google/test'], async (req: Authent
       text: 'HUNTIQ Gmail Integration Verified via OAuth 2.0'
     });
 
+    if (!result.success) {
+      return res.status(502).json({
+        success: false,
+        error: { code: 'TEST_EMAIL_FAILED', message: 'Failed to dispatch email via Gmail API.' }
+      });
+    }
+
     return res.json({
-      success: result.success,
+      success: true,
       data: result
     });
   } catch (err: any) {
+    console.error('[GOOGLE_AUTH] Test email dispatch failed securely');
     return res.status(500).json({
       success: false,
-      error: { code: 'GMAIL_TEST_FAILED', message: err.message }
+      error: { code: 'TEST_EMAIL_FAILED', message: 'Failed to send test email through connected Gmail account.' }
     });
   }
 });
