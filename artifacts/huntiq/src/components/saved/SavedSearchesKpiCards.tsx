@@ -19,11 +19,19 @@ export const SavedSearchesKpiCards: React.FC<SavedSearchesKpiCardsProps> = ({
   activeFilter,
   onSelectFilter
 }) => {
+  const safeSummary: SavedSearchesKpiSummary = {
+    totalSearches: summary?.totalSearches ?? 0,
+    activeMonitoring: summary?.activeMonitoring ?? 0,
+    newMatches: summary?.newMatches ?? 0,
+    newSignals: summary?.newSignals ?? 0,
+    unreadAlerts: summary?.unreadAlerts ?? 0
+  };
+
   const cards = [
     {
       id: 'all',
       title: 'Saved Searches',
-      value: summary.totalSearches.toString(),
+      value: safeSummary.totalSearches.toString(),
       subtext: 'Prospect search criteria files',
       icon: <Bookmark size={16} color="#4f46e5" />,
       iconBg: '#eff6ff',
@@ -36,7 +44,7 @@ export const SavedSearchesKpiCards: React.FC<SavedSearchesKpiCardsProps> = ({
     {
       id: 'monitoring',
       title: 'Active Monitoring',
-      value: summary.activeMonitoring.toString(),
+      value: safeSummary.activeMonitoring.toString(),
       subtext: 'Continuous background scraper jobs',
       icon: <Eye size={16} color="#059669" />,
       iconBg: '#ecfdf5',
@@ -49,7 +57,7 @@ export const SavedSearchesKpiCards: React.FC<SavedSearchesKpiCardsProps> = ({
     {
       id: 'new_matches',
       title: 'New Matches',
-      value: `+${summary.newMatches}`,
+      value: `+${safeSummary.newMatches}`,
       subtext: 'Fresh companies detected this week',
       icon: <Sparkles size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff',
@@ -62,7 +70,7 @@ export const SavedSearchesKpiCards: React.FC<SavedSearchesKpiCardsProps> = ({
     {
       id: 'new_signals',
       title: 'New Signals Detected',
-      value: `+${summary.newSignals}`,
+      value: `+${safeSummary.newSignals}`,
       subtext: 'Hiring, expansion & leadership shifts',
       icon: <Zap size={16} color="#ea580c" />,
       iconBg: '#fff7ed',
@@ -75,7 +83,7 @@ export const SavedSearchesKpiCards: React.FC<SavedSearchesKpiCardsProps> = ({
     {
       id: 'alerts',
       title: 'Unread Alerts',
-      value: summary.unreadAlerts.toString(),
+      value: safeSummary.unreadAlerts.toString(),
       subtext: 'Immediate action notifications',
       icon: <Bell size={16} color="#e11d48" />,
       iconBg: '#fff1f2',

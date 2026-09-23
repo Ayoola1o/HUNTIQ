@@ -28,15 +28,22 @@ savedSearchesRouter.get('/saved-searches', async (req: AuthenticatedRequest, res
     query
   });
 
+  const totalSearches = searches.length;
   const activeMonitoring = searches.filter(s => s.monitoringEnabled).length;
+  const newMatches = searches.reduce((acc, s) => acc + (s.newMatchesCount || 0), 0);
+  const newSignals = searches.reduce((acc, s) => acc + (s.activeSignalsCount || 0), 0);
+  const unreadAlerts = searches.reduce((acc, s) => acc + (s.unreadAlertsCount || 0), 0);
   const totalMatchesTracked = searches.reduce((acc, s) => acc + (s.totalMatches || 0), 0);
-  const newMatchesThisWeek = searches.reduce((acc, s) => acc + (s.newMatchesCount || 0), 0);
   const highIntentAlerts = searches.reduce((acc, s) => acc + (s.highOpportunityCount || 0), 0);
 
   const kpiSummary = {
+    totalSearches,
     activeMonitoring,
+    newMatches,
+    newSignals,
+    unreadAlerts,
     totalMatchesTracked,
-    newMatchesThisWeek,
+    newMatchesThisWeek: newMatches,
     highIntentAlerts
   };
 

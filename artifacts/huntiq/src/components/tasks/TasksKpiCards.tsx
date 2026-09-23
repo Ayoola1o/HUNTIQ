@@ -18,11 +18,18 @@ export const TasksKpiCards: React.FC<TasksKpiCardsProps> = ({
   activeFilter,
   onSelectFilter
 }) => {
+  const safeSummary: TasksKpiSummary = {
+    dueToday: summary?.dueToday ?? 0,
+    overdue: summary?.overdue ?? 0,
+    upcoming: summary?.upcoming ?? 0,
+    completedCount: summary?.completedCount ?? 0
+  };
+
   const cards = [
     {
       id: 'due_today',
       title: 'Due Today',
-      value: summary.dueToday.toString(),
+      value: safeSummary.dueToday.toString(),
       subtext: 'Sales actions requiring execution today',
       icon: <Clock size={16} color="#4f46e5" />,
       iconBg: '#eff6ff',
@@ -35,7 +42,7 @@ export const TasksKpiCards: React.FC<TasksKpiCardsProps> = ({
     {
       id: 'overdue',
       title: 'Overdue Tasks',
-      value: summary.overdue.toString(),
+      value: safeSummary.overdue.toString(),
       subtext: 'Requires immediate follow-up',
       icon: <AlertTriangle size={16} color="#dc2626" />,
       iconBg: '#fef2f2',
@@ -48,7 +55,7 @@ export const TasksKpiCards: React.FC<TasksKpiCardsProps> = ({
     {
       id: 'upcoming',
       title: 'Upcoming (7 Days)',
-      value: summary.upcoming.toString(),
+      value: safeSummary.upcoming.toString(),
       subtext: 'Scheduled pipeline & meeting tasks',
       icon: <Calendar size={16} color="#2563eb" />,
       iconBg: '#eff6ff',
@@ -61,7 +68,7 @@ export const TasksKpiCards: React.FC<TasksKpiCardsProps> = ({
     {
       id: 'completed',
       title: 'Completed (This Month)',
-      value: summary.completedCount.toString(),
+      value: safeSummary.completedCount.toString(),
       subtext: 'Sales velocity & execution',
       icon: <CheckCircle2 size={16} color="#059669" />,
       iconBg: '#ecfdf5',

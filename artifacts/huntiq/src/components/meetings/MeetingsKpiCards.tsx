@@ -18,11 +18,18 @@ export const MeetingsKpiCards: React.FC<MeetingsKpiCardsProps> = ({
   activeFilter,
   onSelectFilter
 }) => {
+  const safeSummary: MeetingsKpiSummary = {
+    upcomingMeetings: summary?.upcomingMeetings ?? 0,
+    todayCount: summary?.todayCount ?? 0,
+    completedThisMonth: summary?.completedThisMonth ?? 0,
+    bookedFromOutreach: summary?.bookedFromOutreach ?? 0
+  };
+
   const cards = [
     {
       id: 'upcoming',
       title: 'Upcoming Meetings',
-      value: summary.upcomingMeetings.toString(),
+      value: safeSummary.upcomingMeetings.toString(),
       subtext: 'Next 7 days schedule',
       icon: <Calendar size={16} color="#4f46e5" />,
       iconBg: '#eff6ff',
@@ -35,7 +42,7 @@ export const MeetingsKpiCards: React.FC<MeetingsKpiCardsProps> = ({
     {
       id: 'today',
       title: "Today's Schedule",
-      value: summary.todayCount.toString(),
+      value: safeSummary.todayCount.toString(),
       subtext: 'Discovery & proposal sessions',
       icon: <Clock size={16} color="#059669" />,
       iconBg: '#ecfdf5',
@@ -48,7 +55,7 @@ export const MeetingsKpiCards: React.FC<MeetingsKpiCardsProps> = ({
     {
       id: 'completed',
       title: 'Completed (This Month)',
-      value: summary.completedThisMonth.toString(),
+      value: safeSummary.completedThisMonth.toString(),
       subtext: 'Sales discovery & demos',
       icon: <CheckCircle2 size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff',
@@ -61,7 +68,7 @@ export const MeetingsKpiCards: React.FC<MeetingsKpiCardsProps> = ({
     {
       id: 'sourced_from_outreach',
       title: 'Sourced from Outreach',
-      value: `${summary.bookedFromOutreach}%`,
+      value: `${safeSummary.bookedFromOutreach}%`,
       subtext: 'Direct outbound conversion',
       icon: <TrendingUp size={16} color="#ea580c" />,
       iconBg: '#fff7ed',

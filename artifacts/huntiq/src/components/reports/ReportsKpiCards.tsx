@@ -18,11 +18,18 @@ export const ReportsKpiCards: React.FC<ReportsKpiCardsProps> = ({
   activeFilter,
   onSelectFilter
 }) => {
+  const safeSummary: ReportsKpiSummary = {
+    totalGenerated: summary?.totalGenerated ?? 0,
+    scheduledCount: summary?.scheduledCount ?? 0,
+    sharedCount: summary?.sharedCount ?? 0,
+    thisMonthCount: summary?.thisMonthCount ?? 0
+  };
+
   const cards = [
     {
       id: 'generated',
       title: 'Reports Generated',
-      value: summary.totalGenerated.toString(),
+      value: safeSummary.totalGenerated.toString(),
       subtext: 'Decision-ready intelligence briefs',
       icon: <FileText size={16} color="#4f46e5" />,
       iconBg: '#eff6ff',
@@ -35,7 +42,7 @@ export const ReportsKpiCards: React.FC<ReportsKpiCardsProps> = ({
     {
       id: 'scheduled',
       title: 'Scheduled Reports',
-      value: summary.scheduledCount.toString(),
+      value: safeSummary.scheduledCount.toString(),
       subtext: 'Automated weekly & monthly digests',
       icon: <Calendar size={16} color="#059669" />,
       iconBg: '#ecfdf5',
@@ -48,7 +55,7 @@ export const ReportsKpiCards: React.FC<ReportsKpiCardsProps> = ({
     {
       id: 'shared',
       title: 'Shared with Team',
-      value: summary.sharedCount.toString(),
+      value: safeSummary.sharedCount.toString(),
       subtext: 'Executive & stakeholder briefs',
       icon: <Share2 size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff',
@@ -61,7 +68,7 @@ export const ReportsKpiCards: React.FC<ReportsKpiCardsProps> = ({
     {
       id: 'this_month',
       title: 'Generated This Month',
-      value: summary.thisMonthCount.toString(),
+      value: safeSummary.thisMonthCount.toString(),
       subtext: '+32% vs Last Month',
       icon: <TrendingUp size={16} color="#ea580c" />,
       iconBg: '#fff7ed',

@@ -18,11 +18,18 @@ export const IntegrationsKpiCards: React.FC<IntegrationsKpiCardsProps> = ({
   activeFilter,
   onSelectFilter
 }) => {
+  const safeSummary: IntegrationsKpiSummary = {
+    connectedCount: summary?.connectedCount ?? 0,
+    syncingCount: summary?.syncingCount ?? 0,
+    attentionRequiredCount: summary?.attentionRequiredCount ?? 0,
+    availableCount: summary?.availableCount ?? 0
+  };
+
   const cards = [
     {
       id: 'connected',
       title: 'Active Connected',
-      value: summary.connectedCount.toString(),
+      value: safeSummary.connectedCount.toString(),
       subtext: 'Live two-way data pipelines',
       icon: <CheckCircle2 size={16} color="#059669" />,
       iconBg: '#ecfdf5',
@@ -35,7 +42,7 @@ export const IntegrationsKpiCards: React.FC<IntegrationsKpiCardsProps> = ({
     {
       id: 'syncing',
       title: 'Currently Syncing',
-      value: summary.syncingCount.toString(),
+      value: safeSummary.syncingCount.toString(),
       subtext: 'Active data stream ingestion',
       icon: <RefreshCw size={16} color="#4f46e5" />,
       iconBg: '#eff6ff',
@@ -48,7 +55,7 @@ export const IntegrationsKpiCards: React.FC<IntegrationsKpiCardsProps> = ({
     {
       id: 'attention',
       title: 'Attention Required',
-      value: summary.attentionRequiredCount.toString(),
+      value: safeSummary.attentionRequiredCount.toString(),
       subtext: 'OAuth token expired / error',
       icon: <AlertTriangle size={16} color="#dc2626" />,
       iconBg: '#fef2f2',
@@ -61,7 +68,7 @@ export const IntegrationsKpiCards: React.FC<IntegrationsKpiCardsProps> = ({
     {
       id: 'available',
       title: 'Available Ecosystem',
-      value: summary.availableCount.toString(),
+      value: safeSummary.availableCount.toString(),
       subtext: 'CRMs, calendars & automations',
       icon: <Grid size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff',

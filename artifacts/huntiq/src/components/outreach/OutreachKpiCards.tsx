@@ -19,11 +19,19 @@ export const OutreachKpiCards: React.FC<OutreachKpiCardsProps> = ({
   activeFilter,
   onSelectFilter
 }) => {
+  const safeSummary: OutreachKpiSummary = {
+    dueToday: summary?.dueToday ?? 0,
+    scheduled: summary?.scheduled ?? 0,
+    replies: summary?.replies ?? 0,
+    needsAttention: summary?.needsAttention ?? 0,
+    responseRate: summary?.responseRate ?? 0
+  };
+
   const cards = [
     {
       id: 'due_today',
       title: 'Due Today',
-      value: summary.dueToday.toString(),
+      value: safeSummary.dueToday.toString(),
       subtext: 'Follow-ups & scheduled touches',
       icon: <Clock size={16} color="#4f46e5" />,
       iconBg: '#eff6ff',
@@ -36,7 +44,7 @@ export const OutreachKpiCards: React.FC<OutreachKpiCardsProps> = ({
     {
       id: 'scheduled',
       title: 'Scheduled',
-      value: summary.scheduled.toString(),
+      value: safeSummary.scheduled.toString(),
       subtext: 'Upcoming automated steps',
       icon: <Calendar size={16} color="#059669" />,
       iconBg: '#ecfdf5',
@@ -49,7 +57,7 @@ export const OutreachKpiCards: React.FC<OutreachKpiCardsProps> = ({
     {
       id: 'replies',
       title: 'New Replies',
-      value: summary.replies.toString(),
+      value: safeSummary.replies.toString(),
       subtext: 'Prospect responses awaiting reply',
       icon: <MessageSquare size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff',
@@ -62,7 +70,7 @@ export const OutreachKpiCards: React.FC<OutreachKpiCardsProps> = ({
     {
       id: 'needs_attention',
       title: 'Needs Attention',
-      value: summary.needsAttention.toString(),
+      value: safeSummary.needsAttention.toString(),
       subtext: 'Stalled threads / objection handling',
       icon: <AlertCircle size={16} color="#ea580c" />,
       iconBg: '#fff7ed',
@@ -75,7 +83,7 @@ export const OutreachKpiCards: React.FC<OutreachKpiCardsProps> = ({
     {
       id: 'response_rate',
       title: 'Response Rate',
-      value: `${summary.responseRate}%`,
+      value: `${safeSummary.responseRate}%`,
       subtext: 'Prospect reply conversion',
       icon: <TrendingUp size={16} color="#2563eb" />,
       iconBg: '#eff6ff',

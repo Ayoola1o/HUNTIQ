@@ -65,9 +65,17 @@ export const SavedSearchesPage: React.FC<SavedSearchesPageProps> = ({
 
     try {
       const response = await fetchSavedSearches();
-      setSearches(response.searches || []);
+      const list = response.searches || [];
+      setSearches(list);
       if (response.kpiSummary) {
-        setKpiSummary(response.kpiSummary);
+        const raw = response.kpiSummary as any;
+        setKpiSummary({
+          totalSearches: raw.totalSearches ?? list.length,
+          activeMonitoring: raw.activeMonitoring ?? list.filter((s: any) => s?.monitoringEnabled).length,
+          newMatches: raw.newMatches ?? raw.newMatchesThisWeek ?? 0,
+          newSignals: raw.newSignals ?? 0,
+          unreadAlerts: raw.unreadAlerts ?? raw.highIntentAlerts ?? 0
+        });
       }
     } catch (err: any) {
       console.error('Failed to load saved searches from API:', err);
@@ -84,17 +92,14 @@ export const SavedSearchesPage: React.FC<SavedSearchesPageProps> = ({
 
   // Recalculate local KPI summary when searches change
   const currentKpiSummary: SavedSearchesKpiSummary = React.useMemo(() => {
-    if (searches.length === 0 && !isLoading) {
-      return kpiSummary;
-    }
     return {
       totalSearches: searches.length,
-      activeMonitoring: searches.filter(s => s.monitoringEnabled).length,
-      newMatches: searches.reduce((acc, curr) => acc + (curr.newMatchesCount || 0), 0),
-      newSignals: searches.reduce((acc, curr) => acc + (curr.activeSignalsCount || 0), 0),
-      unreadAlerts: searches.reduce((acc, curr) => acc + (curr.unreadAlertsCount || 0), 0)
+      activeMonitoring: searches.filter(s => s?.monitoringEnabled).length,
+      newMatches: searches.reduce((acc, curr) => acc + (curr?.newMatchesCount || 0), 0),
+      newSignals: searches.reduce((acc, curr) => acc + (curr?.activeSignalsCount || 0), 0),
+      unreadAlerts: searches.reduce((acc, curr) => acc + (curr?.unreadAlertsCount || 0), 0)
     };
-  }, [searches, kpiSummary, isLoading]);
+  }, [searches]);
 
   // Toggle monitoring active / paused via API
   const handleToggleMonitoring = async (searchId: string) => {

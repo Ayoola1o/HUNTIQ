@@ -13,11 +13,18 @@ export const ResearchKpiCards: React.FC<ResearchKpiCardsProps> = ({
   activeFilter,
   onSelectFilter
 }) => {
+  const safeSummary: ResearchKpiSummary = {
+    totalReports: summary?.totalReports ?? 0,
+    inProgress: summary?.inProgress ?? 0,
+    updatedThisWeek: summary?.updatedThisWeek ?? 0,
+    highOpportunity: summary?.highOpportunity ?? 0
+  };
+
   const cards = [
     {
       id: 'all',
       title: 'Research Reports',
-      value: summary.totalReports.toString(),
+      value: safeSummary.totalReports.toString(),
       subtext: 'Total company intelligence files',
       icon: <FileText size={16} color="#4f46e5" />,
       iconBg: '#eff6ff',
@@ -30,7 +37,7 @@ export const ResearchKpiCards: React.FC<ResearchKpiCardsProps> = ({
     {
       id: 'in_progress',
       title: 'Research in Progress',
-      value: summary.inProgress.toString(),
+      value: safeSummary.inProgress.toString(),
       subtext: 'Active background scraping jobs',
       icon: <Loader2 size={16} color="#d97706" className="animate-spin" />,
       iconBg: '#fffbeb',
@@ -43,7 +50,7 @@ export const ResearchKpiCards: React.FC<ResearchKpiCardsProps> = ({
     {
       id: 'updated',
       title: 'Updated This Week',
-      value: summary.updatedThisWeek.toString(),
+      value: safeSummary.updatedThisWeek.toString(),
       subtext: 'Signals & leadership refreshed',
       icon: <RefreshCw size={16} color="#059669" />,
       iconBg: '#ecfdf5',
@@ -56,7 +63,7 @@ export const ResearchKpiCards: React.FC<ResearchKpiCardsProps> = ({
     {
       id: 'high_opp',
       title: 'High Opportunity Fit',
-      value: summary.highOpportunity.toString(),
+      value: safeSummary.highOpportunity.toString(),
       subtext: 'Score 90+ with active intent signals',
       icon: <Sparkles size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff',
