@@ -6,6 +6,7 @@ import { GmailService } from '../services/gmailService';
 import { GmailReplySyncService } from '../services/gmailReplySyncService';
 import { hasValidTld } from '../engine/scraper/emailExtractor';
 import { postgresPool, pool } from '../database/postgres';
+import { PubSubAuthService } from '../services/pubsubAuthService';
 
 export const googleAuthRouter = Router();
 
@@ -294,65 +295,108 @@ googleAuthRouter.post(['/auth/google/sync', '/google/sync'], async (req: Authent
 /**
  * POST /api/v1/integrations/gmail/webhook
  * Google Cloud Pub/Sub Push Webhook for Gmail mailbox change notifications.
+ * Enforces production authentication (OIDC JWT or verification secret) and envelope validation.
  */
 googleAuthRouter.post(['/integrations/gmail/webhook', '/gmail/webhook'], async (req: Request, res: Response) => {
-  // 1. Optional token verification if GOOGLE_PUBSUB_VERIFICATION_TOKEN is set
-  const expectedToken = process.env.GOOGLE_PUBSUB_VERIFICATION_TOKEN?.trim();
-  if (expectedToken) {
-    const queryToken = req.query.token;
-    const headerToken = req.headers['x-goog-pubsub-token'];
-    if (queryToken !== expectedToken && headerToken !== expectedToken) {
-      console.warn('[GMAIL_WEBHOOK] Rejected Pub/Sub webhook with invalid verification token');
-      return res.status(403).json({ error: 'Invalid verification token' });
-    }
+  // 1. Mandatory authentication check in production (with test bypass header for test suites)
+  const authResult = PubSubAuthService.verifyWebhookAuth(req);
+  if (!authResult.authenticated) {
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: authResult.errorCode || 'GMAIL_WEBHOOK_UNAUTHORIZED',
+        message: authResult.errorMessage || 'Webhook authentication required.'
+      }
+    });
   }
 
-  // 2. Validate envelope format
-  const pubsubMessage = req.body?.message;
-  if (!pubsubMessage || !pubsubMessage.data) {
-    return res.status(400).json({ error: 'Malformed Pub/Sub message payload' });
+  // 2. Validate envelope format and payload contents
+  const envelopeResult = PubSubAuthService.validatePubSubEnvelope(req.body);
+  if (!envelopeResult.valid || !envelopeResult.data) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: envelopeResult.errorCode || 'GMAIL_WEBHOOK_INVALID_PAYLOAD',
+        message: envelopeResult.errorMessage || 'Malformed Pub/Sub message payload.'
+      }
+    });
   }
+
+  const { emailAddress, historyId } = envelopeResult.data;
 
   try {
-    // 3. Decode base64 notification payload
-    const decodedString = Buffer.from(pubsubMessage.data, 'base64').toString('utf8');
-    const parsedData = JSON.parse(decodedString);
-    const { emailAddress, historyId } = parsedData;
-
-    if (!emailAddress) {
-      return res.status(400).json({ error: 'Missing emailAddress in Pub/Sub data' });
-    }
-
-    // 4. Safely locate workspace integration from database using account email (never trusting client-supplied workspace ID)
+    // 3. Safely locate workspace integration from database using account email (never trusting client-supplied workspace ID)
     const activePool = postgresPool || pool;
     if (activePool) {
       const matchRes = await activePool.query(
-        `SELECT workspace_id, account_email, status, is_active 
+        `SELECT workspace_id, account_email, status, sync_status, is_active 
          FROM workspace_integrations 
          WHERE account_email = $1 AND provider = 'gmail' AND is_active = true 
          LIMIT 1`,
-        [emailAddress.toLowerCase().trim()]
+        [emailAddress]
       );
 
       if (matchRes.rows.length === 0) {
-        // Return 200 so Pub/Sub does not endlessly retry notifications for disconnected accounts
+        // Return 200 so Google Pub/Sub does not endlessly retry notifications for disconnected accounts
         return res.status(200).json({ success: true, message: 'No active integration found for account' });
       }
 
       const row = matchRes.rows[0];
+      if (row.sync_status === 'reauth_required') {
+        return res.status(200).json({ success: true, message: 'Integration requires reauthentication, skipped sync' });
+      }
+
       const workspaceId = row.workspace_id;
 
-      // 5. Trigger idempotent history synchronization
-      await GmailReplySyncService.syncMailbox(workspaceId, row.account_email, historyId ? String(historyId) : undefined);
+      // 4. Trigger idempotent history synchronization
+      await GmailReplySyncService.syncMailbox(workspaceId, row.account_email, historyId);
     }
 
     // Acknowledge receipt to Google Pub/Sub
     return res.status(200).json({ success: true, message: 'Notification processed' });
   } catch (err: any) {
-    console.error('[GMAIL_WEBHOOK] Error processing push notification:', err.message);
+    console.error('[GMAIL_WEBHOOK] Error processing push notification safely');
     // Return 200 to acknowledge unrecoverable parse errors, or 500 for transient DB failure
     const status = err.code === 'DATABASE_UNAVAILABLE' ? 500 : 200;
-    return res.status(status).json({ success: false, error: 'Processing error' });
+    return res.status(status).json({
+      success: false,
+      error: { code: 'GMAIL_SYNC_FAILED', message: 'Failed to process push notification.' }
+    });
+  }
+});
+
+/**
+ * POST /api/v1/auth/google/watch/renew
+ * Renews an active Gmail watch subscription before expiration.
+ */
+googleAuthRouter.post(['/auth/google/watch/renew', '/google/watch/renew'], async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'GOOGLE_AUTH_REQUIRED', message: 'Authentication required' }
+    });
+  }
+
+  try {
+    const result = await GmailReplySyncService.renewWatch(workspaceId);
+    if (!result.success) {
+      const statusCode = result.error?.includes('reauthentication') ? 403 : 400;
+      return res.status(statusCode).json({
+        success: false,
+        error: { code: 'GMAIL_WATCH_RENEWAL_FAILED', message: result.error || 'Failed to renew watch' }
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: result
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { code: 'GMAIL_WATCH_RENEWAL_FAILED', message: 'Failed to renew Gmail watch subscription.' }
+    });
   }
 });
 
@@ -367,6 +411,21 @@ googleAuthRouter.post(['/auth/google/test', '/google/test'], async (req: Authent
     return res.status(401).json({
       success: false,
       error: { code: 'GOOGLE_AUTH_REQUIRED', message: 'Authentication required' }
+    });
+  }
+
+  const integration = await GoogleAuthService.getIntegration(workspaceId);
+  if (!integration || !integration.isActive) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'GOOGLE_NOT_CONFIGURED', message: 'Gmail integration is not connected.' }
+    });
+  }
+
+  if (integration.syncStatus === 'reauth_required') {
+    return res.status(403).json({
+      success: false,
+      error: { code: 'GOOGLE_REAUTH_REQUIRED', message: 'Google authorization expired or revoked; reauthentication required.' }
     });
   }
 
