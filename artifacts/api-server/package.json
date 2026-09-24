@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx src/tests/gmail_reply_tracking.test.ts"
+    "test": "tsx src/tests/gmail_reply_tracking.test.ts && tsx src/tests/campaign_execution_recovery.test.ts && tsx src/tests/gmail_watch_renewal.test.ts && tsx src/tests/gmail_disconnect_reauth.test.ts"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

@@ -121,7 +121,13 @@ export const authenticateApiKeyOrJwt = async (
     '/auth/google/callback'
   ];
 
-  if (publicPaths.includes(req.path)) {
+  if (
+    publicPaths.includes(req.path) ||
+    req.path.startsWith('/api/v1/cron') ||
+    req.path.startsWith('/api/cron') ||
+    req.path.startsWith('/cron') ||
+    req.path.startsWith('/jobs')
+  ) {
     return next();
   }
 

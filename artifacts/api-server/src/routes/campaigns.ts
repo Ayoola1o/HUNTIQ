@@ -301,3 +301,88 @@ campaignsRouter.delete('/campaigns/:id', async (req: AuthenticatedRequest, res: 
     });
   }
 });
+
+// 7. Execute next step for a specific prospect
+campaignsRouter.post('/campaigns/:id/prospects/:prospectId/execute-step', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
+
+  const campaignId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const prospectId = Array.isArray(req.params.prospectId) ? req.params.prospectId[0] : req.params.prospectId;
+
+  try {
+    const { CampaignExecutionService } = await import('../services/campaignExecutionService');
+    const result = await CampaignExecutionService.executeNextStepForProspect(workspaceId, campaignId, prospectId);
+
+    return res.status(200).json({
+      success: result.executed,
+      data: result,
+      meta: { timestamp: new Date().toISOString() }
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { code: 'EXECUTION_FAILED', message: err.message }
+    });
+  }
+});
+
+// 8. Process all due campaign steps across active campaigns
+campaignsRouter.post('/campaigns/process-due', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
+
+  try {
+    const { CampaignExecutionService } = await import('../services/campaignExecutionService');
+    const result = await CampaignExecutionService.processDueCampaignSteps(workspaceId);
+
+    return res.status(200).json({
+      success: true,
+      data: result,
+      meta: { timestamp: new Date().toISOString() }
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { code: 'PROCESS_DUE_FAILED', message: err.message }
+    });
+  }
+});
+
+// 9. Recover stale or abandoned sending records
+campaignsRouter.post('/campaigns/recover-stale', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
+
+  try {
+    const { CampaignExecutionService } = await import('../services/campaignExecutionService');
+    const result = await CampaignExecutionService.recoverStaleSendingRecords(workspaceId);
+
+    return res.status(200).json({
+      success: true,
+      data: result,
+      meta: { timestamp: new Date().toISOString() }
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { code: 'RECOVERY_FAILED', message: err.message }
+    });
+  }
+});
+

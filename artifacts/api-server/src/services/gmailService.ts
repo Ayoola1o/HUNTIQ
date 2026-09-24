@@ -84,7 +84,7 @@ export class GmailService {
     const { workspaceId, to, toName, subject, html, text, replyTo } = options;
 
     const integration = await GoogleAuthService.getIntegration(workspaceId);
-    if (!integration || !integration.isActive) {
+    if (!integration || !integration.isActive || integration.status !== 'active' || !integration.accessToken) {
       throw new Error(
         'Gmail is not connected for this workspace. Please authenticate with Google first.'
       );

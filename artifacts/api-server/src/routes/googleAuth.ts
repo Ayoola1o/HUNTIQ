@@ -342,6 +342,10 @@ googleAuthRouter.post(['/integrations/gmail/webhook', '/gmail/webhook'], async (
       }
 
       const row = matchRes.rows[0];
+      if (!row.is_active || row.status === 'revoked' || row.sync_status === 'disconnected' || !row.access_token) {
+        return res.status(200).json({ success: true, message: 'Integration is disconnected, skipped sync' });
+      }
+
       if (row.sync_status === 'reauth_required') {
         return res.status(200).json({ success: true, message: 'Integration requires reauthentication, skipped sync' });
       }

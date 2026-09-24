@@ -2,7 +2,7 @@ import { postgresPool, pool } from '../database/postgres';
 import { config } from '../config/env';
 import { GoogleAuthService } from './googleAuthService';
 import { createActivityLogRepository } from '../repositories/activity-logs';
-import { CampaignExecutionService } from './campaignExecutionService';
+import { CampaignExecutionService, sanitizeDiagnosticError } from './campaignExecutionService';
 
 export interface GmailWatchResult {
   success: boolean;
@@ -10,6 +10,24 @@ export interface GmailWatchResult {
   expiration?: string;
   topicName?: string;
   isConfigured: boolean;
+  error?: string;
+}
+
+export interface WatchRenewalDetail {
+  workspaceId: string;
+  accountEmail?: string;
+  status: 'renewed' | 'skipped' | 'failed';
+  expiration?: string;
+  historyId?: string;
+  error?: string;
+}
+
+export interface WatchRenewalSummary {
+  checked: number;
+  renewed: number;
+  failed: number;
+  skipped: number;
+  details: WatchRenewalDetail[];
   error?: string;
 }
 
@@ -24,6 +42,12 @@ export interface SyncMailboxResult {
 export class GmailReplySyncService {
   private static isProduction(): boolean {
     return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  }
+
+  private static testWatchHandler: ((workspaceId: string, accessToken: string, topic: string) => Promise<GmailWatchResult | null>) | null = null;
+
+  public static setTestWatchHandler(handler: ((workspaceId: string, accessToken: string, topic: string) => Promise<GmailWatchResult | null>) | null): void {
+    this.testWatchHandler = handler;
   }
 
   /**
@@ -52,9 +76,38 @@ export class GmailReplySyncService {
       };
     }
 
-    const pubsubTopic = (process.env.GOOGLE_PUBSUB_TOPIC || process.env.GCP_PUBSUB_TOPIC)?.trim();
+    const pubsubTopic = (process.env.GOOGLE_PUBSUB_TOPIC || process.env.GCP_PUBSUB_TOPIC)?.trim() || 'projects/huntiq/topics/gmail-mailbox-events';
 
-    if (!pubsubTopic) {
+    // Hook for deterministic integration tests
+    if (this.testWatchHandler) {
+      const mockResult = await this.testWatchHandler(workspaceId, accessToken, pubsubTopic);
+      if (mockResult) {
+        if (mockResult.success && activePool) {
+          const expDate = mockResult.expiration ? new Date(mockResult.expiration) : new Date(Date.now() + 7 * 86400000);
+          await activePool.query(
+            `UPDATE workspace_integrations 
+             SET watch_history_id = $1, 
+                 watch_expiration = $2, 
+                 watch_resource_id = $3, 
+                 sync_status = 'active', 
+                 last_sync_error = null, 
+                 updated_at = now() 
+             WHERE workspace_id = $4 AND provider = 'gmail'`,
+            [mockResult.historyId || '1000', expDate, mockResult.topicName || pubsubTopic, workspaceId]
+          );
+        } else if (!mockResult.success && activePool) {
+          await activePool.query(
+            `UPDATE workspace_integrations 
+             SET last_sync_error = $1, updated_at = now() 
+             WHERE workspace_id = $2 AND provider = 'gmail'`,
+            [sanitizeDiagnosticError(mockResult.error || 'Test watch failed'), workspaceId]
+          );
+        }
+        return mockResult;
+      }
+    }
+
+    if (!process.env.GOOGLE_PUBSUB_TOPIC && !process.env.GCP_PUBSUB_TOPIC) {
       // Pub/Sub topic not configured in environment. Fetch baseline profile history ID.
       try {
         const profileRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
@@ -106,7 +159,8 @@ export class GmailReplySyncService {
 
       const watchData: any = await watchRes.json();
       if (!watchRes.ok) {
-        const errorMsg = watchData.error?.message || 'Failed to register Gmail watch with Google API';
+        const rawErrorMsg = watchData.error?.message || 'Failed to register Gmail watch with Google API';
+        const errorMsg = sanitizeDiagnosticError(rawErrorMsg);
         console.error('[GMAIL_WATCH] Registration failed:', errorMsg);
 
         if (activePool) {
@@ -151,11 +205,12 @@ export class GmailReplySyncService {
         topicName: pubsubTopic
       };
     } catch (err: any) {
-      console.error('[GMAIL_WATCH] Error establishing watch:', err.message);
+      const safeError = sanitizeDiagnosticError(err);
+      console.error('[GMAIL_WATCH] Error establishing watch:', safeError);
       return {
         success: false,
         isConfigured: true,
-        error: err.message
+        error: safeError
       };
     }
   }
@@ -174,7 +229,7 @@ export class GmailReplySyncService {
         [workspaceId]
       );
 
-      if (integrationRes.rows.length === 0 || !integrationRes.rows[0].is_active) {
+      if (integrationRes.rows.length === 0 || !integrationRes.rows[0].is_active || integrationRes.rows[0].sync_status === 'disconnected') {
         return {
           success: false,
           isConfigured: false,
@@ -196,32 +251,118 @@ export class GmailReplySyncService {
 
   /**
    * Scans all active Gmail integrations across all workspaces and renews any
-   * whose watch_expiration is within the next 24 hours or has already passed.
+   * whose watch_expiration is within the renewal window (default 24 hours) or has expired.
+   * Isolates failures so one workspace's error never prevents others from being renewed.
+   * Idempotent: repeated scheduler invocations do not renew healthy watches unnecessarily.
    */
-  public static async checkAndRenewAllWatches(): Promise<{ checked: number; renewed: number }> {
+  public static async checkAndRenewAllWatches(options?: {
+    renewalWindowHours?: number;
+  }): Promise<WatchRenewalSummary> {
     const activePool = postgresPool || pool;
-    if (!activePool) return { checked: 0, renewed: 0 };
+    if (!activePool) {
+      return { checked: 0, renewed: 0, failed: 0, skipped: 0, details: [] };
+    }
+
+    const windowHours = options?.renewalWindowHours ?? 24;
+    const renewalWindowMs = windowHours * 60 * 60 * 1000;
+    const details: WatchRenewalDetail[] = [];
+    let renewedCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
 
     try {
-      const expiringRes = await activePool.query(
-        `SELECT workspace_id, watch_expiration 
+      // Find all active Gmail integrations across workspaces
+      const allActiveRes = await activePool.query(
+        `SELECT workspace_id, account_email, watch_expiration, sync_status 
          FROM workspace_integrations 
-         WHERE provider = 'gmail' 
-           AND is_active = true 
-           AND sync_status != 'reauth_required'
-           AND (watch_expiration IS NULL OR watch_expiration < now() + interval '24 hours')`
+         WHERE provider = 'gmail' AND is_active = true AND status = 'active' AND sync_status != 'disconnected'`
       );
 
-      let renewed = 0;
-      for (const row of expiringRes.rows) {
-        const res = await this.renewWatch(row.workspace_id);
-        if (res.success) renewed++;
+      const now = Date.now();
+
+      for (const row of allActiveRes.rows) {
+        const workspaceId = row.workspace_id;
+        const accountEmail = row.account_email || '';
+
+        // If integration requires re-authentication, skip
+        if (row.sync_status === 'reauth_required') {
+          skippedCount++;
+          details.push({
+            workspaceId,
+            accountEmail,
+            status: 'skipped',
+            error: 'Reauthentication required'
+          });
+          continue;
+        }
+
+        const expTime = row.watch_expiration ? new Date(row.watch_expiration).getTime() : 0;
+        const isExpiringSoon = !expTime || expTime < now + renewalWindowMs;
+
+        if (!isExpiringSoon) {
+          // Healthy watch outside renewal window: safe to skip (idempotency rule)
+          skippedCount++;
+          details.push({
+            workspaceId,
+            accountEmail,
+            status: 'skipped',
+            expiration: row.watch_expiration ? new Date(row.watch_expiration).toISOString() : undefined
+          });
+          continue;
+        }
+
+        // Inside renewal window or expired: attempt renewal
+        try {
+          const res = await this.renewWatch(workspaceId);
+          if (res.success) {
+            renewedCount++;
+            details.push({
+              workspaceId,
+              accountEmail,
+              status: 'renewed',
+              expiration: res.expiration,
+              historyId: res.historyId
+            });
+          } else {
+            failedCount++;
+            details.push({
+              workspaceId,
+              accountEmail,
+              status: 'failed',
+              error: sanitizeDiagnosticError(res.error || 'Failed to renew watch')
+            });
+          }
+        } catch (err: any) {
+          // Failure isolation: log error and continue with next workspace
+          failedCount++;
+          const safeError = sanitizeDiagnosticError(err);
+          console.error(`[GMAIL_WATCH] Renewal error for workspace ${workspaceId}:`, safeError);
+          details.push({
+            workspaceId,
+            accountEmail,
+            status: 'failed',
+            error: safeError
+          });
+        }
       }
 
-      return { checked: expiringRes.rows.length, renewed };
+      return {
+        checked: allActiveRes.rows.length,
+        renewed: renewedCount,
+        failed: failedCount,
+        skipped: skippedCount,
+        details
+      };
     } catch (err: any) {
-      console.error('[GMAIL_WATCH] Error scanning for expiring watches:', err.message);
-      return { checked: 0, renewed: 0 };
+      console.error('[GMAIL_WATCH] Error scanning for expiring watches:', sanitizeDiagnosticError(err));
+      return {
+        checked: 0,
+        renewed: 0,
+        failed: 1,
+        skipped: 0,
+        details,
+        error: sanitizeDiagnosticError(err)
+      };
     }
   }
 

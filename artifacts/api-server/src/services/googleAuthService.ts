@@ -3,6 +3,7 @@ import { postgresPool, pool } from '../database/postgres';
 import { config } from '../config/env';
 import { CryptoService } from './cryptoService';
 import { createOAuthStateRepository, OAuthStateRecord } from '../repositories/oauth-states';
+import { sanitizeDiagnosticError } from './campaignExecutionService';
 
 export interface GoogleIntegrationData {
   workspaceId: string;
@@ -159,6 +160,7 @@ export class GoogleAuthService {
 
     const scopes = [
       'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/userinfo.profile'
     ];
@@ -274,8 +276,8 @@ export class GoogleAuthService {
         await activePool.query(
           `INSERT INTO workspace_integrations (
             workspace_id, provider, account_email, account_name,
-            access_token, refresh_token, token_expiry, scopes, is_active, status, last_synced_at, last_error, metadata, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 'active', now(), null, $9, now())
+            access_token, refresh_token, token_expiry, scopes, is_active, status, sync_status, last_synced_at, last_error, metadata, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 'active', 'idle', now(), null, $9, now())
           ON CONFLICT (workspace_id, provider) DO UPDATE SET
             account_email = EXCLUDED.account_email,
             account_name = EXCLUDED.account_name,
@@ -285,6 +287,7 @@ export class GoogleAuthService {
             scopes = EXCLUDED.scopes,
             is_active = true,
             status = 'active',
+            sync_status = 'idle',
             last_synced_at = now(),
             last_error = null,
             metadata = EXCLUDED.metadata,
@@ -396,9 +399,17 @@ export class GoogleAuthService {
    * If refresh fails or cannot occur, updates status to 'reauth_required' and throws/returns null.
    * NEVER returns an expired token.
    */
-  public static async getValidAccessToken(workspaceId: string): Promise<string | null> {
+  public static async getValidAccessToken(
+    workspaceId: string,
+    options?: { forceRefresh?: boolean }
+  ): Promise<string | null> {
     const integration = await this.getIntegration(workspaceId);
     if (!integration || !integration.isActive) {
+      return null;
+    }
+
+    // Do not repeatedly hammer Google if integration already failed and requires reauthentication
+    if (!options?.forceRefresh && (integration.status === 'reauth_required' || integration.syncStatus === 'reauth_required')) {
       return null;
     }
 
@@ -433,7 +444,8 @@ export class GoogleAuthService {
 
       const refreshData = await refreshRes.json() as any;
       if (!refreshRes.ok) {
-        const errorMsg = refreshData.error_description || refreshData.error || 'Failed to refresh Google token';
+        const rawErrorMsg = refreshData.error_description || refreshData.error || 'Failed to refresh Google token';
+        const errorMsg = sanitizeDiagnosticError(rawErrorMsg);
         await this.markReauthRequired(workspaceId, errorMsg);
         return null;
       }
@@ -445,6 +457,7 @@ export class GoogleAuthService {
       integration.accessToken = newAccessToken;
       integration.tokenExpiry = newTokenExpiry;
       integration.status = 'active';
+      integration.syncStatus = integration.syncStatus === 'reauth_required' ? 'idle' : integration.syncStatus;
       integration.lastError = undefined;
       integration.lastSyncedAt = new Date().toISOString();
 
@@ -455,7 +468,9 @@ export class GoogleAuthService {
         try {
           await activePool.query(
             `UPDATE workspace_integrations 
-             SET access_token = $1, token_expiry = $2, status = 'active', last_synced_at = now(), last_error = null, updated_at = now() 
+             SET access_token = $1, token_expiry = $2, status = 'active', 
+                 sync_status = CASE WHEN sync_status = 'reauth_required' THEN 'idle' ELSE sync_status END,
+                 last_synced_at = now(), last_error = null, updated_at = now() 
              WHERE workspace_id = $3 AND provider = $4`,
             [encryptedAccessToken, newTokenExpiry, workspaceId, 'gmail']
           );
@@ -469,20 +484,23 @@ export class GoogleAuthService {
       this.memoryStore.set(workspaceId, integration);
       return newAccessToken;
     } catch (err: any) {
-      console.error(`[GOOGLE_AUTH] Token refresh failed for workspace ${workspaceId}:`, err.message);
-      await this.markReauthRequired(workspaceId, err.message);
+      const safeError = sanitizeDiagnosticError(err.message || 'Token refresh failed');
+      console.error(`[GOOGLE_AUTH] Token refresh failed for workspace ${workspaceId}:`, safeError);
+      await this.markReauthRequired(workspaceId, safeError);
       return null;
     }
   }
 
   /**
-   * Helper to set status = 'reauth_required' and record error message in DB and memory.
+   * Helper to set status = 'reauth_required' and record safe error message in DB and memory.
    */
-  private static async markReauthRequired(workspaceId: string, errorReason: string): Promise<void> {
+  public static async markReauthRequired(workspaceId: string, errorReason: string): Promise<void> {
+    const safeError = sanitizeDiagnosticError(errorReason);
     const cached = this.memoryStore.get(workspaceId);
     if (cached) {
       cached.status = 'reauth_required';
-      cached.lastError = errorReason;
+      cached.syncStatus = 'reauth_required';
+      cached.lastError = safeError;
     }
 
     const activePool = postgresPool || pool;
@@ -490,9 +508,9 @@ export class GoogleAuthService {
       try {
         await activePool.query(
           `UPDATE workspace_integrations
-           SET status = 'reauth_required', last_error = $1, updated_at = now()
+           SET status = 'reauth_required', sync_status = 'reauth_required', last_error = $1, updated_at = now()
            WHERE workspace_id = $2 AND provider = $3`,
-          [errorReason, workspaceId, 'gmail']
+          [safeError, workspaceId, 'gmail']
         );
       } catch {}
     }
@@ -528,7 +546,7 @@ export class GoogleAuthService {
    * Disconnects integration:
    * 1. Stops Gmail Watch subscription.
    * 2. Remotely revokes token at Google OAuth endpoint.
-   * 3. Wipes encrypted tokens from database and sets status = 'revoked', is_active = false.
+   * 3. Wipes encrypted tokens from database and sets status = 'revoked', sync_status = 'disconnected', is_active = false.
    * 4. Clears dev memory cache.
    */
   public static async disconnect(workspaceId: string): Promise<void> {
@@ -536,7 +554,9 @@ export class GoogleAuthService {
     try {
       const { GmailReplySyncService } = await import('./gmailReplySyncService');
       await GmailReplySyncService.stopWatch(workspaceId);
-    } catch {}
+    } catch (err: any) {
+      console.warn(`[GOOGLE_AUTH] Stop watch notice during disconnect for workspace ${workspaceId}:`, err.message);
+    }
 
     const integration = await this.getIntegration(workspaceId);
 
@@ -553,12 +573,12 @@ export class GoogleAuthService {
       }
     }
 
-    // 2. Clear memory cache
+    // 3. Clear memory cache
     if (this.memoryStore.has(workspaceId)) {
       this.memoryStore.delete(workspaceId);
     }
 
-    // 3. Wipe database credentials
+    // 4. Wipe database credentials & invalidate watch state completely
     const activePool = postgresPool || pool;
     if (activePool) {
       try {
@@ -566,8 +586,13 @@ export class GoogleAuthService {
           `UPDATE workspace_integrations 
            SET is_active = false, 
                status = 'revoked', 
+               sync_status = 'disconnected',
                access_token = NULL, 
                refresh_token = NULL, 
+               token_expiry = NULL,
+               watch_history_id = NULL,
+               watch_expiration = NULL,
+               watch_resource_id = NULL,
                last_error = NULL, 
                updated_at = now() 
            WHERE workspace_id = $1 AND provider = $2`,

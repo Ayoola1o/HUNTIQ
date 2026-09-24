@@ -30,6 +30,7 @@ export interface SendEmailOptions {
   replyTo?: string;
   campaignId?: string;
   prospectId?: string;
+  idempotencyKey?: string;
 }
 
 export interface SendEmailResult {
@@ -41,10 +42,16 @@ export interface SendEmailResult {
   deliveredAt: string;
   error?: string;
   previewUrl?: string;
+  threadId?: string;
 }
 
 export class EmailDispatchService {
   private static workspaceConfigs = new Map<string, EmailIntegrationConfig>();
+  private static testDispatchHandler: ((options: SendEmailOptions, workspaceId: string) => Promise<SendEmailResult | null>) | null = null;
+
+  public static setTestDispatchHandler(handler: ((options: SendEmailOptions, workspaceId: string) => Promise<SendEmailResult | null>) | null): void {
+    this.testDispatchHandler = handler;
+  }
 
   /**
    * Retrieves active email integration config for a workspace.
@@ -122,6 +129,11 @@ export class EmailDispatchService {
     options: SendEmailOptions,
     workspaceId: string
   ): Promise<SendEmailResult> {
+    if (this.testDispatchHandler) {
+      const testRes = await this.testDispatchHandler(options, workspaceId);
+      if (testRes) return testRes;
+    }
+
     const { to, toName, subject, html, text, from, replyTo } = options;
     const cleanTo = to.toLowerCase().trim();
 
@@ -155,7 +167,7 @@ export class EmailDispatchService {
 
     // Priority Provider: Official Google Gmail API (OAuth 2.0)
     const googleIntegration = await GoogleAuthService.getIntegration(workspaceId);
-    if (googleIntegration && googleIntegration.isActive) {
+    if (googleIntegration && googleIntegration.isActive && googleIntegration.status === 'active' && Boolean(googleIntegration.accessToken)) {
       try {
         const gmailResult = await GmailService.sendEmail({
           workspaceId,

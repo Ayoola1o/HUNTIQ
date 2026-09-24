@@ -77,7 +77,7 @@ export class PostgresOAuthStateRepository implements OAuthStateRepository {
       `;
       const result = await this.pool.query(query, [stateToken, provider]);
       if (result.rows.length === 0) {
-        return this.isProduction() ? null : this.fallback.consume(stateToken, provider);
+        return null;
       }
       return this.mapRow(result.rows[0]);
     } catch (err: any) {

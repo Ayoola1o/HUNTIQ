@@ -27,6 +27,7 @@ import { emailIntegrationRouter } from './routes/emailIntegration';
 import { googleAuthRouter } from './routes/googleAuth';
 import { leadIngestRouter } from './routes/leadIngest';
 import { emailDiscoveryRouter } from './routes/emailDiscovery';
+import { cronRouter } from './routes/cron';
 import { registerDefaultJobProviders } from './providers/jobs';
 import { ensureDatabaseMigrated } from './database/migrate';
 import { config, getProductionConfigErrors } from './config/env';
@@ -128,9 +129,12 @@ export const createApp = () => {
   app.use('/api', googleAuthRouter);
   app.use('/api/v1', googleAuthRouter);
   app.use('/api', leadIngestRouter);
-  app.use('/api/v1', leadIngestRouter);
   app.use('/api', emailDiscoveryRouter);
   app.use('/api/v1', emailDiscoveryRouter);
+  app.use('/api', cronRouter);
+  app.use('/api/v1', cronRouter);
+  app.use('/cron', cronRouter);
+  app.use('/jobs', cronRouter);
 
   // Root fallback info
   app.get('/', (_req, res) => {

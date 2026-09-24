@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { postgresPool, pool } from '../database/postgres';
 import { createActivityLogRepository } from '../repositories/activity-logs';
 import { EmailDispatchService } from './emailDispatchService';
@@ -15,14 +16,68 @@ export interface StepExecutionResult {
   reason?: string;
   messageId?: string;
   nextStepAt?: string | null;
+  executionId?: string;
+}
+
+export interface StaleRecoveryDetail {
+  campaignId: string;
+  prospectId: string;
+  action: 'recovered_delivered' | 'recovered_failed' | 'marked_needs_review';
+  reason: string;
+}
+
+export interface StaleRecoveryResult {
+  recoveredCount: number;
+  deliveredCount: number;
+  failedCount: number;
+  ambiguousCount: number;
+  details: StaleRecoveryDetail[];
+  error?: string;
+}
+
+/**
+ * Sanitizes error messages to protect against credential, token, or connection string leakage.
+ */
+export function sanitizeDiagnosticError(error: any): string {
+  if (!error) return 'Unknown error';
+  let str = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+
+  // Strip Bearer tokens
+  str = str.replace(/Bearer\s+[A-Za-z0-9_\-\.]+/gi, 'Bearer [REDACTED]');
+  // Strip Google OAuth tokens / api keys (ya29..., AIza...)
+  str = str.replace(/ya29\.[A-Za-z0-9_\-]+/gi, '[REDACTED_GOOGLE_TOKEN]');
+  str = str.replace(/AIza[0-9A-Za-z-_]{35}/gi, '[REDACTED_API_KEY]');
+  // Strip authorization headers, secrets, passwords
+  str = str.replace(/(?:password|secret|token|client_secret|client_id)=[^&\s]+/gi, '$1=[REDACTED]');
+  // Strip database connection strings
+  str = str.replace(/postgres(?:ql)?:\/\/[^@]+@[^\/\s]+/gi, 'postgres://[REDACTED]');
+  // Strip raw header dumps
+  str = str.replace(/authorization:\s*['"]?[^'",\n]+['"]?/gi, 'authorization: [REDACTED]');
+
+  if (str.length > 500) {
+    str = str.substring(0, 500) + '...';
+  }
+  return str;
 }
 
 export class CampaignExecutionService {
   /**
+   * Default timeout for detecting abandoned / stale sending executions (5 minutes).
+   */
+  public static getStaleTimeoutMs(): number {
+    const envVal = process.env.CAMPAIGN_STALE_SENDING_TIMEOUT_MS;
+    if (envVal) {
+      const parsed = parseInt(envVal, 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return 5 * 60 * 1000; // 5 minutes default
+  }
+
+  /**
    * Halts any active sequence follow-ups for a prospect across a workspace's campaigns.
    * Directly updates production database state (target_prospects JSONB in campaigns table)
    * under an explicit PostgreSQL transaction with FOR UPDATE row locks.
-   * Sets status to 'replied' and clears nextStepAt to null.
+   * Sets status to 'replied', clears nextStepAt, claimedAt, and executionId.
    */
   public static async haltProspectSequence(
     workspaceId: string,
@@ -76,6 +131,8 @@ export class CampaignExecutionService {
                 ...p,
                 status: 'replied',
                 nextStepAt: null,
+                claimedAt: null,
+                executionId: null,
                 lastTouch: options.reason || 'Sequence halted: Prospect replied via Gmail'
               };
             }
@@ -94,6 +151,19 @@ export class CampaignExecutionService {
             [JSON.stringify(prospects), newRepliedCount, campaignId, workspaceId]
           );
           haltedCampaignIds.push(campaignId);
+
+          // Also mark any in-flight execution attempts in campaign_step_executions as aborted_reply
+          try {
+            await client.query(
+              `UPDATE campaign_step_executions 
+               SET status = 'aborted_reply', 
+                   completed_at = now(),
+                   updated_at = now() 
+               WHERE workspace_id = $1 AND campaign_id = $2 
+                 AND status = 'sending'`,
+              [workspaceId, campaignId]
+            );
+          } catch {}
         }
       }
 
@@ -125,7 +195,7 @@ export class CampaignExecutionService {
         await client.query('ROLLBACK');
       } catch {}
       console.error('[CAMPAIGN_EXECUTION] Failed to halt prospect sequence in DB:', err.message);
-      return { success: false, haltedCount: 0, campaignIds: [], error: err.message };
+      return { success: false, haltedCount: 0, campaignIds: [], error: sanitizeDiagnosticError(err) };
     } finally {
       client.release();
     }
@@ -133,12 +203,17 @@ export class CampaignExecutionService {
 
   /**
    * Determines if a prospect is eligible to receive a sequence step.
-   * Returns false immediately if prospect status is 'replied', 'halted', 'converted',
-   * 'sending', or if nextStepAt is in the future.
+   * Returns false immediately if:
+   * - campaignStatus is not 'active'
+   * - prospect status is 'replied', 'halted', 'converted', 'needs_review'
+   * - prospect status is 'sending' and NOT stale
+   * - nextStepAt is scheduled in the future
+   * - prospect has no email
    */
   public static isProspectEligibleForStep(
-    prospect: TargetProspectItem & { nextStepAt?: string | null },
-    campaignStatus: string
+    prospect: TargetProspectItem & { nextStepAt?: string | null; claimedAt?: string | null },
+    campaignStatus: string,
+    staleTimeoutMs = CampaignExecutionService.getStaleTimeoutMs()
   ): boolean {
     if (campaignStatus !== 'active') {
       return false;
@@ -149,9 +224,21 @@ export class CampaignExecutionService {
       currentStatus === 'replied' ||
       currentStatus === 'halted' ||
       currentStatus === 'converted' ||
-      currentStatus === 'sending'
+      currentStatus === 'needs_review'
     ) {
       return false;
+    }
+
+    if (currentStatus === 'sending') {
+      // If currently claimed and NOT stale, another worker is executing it
+      if (prospect.claimedAt) {
+        const claimedTime = new Date(prospect.claimedAt).getTime();
+        if (!isNaN(claimedTime) && Date.now() - claimedTime < staleTimeoutMs) {
+          return false; // Still active in-flight
+        }
+      } else {
+        return false;
+      }
     }
 
     if (prospect.nextStepAt) {
@@ -161,34 +248,66 @@ export class CampaignExecutionService {
       }
     }
 
+    if (!prospect.email || !prospect.email.trim()) {
+      return false;
+    }
+
     return true;
   }
 
   /**
    * Executes the next sequence step for a specific prospect in a campaign.
-   * Concurrency-safe atomic claim pattern:
-   * Phase 1 (Under explicit transaction & row lock): Re-verifies eligibility and claims step (status = 'sending').
-   * Phase 2: Dispatches outbound email.
-   * Phase 3 (Under explicit transaction & row lock): Re-checks if reply arrived while sending;
-   *          advances step only if not replied/halted, and sets upcoming nextStepAt.
+   * Explicit durable state machine & crash-safe 2-transaction architecture:
+   * 
+   * Transaction A (DB under row lock):
+   * - locks campaign & prospect
+   * - verifies eligibility
+   * - verifies idempotency / previous step executions
+   * - claims prospect (status = 'sending', claimedAt, executionId, idempotencyKey)
+   * - persists durable step execution record in campaign_step_executions
+   * - commits Transaction A & releases connection
+   * 
+   * Pre-Dispatch Safety Check:
+   * - re-checks whether a reply arrived in the interim
+   * - aborts safely if replied
+   * 
+   * External Operation (NO DB TRANSACTION OPEN):
+   * - calls external email provider
+   * 
+   * Transaction B (DB under row lock):
+   * - locks campaign & prospect
+   * - verifies same execution attempt
+   * - checks if reply arrived while dispatch was in flight (preserves replied status)
+   * - persists successful (delivered + advance step + nextStepAt) or failed state
+   * - persists provider message ID and execution completion in campaign_step_executions
+   * - commits Transaction B & releases connection
    */
   public static async executeNextStepForProspect(
     workspaceId: string,
     campaignId: string,
-    prospectId: string
+    prospectId: string,
+    options?: {
+      forceExecutionId?: string;
+      staleTimeoutMs?: number;
+    }
   ): Promise<StepExecutionResult> {
     const activePool = postgresPool || pool;
     if (!activePool) {
       return { executed: false, reason: 'DATABASE_UNAVAILABLE' };
     }
 
+    const staleTimeout = options?.staleTimeoutMs || this.getStaleTimeoutMs();
     let campaignName = 'Campaign';
     let targetProspect: TargetProspectItem | null = null;
     let nextStepIndex = 0;
     let currentStepDef: any = null;
     let sequenceSteps: any[] = [];
+    const executionId = options?.forceExecutionId || randomUUID();
+    let idempotencyKey = '';
 
-    // --- PHASE 1: Atomic Claim under Transaction Lock ---
+    // =========================================================================
+    // TRANSACTION A: Claim & Lock (Durable State Entry)
+    // =========================================================================
     const claimClient = await activePool.connect();
     try {
       await claimClient.query('BEGIN');
@@ -214,10 +333,15 @@ export class CampaignExecutionService {
         return { executed: false, reason: 'CAMPAIGN_NOT_ACTIVE' };
       }
 
-      const prospects: (TargetProspectItem & { currentStep?: number; nextStepAt?: string | null })[] =
-        Array.isArray(campaign.target_prospects)
-          ? campaign.target_prospects
-          : (typeof campaign.target_prospects === 'string' ? JSON.parse(campaign.target_prospects) : []);
+      const prospects: (TargetProspectItem & { 
+        currentStep?: number; 
+        nextStepAt?: string | null;
+        claimedAt?: string | null;
+        executionId?: string | null;
+        idempotencyKey?: string | null;
+      })[] = Array.isArray(campaign.target_prospects)
+        ? campaign.target_prospects
+        : (typeof campaign.target_prospects === 'string' ? JSON.parse(campaign.target_prospects) : []);
 
       const prospectIdx = prospects.findIndex(p => p.id === prospectId);
       if (prospectIdx === -1) {
@@ -227,14 +351,14 @@ export class CampaignExecutionService {
 
       targetProspect = prospects[prospectIdx];
 
-      // CRITICAL RACE-PREVENTION CHECK:
-      // If prospect has replied, been halted, or is already sending, abort immediately!
-      if (!this.isProspectEligibleForStep(targetProspect, campaign.status)) {
+      // Eligibility & Reply Guard:
+      // If prospect has replied, been halted, converted, or is currently in-flight, abort immediately!
+      if (!this.isProspectEligibleForStep(targetProspect, campaign.status, staleTimeout)) {
         await claimClient.query('ROLLBACK');
-        return {
-          executed: false,
-          reason: `INELIGIBLE_STATUS_${String(targetProspect.status || '').toUpperCase()}`
-        };
+        const reason = targetProspect.status === 'sending' 
+          ? 'STEP_EXECUTION_IN_FLIGHT' 
+          : `INELIGIBLE_STATUS_${String(targetProspect.status || '').toUpperCase()}`;
+        return { executed: false, reason };
       }
 
       if (!targetProspect.email) {
@@ -255,6 +379,8 @@ export class CampaignExecutionService {
           ...targetProspect,
           status: 'converted',
           nextStepAt: null,
+          claimedAt: null,
+          executionId: null,
           lastTouch: 'Sequence completed'
         };
         await claimClient.query(
@@ -265,10 +391,95 @@ export class CampaignExecutionService {
         return { executed: false, reason: 'SEQUENCE_COMPLETED' };
       }
 
-      // ATOMIC CLAIM: Claim execution state by setting status = 'sending'
+      // Check durable execution history in campaign_step_executions
+      idempotencyKey = `${workspaceId}:${campaignId}:${prospectId}:step_${nextStepIndex}:${executionId}`;
+
+      try {
+        const stepExecRes = await claimClient.query(
+          `SELECT id, status, provider_message_id, claimed_at 
+           FROM campaign_step_executions 
+           WHERE workspace_id = $1 AND campaign_id = $2 AND prospect_id = $3 AND sequence_step = $4 
+           FOR UPDATE`,
+          [workspaceId, campaignId, prospectId, nextStepIndex]
+        );
+
+        if (stepExecRes.rows.length > 0) {
+          const prevExec = stepExecRes.rows[0];
+
+          // 1. If step was already delivered, DO NOT dispatch again!
+          if (prevExec.status === 'delivered') {
+            await claimClient.query('ROLLBACK');
+            return {
+              executed: false,
+              reason: 'STEP_ALREADY_DELIVERED',
+              messageId: prevExec.provider_message_id
+            };
+          }
+
+          // 2. If same execution ID is being retried
+          if (prevExec.id === executionId && prevExec.status === 'delivered') {
+            await claimClient.query('ROLLBACK');
+            return { executed: false, reason: 'EXECUTION_ALREADY_COMPLETED' };
+          }
+
+          // 3. If in-flight and not stale
+          if (prevExec.status === 'sending') {
+            const prevClaimed = new Date(prevExec.claimed_at).getTime();
+            if (!isNaN(prevClaimed) && Date.now() - prevClaimed < staleTimeout) {
+              await claimClient.query('ROLLBACK');
+              return { executed: false, reason: 'STEP_EXECUTION_IN_FLIGHT' };
+            }
+          }
+
+          // 4. If marked unresolved_recovery (ambiguous send)
+          if (prevExec.status === 'unresolved_recovery') {
+            await claimClient.query('ROLLBACK');
+            return { executed: false, reason: 'AMBIGUOUS_STALE_EXECUTION' };
+          }
+
+          // Update existing execution record to new attempt
+          await claimClient.query(
+            `UPDATE campaign_step_executions 
+             SET id = $1, 
+                 idempotency_key = $2, 
+                 status = 'sending', 
+                 claimed_at = now(), 
+                 completed_at = null,
+                 error_code = null,
+                 error_message = null,
+                 updated_at = now() 
+             WHERE workspace_id = $3 AND campaign_id = $4 AND prospect_id = $5 AND sequence_step = $6`,
+            [executionId, idempotencyKey, workspaceId, campaignId, prospectId, nextStepIndex]
+          );
+        } else {
+          // Insert new execution attempt record
+          await claimClient.query(
+            `INSERT INTO campaign_step_executions (
+               id, workspace_id, campaign_id, prospect_id, sequence_step, 
+               idempotency_key, status, claimed_at, updated_at
+             ) VALUES ($1, $2, $3, $4, $5, $6, 'sending', now(), now())`,
+            [executionId, workspaceId, campaignId, prospectId, nextStepIndex, idempotencyKey]
+          );
+        }
+      } catch (stepErr: any) {
+        // If unique constraint violated by concurrent insert
+        if (stepErr.code === '23505') {
+          await claimClient.query('ROLLBACK');
+          return { executed: false, reason: 'CONCURRENT_EXECUTION_CONFLICT' };
+        }
+        // If table does not exist yet (during initial migration boot), proceed safely
+        console.warn('[CAMPAIGN_EXECUTION] Step executions table notice:', stepErr.message);
+      }
+
+      // Claim prospect state in campaigns.target_prospects
+      const nowIso = new Date().toISOString();
       prospects[prospectIdx] = {
         ...targetProspect,
         status: 'sending' as any,
+        claimedAt: nowIso,
+        executionId,
+        idempotencyKey,
+        currentStep: nextStepIndex,
         lastTouch: `Executing Step ${currentStepDef.stepNumber || nextStepIndex + 1}: ${currentStepDef.title || 'Follow-up'}`
       };
 
@@ -283,21 +494,69 @@ export class CampaignExecutionService {
         await claimClient.query('ROLLBACK');
       } catch {}
       console.error('[CAMPAIGN_EXECUTION] Claim phase error:', err.message);
-      return { executed: false, reason: err.message };
+      return { executed: false, reason: sanitizeDiagnosticError(err) };
     } finally {
       claimClient.release();
     }
 
-    // --- PHASE 2: Dispatch Email Step ---
-    const dispatchRes = await EmailDispatchService.sendEmail({
-      to: targetProspect.email,
-      toName: targetProspect.contactName,
-      subject: currentStepDef.title || `Follow-up from ${campaignName}`,
-      text: currentStepDef.contentSnippet || 'Hi, checking in on our previous conversation.',
-      campaignId
-    }, workspaceId);
+    // =========================================================================
+    // PRE-DISPATCH SAFETY CHECK: Re-verify prospect state after claiming
+    // If a reply arrived between claim and dispatch, abort safely!
+    // =========================================================================
+    try {
+      const preCheck = await activePool.query(
+        `SELECT target_prospects FROM campaigns WHERE id = $1 AND workspace_id = $2`,
+        [campaignId, workspaceId]
+      );
+      if (preCheck.rows.length > 0) {
+        const pList = Array.isArray(preCheck.rows[0].target_prospects)
+          ? preCheck.rows[0].target_prospects
+          : JSON.parse(preCheck.rows[0].target_prospects || '[]');
+        const currentP = pList.find((p: any) => p.id === prospectId);
+        if (currentP && (currentP.status === 'replied' || currentP.status === 'halted')) {
+          // Abort execution safely before calling external email provider
+          try {
+            await activePool.query(
+              `UPDATE campaign_step_executions 
+               SET status = 'aborted_reply', completed_at = now(), updated_at = now() 
+               WHERE id = $1 AND workspace_id = $2`,
+              [executionId, workspaceId]
+            );
+          } catch {}
+          return { executed: false, reason: 'REPLY_ARRIVED_BEFORE_DISPATCH' };
+        }
+      }
+    } catch {}
 
-    // --- PHASE 3: Reconcile Post-Dispatch State under Transaction Lock ---
+    // =========================================================================
+    // EXTERNAL OPERATION (NO OPEN DATABASE TRANSACTION)
+    // =========================================================================
+    let dispatchRes: any;
+    try {
+      dispatchRes = await EmailDispatchService.sendEmail({
+        to: targetProspect.email,
+        toName: targetProspect.contactName,
+        subject: currentStepDef.title || `Follow-up from ${campaignName}`,
+        text: currentStepDef.contentSnippet || 'Hi, checking in on our previous conversation.',
+        campaignId,
+        prospectId: targetProspect.id,
+        idempotencyKey
+      }, workspaceId);
+    } catch (dispatchErr: any) {
+      dispatchRes = {
+        success: false,
+        messageId: `err-${Date.now()}`,
+        provider: 'simulation',
+        status: 'failed',
+        to: targetProspect.email,
+        deliveredAt: new Date().toISOString(),
+        error: sanitizeDiagnosticError(dispatchErr)
+      };
+    }
+
+    // =========================================================================
+    // TRANSACTION B: Reconcile Post-Dispatch State (Durable State Finalization)
+    // =========================================================================
     let upcomingNextStepDate: string | null = null;
     const reconcileClient = await activePool.connect();
     try {
@@ -313,19 +572,44 @@ export class CampaignExecutionService {
 
       if (recheckRes.rows.length > 0) {
         const row = recheckRes.rows[0];
-        const latestProspects: (TargetProspectItem & { currentStep?: number; nextStepAt?: string | null })[] =
-          Array.isArray(row.target_prospects)
-            ? row.target_prospects
-            : (typeof row.target_prospects === 'string' ? JSON.parse(row.target_prospects) : []);
+        const latestProspects: (TargetProspectItem & { 
+          currentStep?: number; 
+          nextStepAt?: string | null;
+          claimedAt?: string | null;
+          executionId?: string | null;
+          idempotencyKey?: string | null;
+          lastError?: string | null;
+        })[] = Array.isArray(row.target_prospects)
+          ? row.target_prospects
+          : (typeof row.target_prospects === 'string' ? JSON.parse(row.target_prospects) : []);
 
         const pIdx = latestProspects.findIndex(p => p.id === prospectId);
         if (pIdx !== -1) {
           const currentProspect = latestProspects[pIdx];
 
-          // CRITICAL: Did an inbound reply arrive while dispatch was in flight?
-          // If the prospect was already marked 'replied' or 'halted' by haltProspectSequence,
-          // NEVER overwrite with 'delivered' and keep nextStepAt = null!
+          // 1. STOP-ON-REPLY PRECEDENCE:
+          // Did an inbound reply arrive while dispatch was in flight?
+          // If prospect is 'replied' or 'halted', NEVER overwrite with 'delivered' and keep nextStepAt = null!
           if (currentProspect.status === 'replied' || (currentProspect as any).status === 'halted') {
+            try {
+              await reconcileClient.query(
+                `UPDATE campaign_step_executions 
+                 SET status = $1, 
+                     provider_message_id = $2, 
+                     provider_thread_id = $3, 
+                     completed_at = now(),
+                     updated_at = now() 
+                 WHERE id = $4 AND workspace_id = $5`,
+                [
+                  dispatchRes.success ? 'delivered' : 'failed',
+                  dispatchRes.messageId || null,
+                  dispatchRes.threadId || null,
+                  executionId,
+                  workspaceId
+                ]
+              );
+            } catch {}
+
             await reconcileClient.query('COMMIT');
             return {
               executed: true,
@@ -333,6 +617,13 @@ export class CampaignExecutionService {
               nextStepAt: null,
               reason: 'DISPATCHED_BUT_REPLY_COMMITTED'
             };
+          }
+
+          // 2. VERIFY EXECUTION ATTEMPT:
+          // Ensure we are finalizing the exact execution attempt that held the claim
+          if (currentProspect.executionId && currentProspect.executionId !== executionId) {
+            await reconcileClient.query('ROLLBACK');
+            return { executed: false, reason: 'EXECUTION_ATTEMPT_MISMATCH' };
           }
 
           if (dispatchRes.success) {
@@ -349,9 +640,15 @@ export class CampaignExecutionService {
             latestProspects[pIdx] = {
               ...currentProspect,
               currentStep: nextStepIndex + 1,
-              status: 'delivered',
+              status: upcomingStepDef ? 'delivered' : 'converted',
               nextStepAt: upcomingNextStepDate,
-              lastTouch: `Step ${currentStepDef.stepNumber || nextStepIndex + 1} sent: ${currentStepDef.title || 'Follow-up'}`
+              claimedAt: null,
+              executionId: null,
+              idempotencyKey: null,
+              lastError: null,
+              lastTouch: upcomingStepDef
+                ? `Step ${currentStepDef.stepNumber || nextStepIndex + 1} sent: ${currentStepDef.title || 'Follow-up'}`
+                : 'Sequence completed successfully'
             };
 
             const newSentCount = (row.sent_count || 0) + 1;
@@ -363,17 +660,59 @@ export class CampaignExecutionService {
                WHERE id = $3 AND workspace_id = $4`,
               [JSON.stringify(latestProspects), newSentCount, campaignId, workspaceId]
             );
+
+            // Persist success in campaign_step_executions
+            try {
+              await reconcileClient.query(
+                `UPDATE campaign_step_executions 
+                 SET status = 'delivered', 
+                     provider = $1,
+                     provider_message_id = $2, 
+                     provider_thread_id = $3, 
+                     completed_at = now(),
+                     updated_at = now() 
+                 WHERE id = $4 AND workspace_id = $5`,
+                [
+                  dispatchRes.provider || 'email',
+                  dispatchRes.messageId || null,
+                  dispatchRes.threadId || null,
+                  executionId,
+                  workspaceId
+                ]
+              );
+            } catch {}
           } else {
-            // Revert failed dispatch from 'sending' to 'failed'
+            // Handle Provider Failure cleanly with safe diagnostic info
+            const safeErrorMessage = sanitizeDiagnosticError(dispatchRes.error || 'Provider delivery error');
+
             latestProspects[pIdx] = {
               ...currentProspect,
               status: 'failed',
-              lastTouch: `Step dispatch failed: ${dispatchRes.error || 'Provider delivery error'}`
+              claimedAt: null,
+              executionId: null,
+              idempotencyKey: null,
+              lastError: safeErrorMessage,
+              lastTouch: `Step dispatch failed: ${safeErrorMessage}`
             };
+
             await reconcileClient.query(
               `UPDATE campaigns SET target_prospects = $1, updated_at = now() WHERE id = $2 AND workspace_id = $3`,
               [JSON.stringify(latestProspects), campaignId, workspaceId]
             );
+
+            // Persist failure in campaign_step_executions
+            try {
+              await reconcileClient.query(
+                `UPDATE campaign_step_executions 
+                 SET status = 'failed', 
+                     error_code = 'PROVIDER_DISPATCH_FAILED',
+                     error_message = $1,
+                     completed_at = now(),
+                     updated_at = now() 
+                 WHERE id = $2 AND workspace_id = $3`,
+                [safeErrorMessage, executionId, workspaceId]
+              );
+            } catch {}
           }
         }
       }
@@ -384,12 +723,17 @@ export class CampaignExecutionService {
         await reconcileClient.query('ROLLBACK');
       } catch {}
       console.error('[CAMPAIGN_EXECUTION] Reconcile phase error:', err.message);
+      return { executed: false, reason: sanitizeDiagnosticError(err) };
     } finally {
       reconcileClient.release();
     }
 
     if (!dispatchRes.success) {
-      return { executed: false, reason: dispatchRes.error || 'EMAIL_DISPATCH_FAILED' };
+      return { 
+        executed: false, 
+        reason: sanitizeDiagnosticError(dispatchRes.error || 'EMAIL_DISPATCH_FAILED'),
+        executionId 
+      };
     }
 
     // Persist/update linked outreach thread for Gmail reply correlation
@@ -401,14 +745,235 @@ export class CampaignExecutionService {
       companyName: targetProspect.companyName || (targetProspect as any).company,
       subject: currentStepDef.title || `Follow-up from ${campaignName}`,
       messageId: dispatchRes.messageId,
-      threadId: (dispatchRes as any).threadId
+      threadId: dispatchRes.threadId
     });
 
     return {
       executed: true,
       messageId: dispatchRes.messageId,
-      nextStepAt: upcomingNextStepDate
+      nextStepAt: upcomingNextStepDate,
+      executionId
     };
+  }
+
+  /**
+   * Recovers abandoned or stale 'sending' records across campaigns in a workspace.
+   * If a process crashed or timed out while a prospect was 'sending':
+   * - Determines whether the original provider operation has a durable provider/message execution record
+   * - If delivered: reconciles prospect to 'delivered', advances sequence step, updates sent_count
+   * - If failed: reconciles prospect to 'failed'
+   * - If provider outcome is ambiguous / unknown: marks prospect 'needs_review' rather than blindly resending!
+   */
+  public static async recoverStaleSendingRecords(
+    workspaceId: string,
+    customTimeoutMs?: number
+  ): Promise<StaleRecoveryResult> {
+    const activePool = postgresPool || pool;
+    if (!activePool) {
+      return { recoveredCount: 0, deliveredCount: 0, failedCount: 0, ambiguousCount: 0, details: [], error: 'DATABASE_UNAVAILABLE' };
+    }
+
+    const timeoutMs = customTimeoutMs || this.getStaleTimeoutMs();
+    const cutoffTime = Date.now() - timeoutMs;
+    const details: StaleRecoveryDetail[] = [];
+    let recoveredCount = 0;
+    let deliveredCount = 0;
+    let failedCount = 0;
+    let ambiguousCount = 0;
+
+    const client = await activePool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const campaignsRes = await client.query(
+        `SELECT id, target_prospects, sent_count, sequence_steps 
+         FROM campaigns 
+         WHERE workspace_id = $1 
+         FOR UPDATE`,
+        [workspaceId]
+      );
+
+      for (const campaign of campaignsRes.rows) {
+        const campaignId = campaign.id;
+        let prospects: any[] = Array.isArray(campaign.target_prospects)
+          ? campaign.target_prospects
+          : (typeof campaign.target_prospects === 'string' ? JSON.parse(campaign.target_prospects) : []);
+
+        const sequenceSteps = Array.isArray(campaign.sequence_steps)
+          ? campaign.sequence_steps
+          : (typeof campaign.sequence_steps === 'string' ? JSON.parse(campaign.sequence_steps) : []);
+
+        let campaignModified = false;
+        let newSentCount = campaign.sent_count || 0;
+
+        for (let i = 0; i < prospects.length; i++) {
+          const p = prospects[i];
+
+          // Check if prospect is stuck in 'sending'
+          if (p.status === 'sending') {
+            const claimedTime = p.claimedAt ? new Date(p.claimedAt).getTime() : 0;
+            const isStale = !claimedTime || claimedTime < cutoffTime;
+
+            if (isStale) {
+              const currentStepIdx = p.currentStep !== undefined ? p.currentStep : 0;
+
+              // Check durable execution log
+              let execRow: any = null;
+              try {
+                const execRes = await client.query(
+                  `SELECT * FROM campaign_step_executions 
+                   WHERE workspace_id = $1 AND campaign_id = $2 AND prospect_id = $3 AND sequence_step = $4`,
+                  [workspaceId, campaignId, p.id, currentStepIdx]
+                );
+                if (execRes.rows.length > 0) {
+                  execRow = execRes.rows[0];
+                }
+              } catch {}
+
+              // Also check outreach_threads for linked message ID if any
+              let threadRow: any = null;
+              try {
+                const threadRes = await client.query(
+                  `SELECT provider_message_id, provider_thread_id FROM outreach_threads 
+                   WHERE workspace_id = $1 AND campaign_id = $2 AND prospect_id = $3 
+                   LIMIT 1`,
+                  [workspaceId, campaignId, p.id]
+                );
+                if (threadRes.rows.length > 0) {
+                  threadRow = threadRes.rows[0];
+                }
+              } catch {}
+
+              const confirmedMessageId = execRow?.provider_message_id || threadRow?.provider_message_id;
+
+              if (execRow?.status === 'delivered' || confirmedMessageId) {
+                // CASE 1: Message was delivered before the crash!
+                // Reconcile prospect to delivered and advance step
+                const upcomingStepDef = sequenceSteps[currentStepIdx + 1];
+                const nextDelayDays = upcomingStepDef?.delayDays || 3;
+                const nextStepDate = upcomingStepDef
+                  ? new Date(Date.now() + nextDelayDays * 86400000).toISOString()
+                  : null;
+
+                prospects[i] = {
+                  ...p,
+                  currentStep: currentStepIdx + 1,
+                  status: upcomingStepDef ? 'delivered' : 'converted',
+                  nextStepAt: nextStepDate,
+                  claimedAt: null,
+                  executionId: null,
+                  idempotencyKey: null,
+                  lastError: null,
+                  lastTouch: `Recovered: Step ${currentStepIdx + 1} confirmed delivered (Msg: ${confirmedMessageId || 'verified'})`
+                };
+
+                newSentCount++;
+                campaignModified = true;
+                recoveredCount++;
+                deliveredCount++;
+                details.push({
+                  campaignId,
+                  prospectId: p.id,
+                  action: 'recovered_delivered',
+                  reason: `Confirmed delivery with provider message ID: ${confirmedMessageId || 'delivered'}`
+                });
+              } else if (execRow?.status === 'failed') {
+                // CASE 2: Message failed before crash
+                prospects[i] = {
+                  ...p,
+                  status: 'failed',
+                  claimedAt: null,
+                  executionId: null,
+                  idempotencyKey: null,
+                  lastError: execRow.error_message || 'Provider dispatch failed prior to process crash',
+                  lastTouch: `Recovery: Dispatch failed prior to timeout`
+                };
+                campaignModified = true;
+                recoveredCount++;
+                failedCount++;
+                details.push({
+                  campaignId,
+                  prospectId: p.id,
+                  action: 'recovered_failed',
+                  reason: execRow.error_message || 'Provider failed prior to crash'
+                });
+              } else {
+                // CASE 3: Ambiguous state (status still 'sending', no confirmation)
+                // DO NOT resend blindly! Mark 'needs_review' to surface ambiguity safely
+                prospects[i] = {
+                  ...p,
+                  status: 'needs_review',
+                  claimedAt: null,
+                  executionId: null,
+                  idempotencyKey: null,
+                  lastError: 'STALE_SENDING_AMBIGUOUS',
+                  lastTouch: 'Execution timed out in sending state without provider delivery confirmation. Operator review required.'
+                };
+
+                // Mark execution attempt as unresolved_recovery
+                try {
+                  await client.query(
+                    `UPDATE campaign_step_executions 
+                     SET status = 'unresolved_recovery', 
+                         error_code = 'STALE_SENDING_AMBIGUOUS',
+                         error_message = 'Execution timed out without provider confirmation',
+                         updated_at = now() 
+                     WHERE workspace_id = $1 AND campaign_id = $2 AND prospect_id = $3 AND sequence_step = $4`,
+                    [workspaceId, campaignId, p.id, currentStepIdx]
+                  );
+                } catch {}
+
+                campaignModified = true;
+                recoveredCount++;
+                ambiguousCount++;
+                details.push({
+                  campaignId,
+                  prospectId: p.id,
+                  action: 'marked_needs_review',
+                  reason: 'Execution timed out without provider confirmation. Surfaced to operator to prevent double-send.'
+                });
+              }
+            }
+          }
+        }
+
+        if (campaignModified) {
+          await client.query(
+            `UPDATE campaigns 
+             SET target_prospects = $1, 
+                 sent_count = $2, 
+                 updated_at = now() 
+             WHERE id = $3 AND workspace_id = $4`,
+            [JSON.stringify(prospects), newSentCount, campaignId, workspaceId]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+
+      return {
+        recoveredCount,
+        deliveredCount,
+        failedCount,
+        ambiguousCount,
+        details
+      };
+    } catch (err: any) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {}
+      console.error('[CAMPAIGN_EXECUTION] Stale recovery error:', err.message);
+      return {
+        recoveredCount: 0,
+        deliveredCount: 0,
+        failedCount: 0,
+        ambiguousCount: 0,
+        details: [],
+        error: sanitizeDiagnosticError(err)
+      };
+    } finally {
+      client.release();
+    }
   }
 
   /**
@@ -500,22 +1065,30 @@ export class CampaignExecutionService {
 
   /**
    * Processes all due campaign sequence steps across active campaigns for a workspace.
+   * Runs recovery for stale sending records first, then executes due steps.
    */
   public static async processDueCampaignSteps(workspaceId: string): Promise<{
     processedCount: number;
     executedCount: number;
+    recoveredCount: number;
     errors: string[];
   }> {
     const activePool = postgresPool || pool;
     if (!activePool) {
-      return { processedCount: 0, executedCount: 0, errors: ['DATABASE_UNAVAILABLE'] };
+      return { processedCount: 0, executedCount: 0, recoveredCount: 0, errors: ['DATABASE_UNAVAILABLE'] };
     }
 
     let processedCount = 0;
     let executedCount = 0;
+    let recoveredCount = 0;
     const errors: string[] = [];
 
     try {
+      // 1. Recover any abandoned or stale sending records first
+      const recoveryRes = await this.recoverStaleSendingRecords(workspaceId);
+      recoveredCount = recoveryRes.recoveredCount;
+
+      // 2. Scan active campaigns for eligible due steps
       const activeCampaigns = await activePool.query(
         `SELECT id, target_prospects, status FROM campaigns WHERE workspace_id = $1 AND status = 'active'`,
         [workspaceId]
@@ -536,15 +1109,15 @@ export class CampaignExecutionService {
                 executedCount++;
               }
             } catch (err: any) {
-              errors.push(`Prospect ${prospect.id} step execution failed: ${err.message}`);
+              errors.push(`Prospect ${prospect.id} step execution failed: ${sanitizeDiagnosticError(err)}`);
             }
           }
         }
       }
 
-      return { processedCount, executedCount, errors };
+      return { processedCount, executedCount, recoveredCount, errors };
     } catch (err: any) {
-      return { processedCount, executedCount, errors: [err.message] };
+      return { processedCount, executedCount, recoveredCount, errors: [sanitizeDiagnosticError(err)] };
     }
   }
 }

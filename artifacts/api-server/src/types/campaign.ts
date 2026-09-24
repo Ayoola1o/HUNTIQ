@@ -18,9 +18,13 @@ export interface TargetProspectItem {
   domain?: string | null;
   email?: string | null;
   emailStatus?: 'verified' | 'unverified' | 'not_found';
-  status: 'pending' | 'delivered' | 'opened' | 'replied' | 'converted' | 'sending' | 'failed';
+  status: 'pending' | 'delivered' | 'opened' | 'replied' | 'converted' | 'sending' | 'failed' | 'needs_review';
   currentStep?: number;
   nextStepAt?: string | null;
+  claimedAt?: string | null;
+  executionId?: string | null;
+  idempotencyKey?: string | null;
+  lastError?: string | null;
   opportunityScore: number;
   lastTouch: string;
 }
