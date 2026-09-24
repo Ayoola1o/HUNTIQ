@@ -50,7 +50,6 @@ async function buildAll() {
       "pg-native",
       "oracledb",
       "mongodb-client-encryption",
-      "nodemailer",
       "handlebars",
       "knex",
       "typeorm",
@@ -125,52 +124,6 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     path.resolve(distDir, "migrations"),
     { recursive: true },
   );
-
-  // Also bundle Vercel Serverless Function entrypoint if api/serverless.ts exists
-  const serverlessEntry = path.resolve(artifactDir, "../../api/serverless.ts");
-  const serverlessOut = path.resolve(artifactDir, "../../api/index.js");
-  if (existsSync(serverlessEntry)) {
-    console.log("[HUNTIQ] Bundling Vercel serverless function to api/index.js...");
-    await esbuild({
-      entryPoints: [serverlessEntry],
-      platform: "node",
-      target: "node20",
-      bundle: true,
-      format: "esm",
-      outfile: serverlessOut,
-      logLevel: "info",
-      external: [
-        "*.node",
-        "pg-native",
-        "nodemailer",
-        "googleapis",
-        "firebase-admin",
-        "better-sqlite3"
-      ],
-      sourcemap: "inline",
-      plugins: [
-        esbuildPluginPino({ transports: ["pino-pretty"] })
-      ],
-      banner: {
-        js: `import { createRequire as __bannerCrReq } from 'node:module';
-import __bannerPath from 'node:path';
-import __bannerUrl from 'node:url';
-
-globalThis.require = __bannerCrReq(import.meta.url);
-globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
-globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
-`,
-      },
-    });
-
-    const apiMigrationsDir = path.resolve(artifactDir, "../../api/migrations");
-    await cp(
-      path.resolve(artifactDir, "src/database/migrations"),
-      apiMigrationsDir,
-      { recursive: true }
-    );
-    console.log("[HUNTIQ] Successfully bundled Vercel Serverless Function to api/index.js");
-  }
 }
 
 buildAll().catch((err) => {
