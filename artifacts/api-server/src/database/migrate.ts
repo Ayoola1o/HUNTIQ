@@ -6,7 +6,9 @@ import { config } from '../config/env';
 
 async function resolveMigrationsDirectory(): Promise<string> {
   const candidates = [
+    join(process.cwd(), 'api/migrations'),
     join(dirname(fileURLToPath(import.meta.url)), 'migrations'),
+    join(dirname(fileURLToPath(import.meta.url)), '../migrations'),
     join(process.cwd(), 'artifacts/api-server/src/database/migrations'),
     join(process.cwd(), 'artifacts/api-server/dist/migrations'),
     join(process.cwd(), 'src/database/migrations')

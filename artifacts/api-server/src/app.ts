@@ -35,7 +35,7 @@ import { config, getProductionConfigErrors } from './config/env';
 export const createApp = () => {
   registerDefaultJobProviders();
   if (process.env.DATABASE_URL) {
-    ensureDatabaseMigrated().catch((err) => {
+    ensureDatabaseMigrated().catch((err: any) => {
       console.warn('[HUNTIQ] Warning: Auto-migration during boot deferred or failed:', err.message || err);
     });
   }
