@@ -29,7 +29,7 @@ export class AshbyAdapter implements IJobSourceAdapter {
       title: raw.title,
       department,
       functionArea,
-      seniority,
+      seniority: seniority.seniority,
       location: raw.location || 'Lagos, Nigeria',
       country: 'Nigeria',
       remote,

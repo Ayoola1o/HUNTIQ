@@ -66,6 +66,8 @@ export class PostgresOutreachRepository implements OutreachRepository {
         provider: r.provider || 'gmail',
         providerThreadId: r.provider_thread_id || null,
         providerMessageId: r.provider_message_id || null,
+        campaignId: r.campaign_id || null,
+        prospectId: r.prospect_id || null,
         stopSequenceOnReply: r.stop_sequence_on_reply !== false,
         thread: r.messages || []
       }));
@@ -110,8 +112,14 @@ export class PostgresOutreachRepository implements OutreachRepository {
         campaignName: r.metadata?.campaignName,
         opportunityScore: r.opportunity_score,
         unread: Boolean(r.metadata?.unread),
+        provider: r.provider || 'gmail',
+        providerThreadId: r.provider_thread_id || null,
+        providerMessageId: r.provider_message_id || null,
+        campaignId: r.campaign_id || null,
+        prospectId: r.prospect_id || null,
+        stopSequenceOnReply: r.stop_sequence_on_reply !== false,
         thread: r.messages || []
-      };
+      } as any;
     } catch (err: any) {
       if (this.isProduction()) {
         const error = new Error(`Database error retrieving outreach thread: ${err.message}`);
@@ -129,9 +137,9 @@ export class PostgresOutreachRepository implements OutreachRepository {
         INSERT INTO outreach_threads (
           workspace_id, user_id, contact_name, contact_role, company_name, domain,
           email, phone, channel, status, opportunity_score, messages, metadata,
-          provider, provider_thread_id, provider_message_id
+          provider, provider_thread_id, provider_message_id, campaign_id, prospect_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         RETURNING *
       `;
       const metadata = {
@@ -159,7 +167,9 @@ export class PostgresOutreachRepository implements OutreachRepository {
         JSON.stringify(metadata),
         (outreach as any).provider || 'gmail',
         (outreach as any).providerThreadId || null,
-        (outreach as any).providerMessageId || null
+        (outreach as any).providerMessageId || null,
+        (outreach as any).campaignId || (outreach as any).campaign_id || null,
+        (outreach as any).prospectId || (outreach as any).prospect_id || null
       ]);
 
       const r = result.rows[0];
@@ -181,8 +191,14 @@ export class PostgresOutreachRepository implements OutreachRepository {
         campaignName: metadata.campaignName,
         opportunityScore: r.opportunity_score,
         unread: false,
+        provider: r.provider || 'gmail',
+        providerThreadId: r.provider_thread_id || null,
+        providerMessageId: r.provider_message_id || null,
+        campaignId: r.campaign_id || null,
+        prospectId: r.prospect_id || null,
+        stopSequenceOnReply: r.stop_sequence_on_reply !== false,
         thread: r.messages || []
-      };
+      } as any;
     } catch (err: any) {
       if (this.isProduction()) {
         const error = new Error(`Database error creating outreach thread: ${err.message}`);

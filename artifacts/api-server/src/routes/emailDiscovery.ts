@@ -105,7 +105,7 @@ emailDiscoveryRouter.get(
         });
       }
 
-      const job = await EmailDiscoveryService.getScrapeJobStatus(req.params.id, workspaceId);
+      const job = await EmailDiscoveryService.getScrapeJobStatus(req.params.id as string, workspaceId);
       if (!job) {
         return res.status(404).json({
           success: false,
@@ -143,7 +143,7 @@ emailDiscoveryRouter.post(
         });
       }
 
-      const job = await EmailDiscoveryService.cancelScrapeJob(req.params.id, workspaceId);
+      const job = await EmailDiscoveryService.cancelScrapeJob(req.params.id as string, workspaceId);
       if (!job) {
         return res.status(404).json({
           success: false,

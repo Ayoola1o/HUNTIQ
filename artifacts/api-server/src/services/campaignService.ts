@@ -31,15 +31,15 @@ export class CampaignService {
       c.industry?.toLowerCase().includes('saas')
     );
     const techCompanyIds = new Set(techCompanies.map(c => c.id));
-    const techContacts = contacts.filter(c => techCompanyIds.has(c.companyId));
+    const techContacts = contacts.filter(c => c.companyId && techCompanyIds.has(c.companyId));
 
     const techProspects: TargetProspectItem[] = techContacts.slice(0, 8).map((cont, idx) => {
       const comp = companies.find(c => c.id === cont.companyId);
       const statuses: TargetProspectItem['status'][] = ['replied', 'opened', 'delivered', 'pending', 'converted'];
       return {
         id: `p-tech-${cont.id}`,
-        contactName: cont.name,
-        contactRole: cont.title || 'Decision Maker',
+        contactName: cont.name || `${cont.firstName} ${cont.lastName}`,
+        contactRole: cont.title || cont.jobTitle || 'Decision Maker',
         companyName: comp?.name || 'Technology Company',
         domain: comp?.domain || '',
         email: cont.email || null,
@@ -88,15 +88,15 @@ export class CampaignService {
     // Campaign 2: Pan-African FinTech Compliance Outreach
     const fintechCompanies = companies.filter(c => c.industry?.toLowerCase().includes('fintech') || c.industry?.toLowerCase().includes('pay'));
     const fintechCompanyIds = new Set(fintechCompanies.map(c => c.id));
-    const fintechContacts = contacts.filter(c => fintechCompanyIds.has(c.companyId));
+    const fintechContacts = contacts.filter(c => c.companyId && fintechCompanyIds.has(c.companyId));
 
     const fintechProspects: TargetProspectItem[] = fintechContacts.slice(0, 6).map((cont, idx) => {
       const comp = companies.find(c => c.id === cont.companyId);
       const statuses: TargetProspectItem['status'][] = ['opened', 'replied', 'delivered', 'pending'];
       return {
         id: `p-fin-${cont.id}`,
-        contactName: cont.name,
-        contactRole: cont.title || 'Executive',
+        contactName: cont.name || `${cont.firstName} ${cont.lastName}`,
+        contactRole: cont.title || cont.jobTitle || 'Executive',
         companyName: comp?.name || 'FinTech Scaleup',
         domain: comp?.domain || 'fintech.com',
         email: cont.email || `contact@${comp?.domain || 'fintech.com'}`,
@@ -138,8 +138,8 @@ export class CampaignService {
       const comp = companies.find(c => c.id === cont.companyId);
       return {
         id: `p-ent-${cont.id}`,
-        contactName: cont.name,
-        contactRole: cont.title || 'Director of Operations',
+        contactName: cont.name || `${cont.firstName} ${cont.lastName}`,
+        contactRole: cont.title || cont.jobTitle || 'Director of Operations',
         companyName: comp?.name || 'Commercial Enterprise',
         domain: comp?.domain || 'enterprise.com',
         email: cont.email || `director@${comp?.domain || 'enterprise.com'}`,
@@ -291,8 +291,8 @@ export class CampaignService {
       const comp = availableCompanies.find(c => c.id === cont.companyId);
       return {
         id: `p-new-${Date.now()}-${idx}`,
-        contactName: cont.name,
-        contactRole: cont.title || 'Decision Maker',
+        contactName: cont.name || `${cont.firstName} ${cont.lastName}`,
+        contactRole: cont.title || cont.jobTitle || 'Decision Maker',
         companyName: comp?.name || 'Target Enterprise',
         domain: comp?.domain || '',
         email: cont.email || null,
@@ -304,8 +304,8 @@ export class CampaignService {
 
     const generatedOutreach = outreachEngine.generateOutreach(
       availableCompanies[0]?.name || 'Target Enterprise',
-      availableContacts[0]?.name || 'Executive Lead',
-      availableContacts[0]?.title || 'VP Growth',
+      availableContacts[0]?.name || (availableContacts[0] ? `${availableContacts[0].firstName} ${availableContacts[0].lastName}` : 'Executive Lead'),
+      availableContacts[0]?.title || availableContacts[0]?.jobTitle || 'VP Growth',
       'Recent Market Momentum & Headcount Growth',
       'Executive & Direct'
     );

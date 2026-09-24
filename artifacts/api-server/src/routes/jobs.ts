@@ -141,7 +141,7 @@ jobsRouter.get('/jobs/velocity/:companyId', async (req: AuthenticatedRequest, re
   }
   const { companyId } = req.params;
 
-  const velocity = await jobService.calculateHiringVelocity(companyId, workspaceId);
+  const velocity = await jobService.calculateHiringVelocity(companyId as string, workspaceId);
 
   res.status(200).json({
     success: true,

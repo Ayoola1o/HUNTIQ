@@ -38,7 +38,7 @@ export class EnrichmentService {
         for (const record of crawlResult.records) {
           // Check if contact already exists in workspace
           const existing = db.contacts.find(
-            c => c.companyId === company.id && c.email.toLowerCase() === record.email.toLowerCase()
+            c => c.companyId === company.id && c.email?.toLowerCase() === record.email.toLowerCase()
           );
           if (existing) continue;
 
@@ -65,7 +65,7 @@ export class EnrichmentService {
             department: record.type === 'role' ? 'Operations' : 'Executive',
             seniority: record.jobTitle?.match(/Chief|CEO|CTO|COO|CFO|VP|Director|Head|Founder/i) ? 'CXO' : 'MID',
             email: record.email,
-            emailStatus: isDeliverable ? 'VALID' : 'UNVERIFIED',
+            emailStatus: isDeliverable ? 'VALID' : 'UNKNOWN',
             emailConfidence: isDeliverable ? 95 : 65,
             phone: record.phone || company.phone || undefined,
             linkedinUrl: record.socials?.linkedin || company.linkedinUrl || undefined,

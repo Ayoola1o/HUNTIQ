@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Response } from 'express';
 import type { ApiResponse } from '../types/api';
-import type { PipelineDealItem } from '../../src/types/pipeline';
+import type { PipelineDealItem } from '../types/pipeline';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import { createPipelineRepository } from '../repositories/pipeline';
 import { DEFAULT_USER_ID, DEFAULT_WORKSPACE_ID } from '../middleware/auth';
@@ -73,7 +73,6 @@ pipelineRouter.post('/pipeline/deals', async (req: AuthenticatedRequest, res: Re
 
   const dealPayload: Partial<PipelineDealItem> = {
     id: req.body.id,
-    company: req.body.company || req.body.companyName || 'Target Account',
     companyName: req.body.companyName || req.body.company || 'Target Account',
     domain: req.body.domain || 'domain.com',
     title: req.body.title || req.body.dealTitle || 'Strategic Opportunity',
@@ -117,7 +116,7 @@ pipelineRouter.patch('/pipeline/deals/:id', async (req: AuthenticatedRequest, re
   const userId = req.user?.id || DEFAULT_USER_ID;
   const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID;
 
-  const existing = await pipelineRepository.getById(id, userId, workspaceId);
+  const existing = await pipelineRepository.getById(id as string, userId, workspaceId);
   if (!existing) {
     return res.status(404).json({
       success: false,
@@ -126,7 +125,7 @@ pipelineRouter.patch('/pipeline/deals/:id', async (req: AuthenticatedRequest, re
     });
   }
 
-  const saved = await pipelineRepository.update(id, userId, workspaceId, req.body);
+  const saved = await pipelineRepository.update(id as string, userId, workspaceId, req.body);
 
   res.status(200).json({
     success: true,
@@ -140,7 +139,7 @@ pipelineRouter.delete('/pipeline/deals/:id', async (req: AuthenticatedRequest, r
   const userId = req.user?.id || DEFAULT_USER_ID;
   const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID;
 
-  const deleted = await pipelineRepository.delete(id, userId, workspaceId);
+  const deleted = await pipelineRepository.delete(id as string, userId, workspaceId);
   if (!deleted) {
     return res.status(404).json({
       success: false,

@@ -33,7 +33,7 @@ export class IngestionEngine {
     // 1. Resolve Company
     let company: DbCompany | null = null;
     try {
-      company = (await this.companyRepo.findById(companyId)) as any;
+      company = (await (this.companyRepo as any).getById?.(companyId, workspaceId)) || (await (this.companyRepo as any).findById?.(companyId)) || null;
     } catch (_e) {}
 
     if (!company) {
@@ -107,6 +107,7 @@ export class IngestionEngine {
             externalId: nj.externalId,
             title: nj.title,
             department: nj.department || 'General',
+            seniority: (nj as any).seniority || 'MID',
             location: nj.location || 'Remote',
             country: nj.country || 'Nigeria',
             remote: nj.isRemote ?? true,

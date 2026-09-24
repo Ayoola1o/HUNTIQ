@@ -51,14 +51,14 @@ export interface DigitalAuditPackage {
   overallScore: number; // 0 - 100 maturity score
 
   digitalMaturity: {
-    website: number;
-    localPresence: number;
-    emailCredibility: number;
-    conversionTools: number;
-    socialPresence: number;
-    localSeo: number;
-    adsAndTracking: number;
-    emailMarketing: number;
+    website: number;       // 0 - 25
+    localPresence: number; // 0 - 15
+    emailCredibility: number; // 0 - 10
+    conversionTools: number;  // 0 - 20
+    socialPresence: number;   // 0 - 10
+    localSeo: number;         // 0 - 20
+    adsAndTracking: number;   // 0 - 15
+    emailMarketing: number;   // 0 - 15
   };
 
   gapScore: number; // 0 - 100 (Higher = Bigger Opportunity / Urgent Problem)
@@ -96,7 +96,7 @@ export interface DigitalAuditPackage {
 
   pitchAngles: PitchAngles;
 
-  conversionProbability: number;
+  conversionProbability: number; // e.g. 78%
 
   recommendedNextAction: 'CALL' | 'EMAIL' | 'LINKEDIN' | 'WHATSAPP' | 'MANUAL_RESEARCH';
 

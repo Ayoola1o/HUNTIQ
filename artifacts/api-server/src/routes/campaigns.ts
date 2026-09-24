@@ -32,7 +32,7 @@ campaignsRouter.get('/campaigns', async (req: AuthenticatedRequest, res: Respons
       activeCampaigns: campaigns.filter(c => c.status === 'active').length,
       totalAudience: campaigns.reduce((acc, c) => acc + (c.audienceCount || 0), 0),
       totalReplies: campaigns.reduce((acc, c) => acc + Math.round((c.sentCount || 0) * (c.replyRate || 0) / 100), 0),
-      opportunitiesCreated: campaigns.reduce((acc, c) => acc + (c.opportunitiesCreated || 0), 0),
+      opportunitiesCreated: campaigns.reduce((acc, c) => acc + (c.opportunitiesCount || (c as any).opportunitiesCreated || 0), 0),
       pipelineGenerated: campaigns.reduce((acc, c) => acc + (c.expectedValue || 0), 0)
     };
 

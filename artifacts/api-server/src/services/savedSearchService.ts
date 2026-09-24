@@ -300,15 +300,14 @@ export class SavedSearchService {
     const liveMatches = prospectorEngine.searchProspects({
       query: name,
       industries: input.filters?.industries?.length ? input.filters.industries : [industry],
-      locations: input.filters?.locations?.length ? input.filters.locations : [location],
-      limit: 10
-    });
+      locations: input.filters?.locations?.length ? input.filters.locations : [location]
+    } as any);
 
     const signalsList = signalEngine.getAllSignals();
 
     const matchedCompanies: MatchedCompanyItem[] = liveMatches.length > 0
       ? liveMatches.map((c, idx) => {
-          const compSignals = signalsList.filter(s => s.companyId === c.id).map(s => s.title);
+          const compSignals = signalsList.filter((s: any) => s.companyId === c.id || s.companyName === c.name).map(s => s.title);
           return {
             id: `mc-${searchId}-${idx + 1}`,
             companyName: c.name,
@@ -409,7 +408,7 @@ export class SavedSearchService {
     const current = this.searches[index];
     const isMonitoringChanged = updates.monitoringEnabled !== undefined && updates.monitoringEnabled !== current.monitoringEnabled;
 
-    const updatedActivities = [...current.activityHistory];
+    const updatedActivities = [...(current.activityHistory || [])];
     if (isMonitoringChanged) {
       updatedActivities.unshift({
         id: `act-${Date.now()}`,
@@ -456,7 +455,7 @@ export class SavedSearchService {
           title: `Manual scan completed: +${newlyDiscoveredCount} new matches verified`,
           detail: `Prospector Agent cross-referenced company directory and detected ${newlyDiscoveredCount} new high-intent signals.`
         },
-        ...current.activityHistory
+        ...(current.activityHistory || [])
       ]
     };
 
@@ -503,7 +502,7 @@ export class SavedSearchService {
           title: 'Alert preferences updated',
           detail: `Notification cadence set to ${alertFrequency || current.alertFrequency}.`
         },
-        ...current.activityHistory
+        ...(current.activityHistory || [])
       ]
     };
 

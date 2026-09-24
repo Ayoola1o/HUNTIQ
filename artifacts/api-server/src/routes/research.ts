@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import type { ApiResponse } from '../types/api';
 import { researchEngine } from '../engine-client/researchEngine';
 import { researchService } from '../services/researchService';
@@ -164,7 +164,7 @@ researchRouter.delete('/research/reports/:id', (req: AuthenticatedRequest, res: 
  * POST /api/research/generate (Legacy dossier)
  */
 researchRouter.post('/research/generate', (req: Request, res: Response) => {
-  const { companyName } = req.body || {};
+  const { companyName } = (req.body as any) || {};
 
   if (!companyName) {
     return res.status(400).json({

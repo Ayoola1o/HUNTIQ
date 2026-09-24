@@ -112,7 +112,8 @@ export class GreenhouseJobProvider implements JobProvider {
         country: 'Nigeria',
         isRemote: true,
         jobUrl: `https://boards.greenhouse.io/${boardToken}/jobs/01`,
-        postedAt: new Date(Date.now() - 3 * 86400000).toISOString()
+        postedAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+        rawPayload: {}
       },
       {
         externalId: `gh_${boardToken}_02`,
@@ -123,7 +124,8 @@ export class GreenhouseJobProvider implements JobProvider {
         country: 'United Kingdom',
         isRemote: false,
         jobUrl: `https://boards.greenhouse.io/${boardToken}/jobs/02`,
-        postedAt: new Date(Date.now() - 1 * 86400000).toISOString()
+        postedAt: new Date(Date.now() - 1 * 86400000).toISOString(),
+        rawPayload: {}
       }
     ];
   }

@@ -201,13 +201,13 @@ signalsRouter.get('/signals/:companyId', async (req: AuthenticatedRequest, res: 
   const signalRepo = createSignalRepository();
   let signals: any[] = [];
   try {
-    signals = await signalRepo.findByCompanyId(companyId, workspaceId);
+    signals = await signalRepo.findByCompanyId(companyId as string, workspaceId);
   } catch {
     signals = [];
   }
 
   if (signals.length === 0) {
-    signals = db.getSignalsByCompany(companyId, workspaceId);
+    signals = db.getSignalsByCompany(companyId as string, workspaceId);
   }
 
   const enriched = signals.map(s => ({

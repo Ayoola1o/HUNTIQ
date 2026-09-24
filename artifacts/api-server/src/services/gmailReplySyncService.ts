@@ -61,7 +61,7 @@ export class GmailReplySyncService {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
         if (profileRes.ok) {
-          const profileData = await profileRes.json();
+          const profileData: any = await profileRes.json();
           const historyId = profileData.historyId ? String(profileData.historyId) : undefined;
 
           if (activePool && historyId) {
@@ -104,7 +104,7 @@ export class GmailReplySyncService {
         })
       });
 
-      const watchData = await watchRes.json();
+      const watchData: any = await watchRes.json();
       if (!watchRes.ok) {
         const errorMsg = watchData.error?.message || 'Failed to register Gmail watch with Google API';
         console.error('[GMAIL_WATCH] Registration failed:', errorMsg);
@@ -358,6 +358,7 @@ export class GmailReplySyncService {
 
     let processedCount = 0;
     let repliesCount = 0;
+    let syncHaltFailed = false;
     let latestHistoryId = targetHistoryId || startHistoryId;
 
     try {
@@ -383,7 +384,7 @@ export class GmailReplySyncService {
         };
       }
 
-      const historyData = await historyRes.json();
+      const historyData: any = await historyRes.json();
       latestHistoryId = String(historyData.historyId || latestHistoryId);
       const historyItems = historyData.history || [];
 
@@ -418,7 +419,7 @@ export class GmailReplySyncService {
 
           if (!msgRes.ok) continue;
 
-          const msgData = await msgRes.json();
+          const msgData: any = await msgRes.json();
           const headers: Record<string, string> = {};
           for (const h of msgData.payload?.headers || []) {
             if (h.name && h.value) {
@@ -552,14 +553,30 @@ export class GmailReplySyncService {
             // 6. STOP-ON-REPLY: Halt actual campaign sequences in production database
             const shouldStopSequence = matchedThread.stop_sequence_on_reply !== false && stopSequenceSetting;
             if (shouldStopSequence) {
-              await CampaignExecutionService.haltProspectSequence(workspaceId, {
+              const haltRes = await CampaignExecutionService.haltProspectSequence(workspaceId, {
                 campaignId: matchedThread.campaign_id,
                 prospectId: matchedThread.prospect_id,
                 contactEmail: parsedSender.email,
                 userId: matchedThread.user_id,
                 reason: `Prospect replied via Gmail (Thread: ${threadId})`
               });
-              console.log(`[STOP_ON_REPLY] Successfully halted sequence for ${parsedSender.email} in workspace ${workspaceId}`);
+
+              if (!haltRes.success) {
+                syncHaltFailed = true;
+                console.error(`[STOP_ON_REPLY] Campaign sequence halt failed for ${parsedSender.email}: ${haltRes.error}`);
+                if (activePool) {
+                  try {
+                    await activePool.query(
+                      `UPDATE workspace_integrations 
+                       SET last_sync_error = $1, updated_at = now() 
+                       WHERE workspace_id = $2 AND provider = 'gmail'`,
+                      [`REPLY_RECORDED_BUT_SEQUENCE_UPDATE_FAILED: ${parsedSender.email}`, workspaceId]
+                    );
+                  } catch {}
+                }
+              } else {
+                console.log(`[STOP_ON_REPLY] Successfully halted sequence for ${parsedSender.email} in workspace ${workspaceId}`);
+              }
             }
           }
 
@@ -595,16 +612,37 @@ export class GmailReplySyncService {
 
       // Update workspace_integrations with advanced historyId
       if (activePool && latestHistoryId) {
-        await activePool.query(
-          `UPDATE workspace_integrations 
-           SET watch_history_id = $1, 
-               last_synced_at = now(), 
-               sync_status = 'idle', 
-               last_sync_error = null, 
-               updated_at = now() 
-           WHERE workspace_id = $2 AND provider = 'gmail'`,
-          [latestHistoryId, workspaceId]
-        );
+        if (!syncHaltFailed) {
+          await activePool.query(
+            `UPDATE workspace_integrations 
+             SET watch_history_id = $1, 
+                 last_synced_at = now(), 
+                 sync_status = 'idle', 
+                 last_sync_error = null, 
+                 updated_at = now() 
+             WHERE workspace_id = $2 AND provider = 'gmail'`,
+            [latestHistoryId, workspaceId]
+          );
+        } else {
+          await activePool.query(
+            `UPDATE workspace_integrations 
+             SET watch_history_id = $1, 
+                 last_synced_at = now(), 
+                 updated_at = now() 
+             WHERE workspace_id = $2 AND provider = 'gmail'`,
+            [latestHistoryId, workspaceId]
+          );
+        }
+      }
+
+      if (syncHaltFailed) {
+        return {
+          success: false,
+          processedCount,
+          repliesCount,
+          newHistoryId: latestHistoryId,
+          error: 'REPLY_RECORDED_BUT_SEQUENCE_UPDATE_FAILED'
+        };
       }
 
       return {

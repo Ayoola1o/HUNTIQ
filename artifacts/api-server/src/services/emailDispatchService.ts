@@ -220,9 +220,9 @@ export class EmailDispatchService {
           })
         });
 
-        const data = await resendRes.json();
+        const data = (await resendRes.json()) as any;
         if (!resendRes.ok) {
-          throw new Error(data.message || `Resend HTTP error ${resendRes.status}`);
+          throw new Error(data?.message || `Resend HTTP error ${resendRes.status}`);
         }
 
         return {

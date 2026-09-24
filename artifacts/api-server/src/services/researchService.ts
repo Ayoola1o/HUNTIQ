@@ -241,6 +241,9 @@ export class ResearchService {
           intro: 'Hi Michael, Ayoola calling from Peak Consulting regarding FinServe\'s Abidjan compliance team ramp-up.',
           valueHook: 'We help fintech directors accelerate bilingual talent readiness and minimize onboarding friction.',
           close: 'Let\'s schedule a brief 10-minute discovery call next week.'
+        },
+        whatsApp: {
+          text: 'Hi Michael, reaching out regarding FinServe\'s Abidjan compliance team ramp-up.'
         }
       },
       sources: [
@@ -303,7 +306,7 @@ export class ResearchService {
     const dossier = researchEngine.generateDossier(companyName);
     const id = `res-${Date.now()}`;
     const cleanDomain = domain && domain.trim().length > 0 ? domain.trim() : null;
-    const cleanIndustry = industry || dossier.industry || 'Technology & SaaS';
+    const cleanIndustry = industry || (dossier as any).industry || 'Technology & SaaS';
 
     const newReport: CompanyResearchReport = {
       id,
@@ -320,7 +323,7 @@ export class ResearchService {
       founded: '2019',
       status: 'complete',
       lastUpdated: 'Just now',
-      opportunityScore: dossier.opportunityScore || 92,
+      opportunityScore: (dossier as any).opportunityScore || 92,
       opportunityLevel: 'Very High',
       buyingIntent: 'Very High',
       relationship: 'New Prospect',
@@ -437,7 +440,7 @@ export class ResearchService {
           iconBg: '#ecfdf5',
           iconColor: '#059669'
         },
-        ...current.signalsTimeline
+        ...(current.signalsTimeline || [])
       ]
     };
 

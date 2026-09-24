@@ -222,7 +222,7 @@ scraperRouter.post('/scraper/crawl', async (req: AuthenticatedRequest, res: Resp
  * SSE endpoint for live crawler telemetry
  */
 scraperRouter.get('/scraper/crawl/stream/:jobId', (req: AuthenticatedRequest, res: Response) => {
-  const jobId = req.params.jobId;
+  const jobId = req.params.jobId as string;
   const job = activeCrawlJobs.get(jobId);
 
   if (!job) {
@@ -267,7 +267,7 @@ scraperRouter.get('/scraper/crawl/stream/:jobId', (req: AuthenticatedRequest, re
  * Cancels a running crawl session
  */
 scraperRouter.post('/scraper/crawl/cancel/:jobId', (req: AuthenticatedRequest, res: Response) => {
-  const jobId = req.params.jobId;
+  const jobId = req.params.jobId as string;
   const job = activeCrawlJobs.get(jobId);
 
   if (!job) {
@@ -374,7 +374,7 @@ scraperRouter.post('/scraper/save-contacts', async (req: AuthenticatedRequest, r
 
       // Deduplicate against existing workspace contacts
       const existing = db.contacts.find(
-        c => c.workspaceId === workspaceId && c.email.toLowerCase() === email
+        c => c.workspaceId === workspaceId && c.email?.toLowerCase() === email
       );
       if (existing) continue;
 
@@ -400,7 +400,7 @@ scraperRouter.post('/scraper/save-contacts', async (req: AuthenticatedRequest, r
         department: rec.type === 'role' ? 'Operations' : 'Executive',
         seniority: rec.jobTitle?.match(/Chief|CEO|CTO|COO|CFO|VP|Director|Head|Founder/i) ? 'CXO' : 'MID',
         email,
-        emailStatus: isDeliverable ? 'VALID' : 'UNVERIFIED',
+        emailStatus: isDeliverable ? 'VALID' : 'UNKNOWN',
         emailConfidence: isDeliverable ? 95 : 65,
         phone: rec.phone || undefined,
         linkedinUrl: rec.socials?.linkedin || undefined,

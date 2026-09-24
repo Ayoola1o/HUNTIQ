@@ -299,7 +299,7 @@ googleAuthRouter.post(['/auth/google/sync', '/google/sync'], async (req: Authent
  */
 googleAuthRouter.post(['/integrations/gmail/webhook', '/gmail/webhook'], async (req: Request, res: Response) => {
   // 1. Mandatory authentication check in production (with test bypass header for test suites)
-  const authResult = PubSubAuthService.verifyWebhookAuth(req);
+  const authResult = await PubSubAuthService.verifyWebhookAuth(req);
   if (!authResult.authenticated) {
     return res.status(401).json({
       success: false,

@@ -228,7 +228,7 @@ contactsRouter.post('/contacts/verify-email', (req: AuthenticatedRequest, res: R
 contactsRouter.get('/contacts/pattern/:domain', (req: AuthenticatedRequest, res: Response) => {
   const { domain } = req.params;
 
-  const result = ContactEnrichmentEngine.discoverDomainPattern(domain);
+  const result = ContactEnrichmentEngine.discoverDomainPattern(domain as string);
 
   res.status(200).json({
     success: true,

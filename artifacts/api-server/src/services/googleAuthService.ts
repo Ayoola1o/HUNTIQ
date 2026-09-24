@@ -221,7 +221,7 @@ export class GoogleAuthService {
       })
     });
 
-    const tokenData = await tokenRes.json();
+    const tokenData: any = await tokenRes.json();
     if (!tokenRes.ok) {
       const err = new Error(
         tokenData.error_description || tokenData.error || 'Failed to exchange Google OAuth code'
@@ -242,7 +242,7 @@ export class GoogleAuthService {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
 
-    const profile = await profileRes.json();
+    const profile: any = await profileRes.json();
     const accountEmail = profile.email || 'user@gmail.com';
     const accountName = profile.name || undefined;
     const accountPicture = profile.picture || undefined;

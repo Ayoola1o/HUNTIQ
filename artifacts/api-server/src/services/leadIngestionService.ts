@@ -96,10 +96,10 @@ export class LeadIngestionService {
       const existingJob = await discoveryJobRepository.getJobById(payload.source.jobId, workspaceId);
       if (existingJob) {
         matchedJobId = existingJob.id;
-        jobCompanyId = existingJob.companyId;
+        jobCompanyId = existingJob.companyId ?? null;
         jobCompanyName = existingJob.metadata?.companyName;
-        jobTargetDomain = existingJob.targetDomain;
-        jobTargetWebsite = existingJob.targetWebsite;
+        jobTargetDomain = existingJob.targetDomain ?? null;
+        jobTargetWebsite = existingJob.targetWebsite ?? null;
       }
     }
 
@@ -165,7 +165,7 @@ export class LeadIngestionService {
 
       // Check if contact already exists in workspace
       const existingContact = db.contacts.find(
-        c => c.workspaceId === workspaceId && c.email.toLowerCase() === cleanEmail
+        c => c.workspaceId === workspaceId && c.email?.toLowerCase() === cleanEmail
       );
 
       let targetContactId = existingContact?.id;
@@ -186,7 +186,7 @@ export class LeadIngestionService {
         if (!existingContact.linkedinUrl && item.socials?.linkedin) {
           existingContact.linkedinUrl = item.socials.linkedin;
         }
-        if (existingContact.emailStatus === 'UNVERIFIED' && item.emailStatus === 'VALIDATED') {
+        if ((existingContact.emailStatus === 'UNKNOWN' || (existingContact.emailStatus as any) === 'UNVERIFIED') && item.emailStatus === 'VALIDATED') {
           existingContact.emailStatus = 'VALID';
           existingContact.emailConfidence = Math.max(existingContact.emailConfidence, 90);
         }
@@ -222,7 +222,7 @@ export class LeadIngestionService {
           confidence = Math.min(confidence, 50);
         }
 
-        const emailStatus = item.emailStatus === 'VALIDATED' ? 'VALID' : 'UNVERIFIED';
+        const emailStatus: 'UNKNOWN' | 'VALID' | 'INVALID' | 'RISKY' = item.emailStatus === 'VALIDATED' ? 'VALID' : 'UNKNOWN';
 
         const newContact: DbContact = {
           id: targetContactId,
@@ -241,7 +241,7 @@ export class LeadIngestionService {
           source: 'EXTERNAL_EMAIL_SCRAPER' as any,
           sourceUrl: item.sourceUrl || undefined,
           firstSeenAt: new Date().toISOString(),
-          lastVerifiedAt: item.emailStatus === 'VALIDATED' ? new Date().toISOString() : undefined,
+          lastVerifiedAt: item.emailStatus === 'VALIDATED' ? new Date().toISOString() : new Date().toISOString(),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
@@ -261,7 +261,7 @@ export class LeadIngestionService {
         evidenceToSave.push({
           workspaceId,
           contactId: targetContactId,
-          companyId: resolvedCompany?.id || null,
+          companyId: resolvedCompany?.id || undefined as any,
           discoveryJobId: matchedJobId,
           email: cleanEmail,
           emailType: item.emailType || 'UNKNOWN',
@@ -373,7 +373,7 @@ export class LeadIngestionService {
 
       // Check existing contact in workspace
       const existing = db.contacts.find(
-        c => c.workspaceId === workspaceId && c.email.toLowerCase() === cleanEmail
+        c => c.workspaceId === workspaceId && c.email?.toLowerCase() === cleanEmail
       );
       if (existing) {
         duplicateCount++;
@@ -419,14 +419,14 @@ export class LeadIngestionService {
         department: 'Commercial',
         seniority: jobTitle.match(/Chief|CEO|CTO|COO|CFO|VP|Director|Head|Founder/i) ? 'CXO' : 'MID',
         email: cleanEmail,
-        emailStatus: isDeliverable ? 'VALID' : 'UNVERIFIED',
+        emailStatus: isDeliverable ? 'VALID' : 'UNKNOWN',
         emailConfidence: isDeliverable ? 90 : 65,
         phone: item.phone || resolvedCompany?.phone || undefined,
         linkedinUrl: item.socials?.linkedin || resolvedCompany?.linkedinUrl || undefined,
         source: source as any,
         sourceUrl: item.sourceUrl,
         firstSeenAt: new Date().toISOString(),
-        lastVerifiedAt: isDeliverable ? new Date().toISOString() : undefined,
+        lastVerifiedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -438,7 +438,7 @@ export class LeadIngestionService {
         db.logActivity({
           workspaceId,
           userId,
-          companyId: contactRecord.companyId,
+          companyId: contactRecord.companyId || undefined,
           contactId,
           type: 'CONTACT_ADDED',
           title: `Ingested Contact: ${firstName} ${lastName} (${jobTitle})`,

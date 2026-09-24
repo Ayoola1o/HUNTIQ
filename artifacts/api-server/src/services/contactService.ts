@@ -126,7 +126,7 @@ export class ContactService {
     db.logActivity({
       workspaceId,
       userId: 'usr-1',
-      companyId: newContact.companyId,
+      companyId: newContact.companyId || undefined,
       contactId: newContact.id,
       type: 'CONTACT_ADDED',
       title: `Contact Verified: ${newContact.firstName} ${newContact.lastName}`,

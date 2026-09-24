@@ -19,6 +19,14 @@ export class PostgresPipelineRepository implements PipelineRepository {
   private mapRowToDeal(row: any): PipelineDealItem {
     return {
       id: row.id,
+      companyName: row.company_name || 'Target Account',
+      dealTitle: row.title || 'Strategic Opportunity',
+      serviceName: row.title || 'Digital Modernization Suite',
+      opportunityScore: 85,
+      stageEnteredAt: 'Just now',
+      ownerName: 'Ayoola Ade',
+      contactAvatarBg: '#fee2e2',
+      contactAvatarColor: '#dc2626',
       title: row.title,
       company: row.company_name,
       dealValue: Number(row.deal_value),
@@ -157,7 +165,7 @@ export class PostgresPipelineRepository implements PipelineRepository {
       const existing = await this.getById(id, userId, workspaceId);
       if (!existing) return null;
 
-      const merged = { ...existing, ...updates };
+      const merged: any = { ...existing, ...updates };
       const query = `
         UPDATE pipeline_deals SET
           title = $1, company_name = $2, deal_value = $3, stage = $4,

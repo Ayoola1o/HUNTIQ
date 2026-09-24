@@ -130,7 +130,7 @@ export class GmailService {
       }
     );
 
-    const data = await response.json();
+    const data: any = await response.json();
 
     if (!response.ok) {
       const errorMessage =

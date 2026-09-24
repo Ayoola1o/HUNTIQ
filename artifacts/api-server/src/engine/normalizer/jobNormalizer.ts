@@ -127,6 +127,13 @@ export class JobNormalizer {
   }
 
   /**
+   * Helper to check if job is remote
+   */
+  public static isRemote(title: string, location: string = '', description: string = ''): boolean {
+    return this.extractWorkplaceMode(title, location, description) === 'REMOTE';
+  }
+
+  /**
    * Extracts geographic coordinates, city, and country.
    */
   public static extractGeo(location: string = ''): { city: string; state?: string; country: string } {

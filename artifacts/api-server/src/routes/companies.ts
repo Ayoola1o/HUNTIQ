@@ -122,6 +122,7 @@ companiesRouter.get('/companies/:id', async (req: AuthenticatedRequest, res: Res
  */
 companiesRouter.post('/companies/resolve', async (req: Request, res: Response) => {
   const { name, domain, website, sourceUrl, boardToken, industry, city, country } = req.body || {};
+  const workspaceId = (req as any).user?.workspaceId || (req.body as any)?.workspaceId || 'ws-default-001';
 
   try {
     const result = await CompanyResolver.resolve({
@@ -133,7 +134,7 @@ companiesRouter.post('/companies/resolve', async (req: Request, res: Response) =
       industry,
       city,
       country
-    });
+    }, workspaceId);
 
     res.status(200).json({
       success: true,
@@ -155,6 +156,7 @@ companiesRouter.post('/companies/resolve', async (req: Request, res: Response) =
  */
 companiesRouter.post('/companies/merge', async (req: Request, res: Response) => {
   const { sourceCompanyId, targetCompanyId } = req.body || {};
+  const workspaceId = (req as any).user?.workspaceId || (req.body as any)?.workspaceId || 'ws-default-001';
 
   if (!sourceCompanyId || !targetCompanyId) {
     return res.status(400).json({
@@ -165,7 +167,7 @@ companiesRouter.post('/companies/merge', async (req: Request, res: Response) => 
   }
 
   try {
-    const merged = await CompanyResolver.mergeCompanies(sourceCompanyId, targetCompanyId);
+    const merged = await CompanyResolver.mergeCompanies(sourceCompanyId, targetCompanyId, workspaceId);
 
     res.status(200).json({
       success: true,

@@ -169,7 +169,9 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
       subject,
       content,
       campaignName,
-      opportunityScore
+      opportunityScore,
+      campaignId,
+      prospectId
     } = req.body || {};
 
     if (!to || !subject || !content) {
@@ -271,6 +273,8 @@ emailIntegrationRouter.post('/integrations/email/send', async (req: Authenticate
       campaignName: campaignName || 'Outreach Campaign',
       opportunityScore: opportunityScore || 75,
       unread: false,
+      campaignId: campaignId || null,
+      prospectId: prospectId || null,
       provider: dispatchResult.provider,
       providerThreadId: (dispatchResult as any).threadId || null,
       providerMessageId: dispatchResult.messageId,

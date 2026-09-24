@@ -69,6 +69,7 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
         unreadAlertsCount: 0,
         alertSettings: { emailNotifications: true, inAppAlerts: true, slackWebhook: false, scoreThreshold: 75 },
         matchedCompanies: [],
+        activityHistory: [],
         recentActivity: []
       }));
     } catch (err: any) {

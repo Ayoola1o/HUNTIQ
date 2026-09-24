@@ -26,7 +26,7 @@ prospectsRouter.post('/prospects/search', (req: Request, res: Response) => {
     locations,
     minScore: minScore ? Number(minScore) : undefined,
     limit: limit ? Number(limit) : undefined
-  });
+  } as any);
 
   const response: ApiResponse = {
     success: true,
@@ -226,7 +226,7 @@ prospectsRouter.post('/prospects/:businessId/audit', (req: Request, res: Respons
   const { name, category, website, phone, rating, reviewCount, address, district } = req.body || {};
 
   const auditPackage = DigitalAuditEngine.audit({
-    id: businessId,
+    id: businessId as string,
     name: name || 'Commercial Entity',
     category: category || 'Commercial Business',
     website,
@@ -292,7 +292,7 @@ prospectsRouter.post('/prospects/capture', async (req: AuthenticatedRequest, res
     if (destination === 'PIPELINE' || destination === 'ALL') {
       const stage = pipelineStage || (gapScore >= 80 ? 'discovery' : 'contacted');
 
-      const savedDeal = await pipelineRepository.save({
+      const savedDeal = await pipelineRepository.create(uId, wId, {
         id: `deal-geo-${b.id || Math.random().toString(36).substring(2, 9)}`,
         companyName: b.name,
         domain: cleanDomain,
@@ -312,19 +312,16 @@ prospectsRouter.post('/prospects/capture', async (req: AuthenticatedRequest, res
         lastActivity: 'Captured via Geo Radar',
         nextAction: b.digitalAudit?.pitchAngles?.salesCallOpener || 'Reach out with custom audit brief',
         nextActionDueDate: 'Tomorrow',
-        priority: gapScore >= 80 ? 'Hot' : 'High',
+        priority: gapScore >= 80 ? 'High' : 'Medium',
         activities: [
           {
             id: `act-${Date.now()}`,
-            type: 'stage_change',
+            type: 'stage_changed',
             title: 'Prospect Captured',
-            description: `Captured from Apify / Google Places Radar into ${stage} stage.`,
-            timestamp: 'Just now',
-            user: ownerName
-          }
-        ],
-        userId: uId,
-        workspaceId: wId
+            detail: `Captured from Apify / Google Places Radar into ${stage} stage.`,
+            timestamp: 'Just now'
+          } as any
+        ]
       });
 
       capturedResults.push({

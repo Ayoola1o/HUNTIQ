@@ -6,6 +6,7 @@ import { postgresPool } from '../../database/postgres';
 import type { ApiKeyRepository } from './api-key-repository';
 import { PostgresApiKeyRepository } from './postgres-api-key.repository';
 import { InMemoryApiKeyRepository } from './in-memory-api-key.repository';
+import { config } from '../../config/env';
 
 export const createApiKeyRepository = (): ApiKeyRepository => {
   if (postgresPool) {

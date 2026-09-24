@@ -82,7 +82,8 @@ export class ScoringEngine {
     if (company.industry && company.industry !== 'Unknown') {
       icpFitScore += 20;
     }
-    if (company.employeeCount !== undefined && company.employeeCount > 0) {
+    const parsedEmployees = parseInt(String(company.employeeCount || '0'), 10) || 0;
+    if (parsedEmployees > 0) {
       icpFitScore += 20;
     }
     icpFitScore = Math.min(100, icpFitScore);
@@ -99,8 +100,8 @@ export class ScoringEngine {
 
     // Estimated Deal Value: Calculated strictly when employee count or role count is verified
     let estimatedDealValue = 0;
-    if (company.employeeCount && company.employeeCount > 0) {
-      estimatedDealValue = company.employeeCount > 500 ? 35000 : company.employeeCount > 100 ? 20000 : 10000;
+    if (parsedEmployees > 0) {
+      estimatedDealValue = parsedEmployees > 500 ? 35000 : parsedEmployees > 100 ? 20000 : 10000;
     } else if (openJobs.length > 0) {
       estimatedDealValue = openJobs.length * 2000;
     }

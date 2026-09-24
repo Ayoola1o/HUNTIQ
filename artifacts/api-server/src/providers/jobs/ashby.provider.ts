@@ -43,7 +43,7 @@ export class AshbyJobProvider implements JobProvider {
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         const jobs = data.jobs || data;
         if (Array.isArray(jobs)) {
           return jobs.map((job: any) => this.normalizeJob(job, identifier));

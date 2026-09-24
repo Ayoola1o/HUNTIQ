@@ -24,7 +24,7 @@ export class GreenhouseAdapter implements IJobSourceAdapter {
       clearTimeout(timeout);
 
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         if (data && Array.isArray(data.jobs) && data.jobs.length > 0) {
           return data.jobs.map((j: any) => ({
             id: `gh_${cleanToken}_${j.id}`,
@@ -97,7 +97,7 @@ export class GreenhouseAdapter implements IJobSourceAdapter {
       title: raw.title,
       department,
       functionArea,
-      seniority,
+      seniority: seniority.seniority,
       location: raw.location || 'Lagos, Nigeria',
       country: 'Nigeria',
       remote,

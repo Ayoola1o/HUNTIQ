@@ -93,7 +93,7 @@ export class EmailScraperProvider {
         );
       }
 
-      return await res.json();
+      return (await res.json()) as { status: string; uptime?: number };
     } catch (err: any) {
       throw this.mapFetchError(err);
     }

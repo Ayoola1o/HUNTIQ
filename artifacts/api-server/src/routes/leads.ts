@@ -76,7 +76,7 @@ leadsRouter.post('/leads/evaluate', async (req: AuthenticatedRequest, res: Respo
     []
   );
 
-  let lead = await leadRepository.findById(companyId, workspaceId);
+  let lead: any = await leadRepository.findById(companyId, workspaceId);
 
   if (!lead && evaluation.totalScore >= 75) {
     lead = await leadService.createLead(workspaceId, {
@@ -149,7 +149,7 @@ leadsRouter.post('/leads/:id/promote', async (req: AuthenticatedRequest, res: Re
   const { customDealValue } = req.body || {};
 
   try {
-    const deal = await AutomaticLeadEngine.promoteLeadToPipeline(id, workspaceId, customDealValue);
+    const deal = await AutomaticLeadEngine.promoteLeadToPipeline(id as string, workspaceId, customDealValue);
 
     res.status(200).json({
       success: true,
@@ -180,7 +180,7 @@ leadsRouter.patch('/leads/:id/status', async (req: AuthenticatedRequest, res: Re
   const { id } = req.params;
   const { status } = req.body || {};
 
-  const lead = await leadRepository.updateStatus(id, status, workspaceId);
+  const lead = await leadRepository.updateStatus(id as string, status, workspaceId);
   if (!lead) {
     return res.status(404).json({
       success: false,
