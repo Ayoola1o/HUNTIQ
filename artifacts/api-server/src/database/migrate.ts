@@ -4,7 +4,23 @@ import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { config } from '../config/env';
 
-const migrationsDirectory = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
+async function resolveMigrationsDirectory(): Promise<string> {
+  const candidates = [
+    join(dirname(fileURLToPath(import.meta.url)), 'migrations'),
+    join(process.cwd(), 'artifacts/api-server/src/database/migrations'),
+    join(process.cwd(), 'artifacts/api-server/dist/migrations'),
+    join(process.cwd(), 'src/database/migrations')
+  ];
+  for (const candidate of candidates) {
+    try {
+      const entries = await readdir(candidate);
+      if (entries.some((f) => f.endsWith('.sql'))) {
+        return candidate;
+      }
+    } catch {}
+  }
+  return candidates[0];
+}
 
 let migrationInFlight: Promise<void> | null = null;
 let migrationCompleted = false;
@@ -38,6 +54,7 @@ export const runMigrations = async (poolOrUrl?: Pool | string) => {
       )
     `);
 
+    const migrationsDirectory = await resolveMigrationsDirectory();
     const files = (await readdir(migrationsDirectory))
       .filter((file) => file.endsWith('.sql'))
       .sort();
