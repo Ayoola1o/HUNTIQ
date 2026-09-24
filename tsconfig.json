@@ -1,7 +1,16 @@
 {
   "extends": "./tsconfig.base.json",
   "compileOnSave": false,
-  "files": [],
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "es2022",
+    "skipLibCheck": true,
+    "noImplicitAny": false
+  },
+  "include": [
+    "api/**/*"
+  ],
   "references": [
     {
       "path": "./lib/db"
