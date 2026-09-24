@@ -78,7 +78,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     <div style={{
       position: 'fixed',
       inset: 0,
-      backgroundImage: `radial-gradient(ellipse at 65% 50%, rgba(15, 23, 42, 0.45) 0%, rgba(9, 13, 22, 0.82) 100%), url('/huntiq_auth_background_fg.png')`,
+      backgroundImage: `radial-gradient(ellipse at 65% 50%, rgba(15, 23, 42, 0.45) 0%, rgba(9, 13, 22, 0.82) 100%), url('/huntiq_auth_background_fg.webp')`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
