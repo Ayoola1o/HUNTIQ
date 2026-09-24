@@ -1,0 +1,19 @@
+name: HUNTIQ Background Campaign Scheduler
+
+on:
+  schedule:
+    # Runs every 15 minutes
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger-campaigns:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Campaign Dispatcher
+        run: |
+          URL="${{ secrets.HUNTIQ_APP_URL || 'https://huntiq.vercel.app' }}"
+          echo "Pinging ${URL}/api/cron/campaigns..."
+          curl -s -X POST "${URL}/api/cron/campaigns" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" || true
