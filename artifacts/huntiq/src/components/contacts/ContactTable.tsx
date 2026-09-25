@@ -489,7 +489,77 @@ export const ContactTable: React.FC<ContactTableProps> = ({
 
       {/* Table Rows */}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {contacts.map((cont) => {
+        {contacts.length === 0 ? (
+          <div style={{
+            padding: '56px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px'
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              backgroundColor: '#eff6ff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#4f46e5'
+            }}>
+              <Briefcase size={24} />
+            </div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+              No contacts found in this workspace
+            </div>
+            <div style={{ fontSize: '13px', color: '#64748b', maxWidth: '380px', lineHeight: 1.5 }}>
+              Add executive contacts manually or import leads to begin managing your stakeholder network.
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button
+                onClick={onOpenAddModal}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#4f46e5',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 14px',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <Plus size={14} />
+                <span>Add Contact</span>
+              </button>
+              <button
+                onClick={onOpenImportModal}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#ffffff',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  padding: '8px 14px',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <Upload size={14} />
+                <span>Import Contacts</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          contacts.map((cont) => {
           const isSelected = selectedContactId === cont.id;
           const isChecked = selectedIds.includes(cont.id);
 
@@ -633,7 +703,8 @@ export const ContactTable: React.FC<ContactTableProps> = ({
               </div>
             </div>
           );
-        })}
+        })
+      )}
       </div>
 
       {/* Pagination Footer */}
@@ -646,97 +717,21 @@ export const ContactTable: React.FC<ContactTableProps> = ({
         fontSize: '12px',
         color: '#64748b'
       }}>
-        <span>Showing 1 to 8 of 8,642 contacts</span>
+        <span>{contacts.length === 0 ? 'Showing 0 contacts' : ('Showing 1 to ' + contacts.length + ' of ' + contacts.length + ' contacts')}</span>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {contacts.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <button
-              style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '6px',
-                border: '1px solid #e2e8f0',
-                backgroundColor: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: '#64748b'
-              }}
-            >
+            <button style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}>
               <ChevronLeft size={14} />
             </button>
-
-            {[1, 2, 3].map((page) => (
-              <button
-                key={page}
-                style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '6px',
-                  border: page === 1 ? '1px solid #6366f1' : '1px solid #e2e8f0',
-                  backgroundColor: page === 1 ? '#ede9fe' : '#ffffff',
-                  color: page === 1 ? '#6d28d9' : '#475569',
-                  fontSize: '12px',
-                  fontWeight: page === 1 ? 700 : 500,
-                  cursor: 'pointer'
-                }}
-              >
-                {page}
-              </button>
-            ))}
-
-            <span style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>
-
-            <button
-              style={{
-                width: '36px',
-                height: '28px',
-                borderRadius: '6px',
-                border: '1px solid #e2e8f0',
-                backgroundColor: '#ffffff',
-                color: '#475569',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              216
+            <button style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #6366f1', backgroundColor: '#ede9fe', color: '#6d28d9', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+              1
             </button>
-
-            <button
-              style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '6px',
-                border: '1px solid #e2e8f0',
-                backgroundColor: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: '#64748b'
-              }}
-            >
+            <button style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}>
               <ChevronRight size={14} />
             </button>
           </div>
-
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            backgroundColor: '#ffffff',
-            border: '1px solid #cbd5e1',
-            borderRadius: '6px',
-            padding: '4px 8px',
-            fontSize: '11.5px',
-            color: '#334155',
-            marginLeft: '8px'
-          }}>
-            <span>20 per page</span>
-            <ChevronDown size={11} />
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

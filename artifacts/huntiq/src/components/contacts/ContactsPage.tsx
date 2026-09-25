@@ -59,6 +59,12 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   const handleApplyFilters = (filters: {
     minScore: number;
@@ -159,11 +165,14 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
 
     // Optimistic update
     setContacts(prev => prev.map(c => c.id === contactId ? { ...c, isBookmarked: nextBookmarked } : c));
+    showToast(nextBookmarked ? 'Contact saved to bookmarks' : 'Contact removed from bookmarks');
 
     try {
       await apiUpdateContact(contactId, { isBookmarked: nextBookmarked });
     } catch (err) {
       console.warn('Failed to update bookmark on backend:', err);
+      setContacts(prev => prev.map(c => c.id === contactId ? { ...c, isBookmarked: !nextBookmarked } : c));
+      showToast('Failed to update bookmark on backend');
     }
   };
 
@@ -173,38 +182,10 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       const created = await apiCreateContact(contactData);
       setContacts(prev => [created, ...prev]);
       setSelectedContactId(created.id);
-    } catch (err) {
-      console.error('Failed to create contact via API, added fallback:', err);
-      const fallback: ContactItem = {
-        id: `cont-${Date.now()}`,
-        name: contactData.name || 'New Contact',
-        email: contactData.email || '',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-        verificationStatus: contactData.email ? 'verified' : 'unverified',
-        companyName: contactData.companyName || 'Target Account',
-        companyLocation: 'Lagos, Nigeria',
-        companyIndustry: 'Technology',
-        companyEmployees: '100-500 employees',
-        role: contactData.role || 'Executive',
-        decisionRole: contactData.decisionRole || 'Decision Maker',
-        influenceScore: 88,
-        influenceLevel: 'High',
-        opportunityFitScore: 90,
-        opportunityFitLevel: 'Excellent',
-        lastActivity: 'Added via HUNTIQ',
-        lastActivityTime: 'Just now',
-        source: 'manual',
-        isBookmarked: false,
-        phone: contactData.phone || '+234 800 000 0000',
-        location: 'Lagos, Nigeria',
-        localTime: '10:30 AM (WAT)',
-        about: `${contactData.role || 'Executive'} at ${contactData.companyName || 'Company'}.`,
-        aiInsights: ['Key decision maker identified'],
-        tags: ['Verified', 'Contact'],
-        opportunities: []
-      };
-      setContacts(prev => [fallback, ...prev]);
-      setSelectedContactId(fallback.id);
+      showToast(`Contact "${created.name}" created successfully`);
+    } catch (err: any) {
+      console.error('Failed to create contact via API:', err);
+      showToast(err?.message || 'Failed to create contact');
     }
   };
 
@@ -235,9 +216,11 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       const res = await apiImportContacts(sampleImports);
       if (res.contacts && res.contacts.length > 0) {
         setContacts(prev => [...res.contacts, ...prev]);
+        showToast(`Imported ${res.contacts.length} verified contacts`);
       }
-    } catch (err) {
-      console.warn('Import API fallback:', err);
+    } catch (err: any) {
+      console.warn('Import API error:', err);
+      showToast(err?.message || 'Failed to import contacts');
     }
   };
 
@@ -686,6 +669,28 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
           companyName={researchedCompany}
           onClose={() => setResearchedCompany(null)}
         />
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          backgroundColor: '#0f172a',
+          color: '#ffffff',
+          padding: '12px 20px',
+          borderRadius: '10px',
+          fontSize: '13px',
+          fontWeight: 600,
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>{toastMessage}</span>
+        </div>
       )}
 
       {/* Mobile One-Thumb Bottom Navigation */}

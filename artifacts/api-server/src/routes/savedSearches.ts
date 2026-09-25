@@ -206,7 +206,46 @@ savedSearchesRouter.post('/saved-searches/:id/toggle-monitoring', async (req: Au
   res.status(200).json(response);
 });
 
-// 6. Delete saved search
+// 6. Run on-demand scan for saved search
+savedSearchesRouter.post('/saved-searches/:id/run', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const existing = await savedSearchRepository.getById(id, workspaceId);
+
+  if (!existing) {
+    const errorResponse: ApiResponse = {
+      success: false,
+      error: {
+        code: 'SAVED_SEARCH_NOT_FOUND',
+        message: `Saved search with ID '${id}' not found.`
+      }
+    };
+    return res.status(404).json(errorResponse);
+  }
+
+  const updated = await savedSearchRepository.update(id, {
+    lastRunAt: new Date().toISOString(),
+    lastUpdated: new Date().toISOString()
+  }, workspaceId);
+
+  const response: ApiResponse = {
+    success: true,
+    data: updated,
+    meta: {
+      timestamp: new Date().toISOString()
+    }
+  };
+
+  res.status(200).json(response);
+});
+
+// 7. Delete saved search
 savedSearchesRouter.delete('/saved-searches/:id', async (req: AuthenticatedRequest, res: Response) => {
   const workspaceId = req.user?.workspaceId;
   if (!workspaceId) {

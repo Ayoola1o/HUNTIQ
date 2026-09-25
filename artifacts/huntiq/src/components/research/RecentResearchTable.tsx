@@ -259,27 +259,82 @@ export const RecentResearchTable: React.FC<RecentResearchTableProps> = ({
             </tr>
           </thead>
           <tbody>
-            {filteredReports.map((report) => {
-              const isSelected = selectedReportId === report.id;
-              const intent = getIntentBadge(report.buyingIntent);
+            {filteredReports.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ padding: '64px 24px', textAlign: 'center' }}>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '12px'
+                  }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '12px',
+                      backgroundColor: '#eff6ff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#3b82f6'
+                    }}>
+                      <Search size={22} />
+                    </div>
+                    <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                      {tableSearch ? 'No matching company reports found' : 'No research dossiers generated yet'}
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b', maxWidth: '400px' }}>
+                      {tableSearch 
+                        ? `No company dossier matches "${tableSearch}". Clear search to view all reports.` 
+                        : 'Enter any company name in the search bar above or click "+ New Research" to run deep AI intelligence on target companies.'}
+                    </p>
+                    <button
+                      onClick={onStartNewResearch}
+                      style={{
+                        marginTop: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: '#4f46e5',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 16px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
+                      }}
+                    >
+                      <Sparkles size={13} />
+                      <span>+ Generate Research Dossier</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              filteredReports.map((report) => {
+                const isSelected = selectedReportId === report.id;
+                const intent = getIntentBadge(report.buyingIntent);
 
-              return (
-                <tr
-                  key={report.id}
-                  onClick={() => onSelectReport(report)}
-                  style={{
-                    borderBottom: '1px solid #f1f5f9',
-                    backgroundColor: isSelected ? '#f5f3ff' : '#ffffff',
-                    cursor: 'pointer',
-                    transition: 'all 0.1s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) e.currentTarget.style.backgroundColor = '#f8fafc';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) e.currentTarget.style.backgroundColor = '#ffffff';
-                  }}
-                >
+                return (
+                  <tr
+                    key={report.id}
+                    onClick={() => onSelectReport(report)}
+                    style={{
+                      borderBottom: '1px solid #f1f5f9',
+                      backgroundColor: isSelected ? '#f5f3ff' : '#ffffff',
+                      cursor: 'pointer',
+                      transition: 'all 0.1s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) e.currentTarget.style.backgroundColor = '#f8fafc';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) e.currentTarget.style.backgroundColor = '#ffffff';
+                    }}
+                  >
                   {/* Company & Domain */}
                   <td style={{ padding: '14px 20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -413,7 +468,8 @@ export const RecentResearchTable: React.FC<RecentResearchTableProps> = ({
                   </td>
                 </tr>
               );
-            })}
+            })
+          )}
           </tbody>
         </table>
       </div>

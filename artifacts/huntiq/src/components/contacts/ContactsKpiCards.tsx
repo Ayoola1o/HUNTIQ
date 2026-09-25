@@ -20,19 +20,19 @@ export const ContactsKpiCards: React.FC<ContactsKpiCardsProps> = ({
   onSelectKpi,
   contacts = []
 }) => {
-  const totalCount = contacts.length || 8642;
-  const newCount = contacts.filter(c => c.lastActivityTime?.includes('h ago') || c.lastActivityTime?.includes('1d ago') || c.lastActivityTime?.includes('Just now')).length || 432;
-  const changedRolesCount = contacts.filter(c => c.tags?.includes('Role Change') || c.aiInsights?.some(i => i.toLowerCase().includes('role') || i.toLowerCase().includes('move'))).length || 128;
-  const highInfluenceCount = contacts.filter(c => (c.influenceScore || 0) >= 85).length || 1247;
-  const contactedCount = contacts.filter(c => c.lastActivity?.toLowerCase().includes('email') || c.lastActivity?.toLowerCase().includes('sent') || c.lastActivity?.toLowerCase().includes('call')).length || 1843;
-  const repliedCount = contacts.filter(c => c.lastActivity?.toLowerCase().includes('opened') || c.lastActivity?.toLowerCase().includes('replied')).length || 623;
+  const totalCount = contacts.length;
+  const newCount = contacts.filter(c => c.lastActivityTime?.includes('h ago') || c.lastActivityTime?.includes('1d ago') || c.lastActivityTime?.includes('Just now')).length;
+  const changedRolesCount = contacts.filter(c => c.tags?.includes('Role Change') || c.aiInsights?.some(i => i.toLowerCase().includes('role') || i.toLowerCase().includes('move'))).length;
+  const highInfluenceCount = contacts.filter(c => (c.influenceScore || 0) >= 85).length;
+  const contactedCount = contacts.filter(c => c.lastActivity?.toLowerCase().includes('email') || c.lastActivity?.toLowerCase().includes('sent') || c.lastActivity?.toLowerCase().includes('call')).length;
+  const repliedCount = contacts.filter(c => c.lastActivity?.toLowerCase().includes('opened') || c.lastActivity?.toLowerCase().includes('replied')).length;
 
   const cards = [
     {
       id: 'total',
       title: 'Total Contacts',
-      value: contacts.length > 0 ? totalCount.toLocaleString() : '8,642',
-      change: '18.6%',
+      value: totalCount.toLocaleString(),
+      change: totalCount > 0 ? '18.6%' : '0%',
       isPositive: true,
       icon: <Users size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff',
@@ -41,7 +41,7 @@ export const ContactsKpiCards: React.FC<ContactsKpiCardsProps> = ({
       id: 'new',
       title: 'New Contacts',
       value: newCount.toLocaleString(),
-      change: '22.4%',
+      change: newCount > 0 ? '22.4%' : '0%',
       isPositive: true,
       icon: <UserPlus size={16} color="#6366f1" />,
       iconBg: '#ede9fe',
@@ -50,7 +50,7 @@ export const ContactsKpiCards: React.FC<ContactsKpiCardsProps> = ({
       id: 'changed-roles',
       title: 'Changed Roles',
       value: changedRolesCount.toLocaleString(),
-      change: '15.3%',
+      change: changedRolesCount > 0 ? '15.3%' : '0%',
       isPositive: true,
       icon: <UserCheck size={16} color="#ea580c" />,
       iconBg: '#fff7ed',
@@ -59,7 +59,7 @@ export const ContactsKpiCards: React.FC<ContactsKpiCardsProps> = ({
       id: 'high-influence',
       title: 'High Influence',
       value: highInfluenceCount.toLocaleString(),
-      change: '19.7%',
+      change: highInfluenceCount > 0 ? '19.7%' : '0%',
       isPositive: true,
       icon: <Target size={16} color="#059669" />,
       iconBg: '#ecfdf5',
@@ -68,7 +68,7 @@ export const ContactsKpiCards: React.FC<ContactsKpiCardsProps> = ({
       id: 'contacted',
       title: 'Contacted',
       value: contactedCount.toLocaleString(),
-      change: '21.1%',
+      change: contactedCount > 0 ? '21.1%' : '0%',
       isPositive: true,
       icon: <CheckSquare size={16} color="#2563eb" />,
       iconBg: '#eff6ff',
@@ -77,7 +77,7 @@ export const ContactsKpiCards: React.FC<ContactsKpiCardsProps> = ({
       id: 'replied',
       title: 'Replied',
       value: repliedCount.toLocaleString(),
-      change: '17.9%',
+      change: repliedCount > 0 ? '17.9%' : '0%',
       isPositive: true,
       icon: <MailCheck size={16} color="#16a34a" />,
       iconBg: '#f0fdf4',

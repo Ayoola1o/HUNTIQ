@@ -62,7 +62,7 @@ export class PostgresContactRepository implements ContactRepository {
       `;
       const result = await this.pool.query(query, [workspaceId, userId]);
       if (result.rows.length === 0) {
-        return this.isProduction() ? [] : this.fallback.listByUser(userId, workspaceId);
+        return [];
       }
       return result.rows.map((r) => this.mapRowToContact(r));
     } catch (err: any) {
@@ -72,7 +72,7 @@ export class PostgresContactRepository implements ContactRepository {
         (error as any).code = 'DATABASE_UNAVAILABLE';
         throw error;
       }
-      return this.fallback.listByUser(userId, workspaceId);
+      return [];
     }
   }
 
@@ -85,7 +85,7 @@ export class PostgresContactRepository implements ContactRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId, userId]);
       if (result.rows.length === 0) {
-        return this.isProduction() ? null : this.fallback.getById(id, userId, workspaceId);
+        return null;
       }
       return this.mapRowToContact(result.rows[0]);
     } catch (err: any) {
@@ -95,7 +95,7 @@ export class PostgresContactRepository implements ContactRepository {
         (error as any).code = 'DATABASE_UNAVAILABLE';
         throw error;
       }
-      return this.fallback.getById(id, userId, workspaceId);
+      return null;
     }
   }
 

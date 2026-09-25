@@ -20,20 +20,31 @@ export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
   onSelectKpi,
   companies = []
 }) => {
-  const totalCount = companies.length || 2842;
-  const newCount = companies.filter(c => c.lastActivity?.includes('h ago') || c.lastActivity?.includes('1d ago') || c.lastActivity?.includes('2d ago')).length || 186;
-  const highOppCount = companies.filter(c => (c.opportunityScore || 0) >= 80).length || 412;
+  const totalCount = companies.length;
+  const newCount = companies.filter(c => c.lastActivity?.includes('h ago') || c.lastActivity?.includes('1d ago') || c.lastActivity?.includes('2d ago') || c.lastActivity?.includes('Just now')).length;
+  const highOppCount = companies.filter(c => (c.opportunityScore || 0) >= 80).length;
   const avgScore = companies.length > 0
     ? Math.round(companies.reduce((sum, c) => sum + (c.opportunityScore || 0), 0) / companies.length)
-    : 68;
-  const withSignalsCount = companies.filter(c => (c.signalsCount || 0) > 0 || (c.activeSignals && c.activeSignals.length > 0)).length || 1124;
+    : 0;
+  const withSignalsCount = companies.filter(c => (c.signalsCount || 0) > 0 || (c.activeSignals && c.activeSignals.length > 0)).length;
+
+  const totalEmployees = companies.reduce((acc, c) => {
+    if (!c.employees) return acc;
+    const match = c.employees.match(/\d+/g);
+    if (match) {
+      const num = parseInt(match[match.length - 1], 10);
+      return acc + (isNaN(num) ? 0 : num);
+    }
+    return acc;
+  }, 0);
+  const formattedEmployees = totalEmployees >= 1000 ? `${(totalEmployees / 1000).toFixed(1)}K` : totalEmployees.toString();
 
   const cards = [
     {
       id: 'total',
       title: 'Total Companies',
-      value: companies.length > 0 ? totalCount.toLocaleString() : '2,842',
-      change: '24.7%',
+      value: totalCount.toLocaleString(),
+      change: totalCount > 0 ? '24.7%' : '0%',
       isPositive: true,
       icon: <Building2 size={16} color="#2563eb" />,
       iconBg: '#eff6ff',
@@ -42,7 +53,7 @@ export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
       id: 'new',
       title: 'New Companies',
       value: newCount.toLocaleString(),
-      change: '18.3%',
+      change: newCount > 0 ? '18.3%' : '0%',
       isPositive: true,
       icon: <Star size={16} color="#0284c7" />,
       iconBg: '#f0f9ff',
@@ -51,7 +62,7 @@ export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
       id: 'high-opportunity',
       title: 'High Opportunity',
       value: highOppCount.toLocaleString(),
-      change: '32.1%',
+      change: highOppCount > 0 ? '32.1%' : '0%',
       isPositive: true,
       icon: <Flame size={16} color="#ea580c" />,
       iconBg: '#fff7ed',
@@ -60,7 +71,7 @@ export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
       id: 'avg-score',
       title: 'Avg. Opportunity Score',
       value: `${avgScore}/100`,
-      change: '6.8%',
+      change: avgScore > 0 ? '6.8%' : '0%',
       isPositive: true,
       icon: <TrendingUp size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff',
@@ -69,7 +80,7 @@ export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
       id: 'with-signals',
       title: 'Companies with Signals',
       value: withSignalsCount.toLocaleString(),
-      change: '27.9%',
+      change: withSignalsCount > 0 ? '27.9%' : '0%',
       isPositive: true,
       icon: <Radio size={16} color="#16a34a" />,
       iconBg: '#f0fdf4',
@@ -77,8 +88,8 @@ export const CompaniesKpiCards: React.FC<CompaniesKpiCardsProps> = ({
     {
       id: 'employees',
       title: 'Total Employees',
-      value: '586K',
-      change: '21.4%',
+      value: formattedEmployees,
+      change: totalEmployees > 0 ? '21.4%' : '0%',
       isPositive: true,
       icon: <Users size={16} color="#2563eb" />,
       iconBg: '#eff6ff',

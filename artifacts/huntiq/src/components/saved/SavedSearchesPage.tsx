@@ -101,11 +101,19 @@ export const SavedSearchesPage: React.FC<SavedSearchesPageProps> = ({
     };
   }, [searches]);
 
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
   // Toggle monitoring active / paused via API
   const handleToggleMonitoring = async (searchId: string) => {
     const target = searches.find(s => s.id === searchId);
     if (!target) return;
 
+    const prevSearches = searches;
     const nextMonitoring = !target.monitoringEnabled;
     const nextStatus = nextMonitoring ? 'active' : 'paused';
 
@@ -126,6 +134,8 @@ export const SavedSearchesPage: React.FC<SavedSearchesPageProps> = ({
       } : null);
     }
 
+    showToast(nextMonitoring ? `🔔 Monitoring enabled for "${target.name}"` : `⏸️ Monitoring paused for "${target.name}"`);
+
     try {
       const updated = await apiUpdateSavedSearch(searchId, {
         monitoringEnabled: nextMonitoring,
@@ -135,39 +145,34 @@ export const SavedSearchesPage: React.FC<SavedSearchesPageProps> = ({
         setSearches(prev => prev.map(s => s.id === searchId ? updated : s));
         if (selectedSearch?.id === searchId) setSelectedSearch(updated);
       }
-    } catch (err) {
-      console.warn('Backend update failed, kept optimistic state:', err);
+    } catch (err: any) {
+      console.warn('Backend update failed, rolling back:', err);
+      setSearches(prevSearches);
+      showToast(`❌ Failed to update monitoring: ${err?.message || 'Server error'}`);
     }
   };
 
   // Run on-demand live prospect scan via API
   const handleRunSearch = async (searchId: string) => {
+    const target = searches.find(s => s.id === searchId);
+    showToast(`⚡ Scanning prospects for "${target?.name || 'search'}"...`);
     try {
       const updated = await apiRunSavedSearch(searchId);
       if (updated) {
         setSearches(prev => prev.map(s => s.id === searchId ? updated : s));
         if (selectedSearch?.id === searchId) setSelectedSearch(updated);
+        showToast(`✅ Scan complete for "${target?.name || 'search'}"`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Run search failed:', err);
-      // Fallback optimistic increment
-      setSearches(prev => prev.map(s => {
-        if (s.id === searchId) {
-          return {
-            ...s,
-            lastRunAt: 'Just now',
-            lastUpdated: 'Just now',
-            newMatchesCount: s.newMatchesCount + 2,
-            totalMatches: s.totalMatches + 2
-          };
-        }
-        return s;
-      }));
+      showToast(`❌ Scan failed: ${err?.message || 'Server error'}`);
     }
   };
 
   // Delete search via API
   const handleDeleteSearch = async (searchId: string) => {
+    const target = searches.find(s => s.id === searchId);
+    const prevSearches = searches;
     // Optimistic delete
     setSearches(prev => prev.filter(s => s.id !== searchId));
     if (selectedSearch?.id === searchId) {
@@ -177,8 +182,11 @@ export const SavedSearchesPage: React.FC<SavedSearchesPageProps> = ({
 
     try {
       await apiDeleteSavedSearch(searchId);
-    } catch (err) {
-      console.warn('Backend delete failed, item removed from local view:', err);
+      showToast(`🗑️ Search "${target?.name || ''}" deleted successfully`);
+    } catch (err: any) {
+      console.error('Backend delete failed, rolling back:', err);
+      setSearches(prevSearches);
+      showToast(`❌ Failed to delete search: ${err?.message || 'Server error'}`);
     }
   };
 
@@ -187,52 +195,11 @@ export const SavedSearchesPage: React.FC<SavedSearchesPageProps> = ({
     try {
       const created = await apiCreateSavedSearch(newSearchData);
       setSearches(prev => [created, ...prev]);
-    } catch (err) {
-      console.error('Failed to create search via API, using generated record:', err);
-      const fallbackItem: SavedSearchItem = {
-        id: `ss-${Date.now()}`,
-        name: newSearchData.name || 'Untitled Search',
-        description: newSearchData.description || 'Custom prospect search',
-        searchType: newSearchData.searchType || 'ai_search',
-        status: 'active',
-        monitoringEnabled: newSearchData.monitoringEnabled !== false,
-        alertFrequency: newSearchData.alertFrequency || 'immediately',
-        createdAt: 'Just now',
-        lastRunAt: 'Just now',
-        lastUpdated: 'Just now',
-        filters: newSearchData.filters || {
-          industries: ['Technology & SaaS'],
-          locations: ['Lagos, Nigeria'],
-          companySizes: ['50 – 500']
-        },
-        signalsToWatch: newSearchData.signalsToWatch || ['Hiring Surge'],
-        icpName: newSearchData.icpName || 'Primary ICP',
-        totalMatches: 24,
-        newMatchesCount: 4,
-        highOpportunityCount: 12,
-        activeSignalsCount: 6,
-        unreadAlertsCount: 1,
-        alertSettings: newSearchData.alertSettings || {
-          onNewMatch: true,
-          onHighOpportunity: true,
-          onHiringSignal: true,
-          onExpansionSignal: true,
-          onLeadershipSignal: true,
-          onFundingSignal: false,
-          onTechMigration: false
-        },
-        matchedCompanies: [],
-        activityHistory: [
-          {
-            id: `act-${Date.now()}`,
-            timestamp: 'Just now',
-            type: 'new_match',
-            title: 'Search created',
-            detail: 'Autonomous prospector activated.'
-          }
-        ]
-      };
-      setSearches(prev => [fallbackItem, ...prev]);
+      setIsCreateModalOpen(false);
+      showToast(`✅ Saved search "${created.name}" created successfully!`);
+    } catch (err: any) {
+      console.error('Failed to create search via API:', err);
+      showToast(`❌ Failed to create search: ${err?.message || 'Server error'}`);
     }
   };
 
@@ -607,27 +574,48 @@ export const SavedSearchesPage: React.FC<SavedSearchesPageProps> = ({
                 ? `No searches match "${searchQuery}". Try clearing filters or searching for different keywords.` 
                 : 'Create monitored prospect searches to automatically track company hiring spikes, expansions, and score changes.'}
             </p>
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              style={{
-                marginTop: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: '#4f46e5',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '8px 18px',
-                fontSize: '12.5px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)'
-              }}
-            >
-              <Plus size={14} />
-              <span>+ Create New Search</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#4f46e5',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 18px',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)'
+                }}
+              >
+                <Plus size={14} />
+                <span>+ Create New Search</span>
+              </button>
+
+              <button
+                onClick={() => onNavigate('find-prospects')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#ffffff',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  padding: '8px 16px',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <Search size={14} />
+                <span>Explore Prospects</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -695,6 +683,29 @@ export const SavedSearchesPage: React.FC<SavedSearchesPageProps> = ({
           companyName={researchedCompany}
           onClose={() => setResearchedCompany(null)}
         />
+      )}
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          backgroundColor: '#0f172a',
+          color: '#ffffff',
+          padding: '12px 20px',
+          borderRadius: '10px',
+          fontSize: '13px',
+          fontWeight: 600,
+          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          zIndex: 9999,
+          animation: 'fadeInUp 0.2s ease-out'
+        }}>
+          {toastMessage}
+        </div>
       )}
     </div>
   );

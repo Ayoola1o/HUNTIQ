@@ -29,327 +29,14 @@ interface CompaniesPageProps {
   onGoToOnboarding?: () => void;
 }
 
-const initialFallbackCompanies: CompanyItem[] = [
-  {
-    id: 'comp-1',
-    name: 'Acme Technologies',
-      domain: 'acmetech.com',
-      logoBg: '#ef4444',
-      logoColor: '#ffffff',
-      logoInitial: 'A',
-      industry: 'Technology',
-      employees: '250 – 500',
-      revenue: '$25M – $50M',
-      location: 'Lagos, Nigeria',
-      opportunityScore: 94,
-      opportunityLevel: 'Very High',
-      scoreColor: '#059669',
-      scoreTrend: [74, 82, 86, 91, 94],
-      isSaved: false,
-      signalsCount: 6,
-      activeSignals: [
-        {
-          type: 'hiring',
-          title: 'Hiring Surge',
-          description: '38 new job postings',
-          time: '2h ago',
-          iconType: 'hiring'
-        },
-        {
-          type: 'expansion',
-          title: 'Expansion',
-          description: 'Opened new office in Lagos',
-          time: '1d ago',
-          iconType: 'expansion'
-        },
-        {
-          type: 'leadership',
-          title: 'Leadership Change',
-          description: 'New COO appointed',
-          time: '3d ago',
-          iconType: 'leadership'
-        },
-        {
-          type: 'technology',
-          title: 'Technology Change',
-          description: 'Migrating to AWS cloud',
-          time: '5d ago',
-          iconType: 'technology'
-        }
-      ],
-      lastActivity: '2h ago',
-      description: 'Acme Technologies provides innovative software solutions and digital transformation services to businesses across Africa.',
-      founded: '2016',
-      headquarters: 'Lagos, Nigeria',
-      socials: {
-        linkedin: 'https://linkedin.com/company/acme-technologies',
-        twitter: 'https://twitter.com/acmetech',
-        facebook: 'https://facebook.com/acmetech'
-      }
-    },
-    {
-      id: 'comp-2',
-      name: 'FinServe Ltd',
-      domain: 'finserve.com',
-      logoBg: '#2563eb',
-      logoColor: '#ffffff',
-      logoInitial: 'F',
-      industry: 'Financial Services',
-      employees: '200 – 500',
-      revenue: '$10M – $25M',
-      location: 'Lagos, Nigeria',
-      opportunityScore: 91,
-      opportunityLevel: 'Very High',
-      scoreColor: '#059669',
-      scoreTrend: [68, 76, 84, 89, 91],
-      isSaved: true,
-      signalsCount: 5,
-      activeSignals: [
-        {
-          type: 'funding',
-          title: 'Funding Raised',
-          description: '$12M Series B closed',
-          time: '1d ago',
-          iconType: 'funding'
-        },
-        {
-          type: 'expansion',
-          title: 'Regional Expansion',
-          description: 'Launched in Kenya & Ghana',
-          time: '2d ago',
-          iconType: 'expansion'
-        }
-      ],
-      lastActivity: '5h ago',
-      description: 'FinServe Ltd is a premier fintech infrastructure platform enabling seamless payment switching across West Africa.',
-      founded: '2019',
-      headquarters: 'Lagos, Nigeria',
-      socials: {
-        linkedin: 'https://linkedin.com/company/finserve',
-        twitter: 'https://twitter.com/finserve'
-      }
-    },
-    {
-      id: 'comp-3',
-      name: 'Delta Systems',
-      domain: 'deltasystems.ng',
-      logoBg: '#10b981',
-      logoColor: '#ffffff',
-      logoInitial: 'D',
-      industry: 'Software',
-      employees: '100 – 250',
-      revenue: '$5M – $10M',
-      location: 'Abuja, Nigeria',
-      opportunityScore: 87,
-      opportunityLevel: 'High',
-      scoreColor: '#059669',
-      scoreTrend: [65, 72, 79, 83, 87],
-      isSaved: false,
-      signalsCount: 4,
-      activeSignals: [
-        {
-          type: 'technology',
-          title: 'Technology Modernization',
-          description: 'Migrated infrastructure to AWS',
-          time: '1d ago',
-          iconType: 'technology'
-        },
-        {
-          type: 'leadership',
-          title: 'New VP Engineering',
-          description: 'Hired senior tech leader from UK',
-          time: '4d ago',
-          iconType: 'leadership'
-        }
-      ],
-      lastActivity: '1d ago',
-      description: 'Enterprise ERP and cloud business process automation software built for public and private institutions.',
-      founded: '2015',
-      headquarters: 'Abuja, Nigeria',
-      socials: {
-        linkedin: 'https://linkedin.com/company/deltasystems'
-      }
-    },
-    {
-      id: 'comp-4',
-      name: 'Vertex Solutions',
-      domain: 'vertexsol.com',
-      logoBg: '#8b5cf6',
-      logoColor: '#ffffff',
-      logoInitial: 'V',
-      industry: 'IT Services',
-      employees: '150 – 300',
-      revenue: '$10M – $25M',
-      location: 'Lagos, Nigeria',
-      opportunityScore: 78,
-      opportunityLevel: 'High',
-      scoreColor: '#059669',
-      scoreTrend: [60, 68, 72, 75, 78],
-      isSaved: false,
-      signalsCount: 5,
-      activeSignals: [
-        {
-          type: 'hiring',
-          title: 'Hiring Surge',
-          description: '22 technical openings posted',
-          time: '1d ago',
-          iconType: 'hiring'
-        }
-      ],
-      lastActivity: '1d ago',
-      description: 'Vertex Solutions provides outsourced IT management, cybersecurity compliance, and cloud architecture.',
-      founded: '2017',
-      headquarters: 'Lagos, Nigeria',
-      socials: {
-        linkedin: 'https://linkedin.com/company/vertexsolutions'
-      }
-    },
-    {
-      id: 'comp-5',
-      name: 'Nimbus Analytics',
-      domain: 'nimbusanalytics.com',
-      logoBg: '#ea580c',
-      logoColor: '#ffffff',
-      logoInitial: 'N',
-      industry: 'Data & Analytics',
-      employees: '100 – 200',
-      revenue: '$5M – $10M',
-      location: 'Lagos, Nigeria',
-      opportunityScore: 76,
-      opportunityLevel: 'High',
-      scoreColor: '#d97706',
-      scoreTrend: [58, 64, 70, 73, 76],
-      isSaved: false,
-      signalsCount: 4,
-      activeSignals: [
-        {
-          type: 'expansion',
-          title: 'Market Entry',
-          description: 'Announced launch in 3 countries',
-          time: '2d ago',
-          iconType: 'expansion'
-        }
-      ],
-      lastActivity: '2d ago',
-      description: 'Business intelligence and customer telemetry analytics for high-volume retail and logistics companies.',
-      founded: '2020',
-      headquarters: 'Lagos, Nigeria',
-      socials: {
-        linkedin: 'https://linkedin.com/company/nimbusanalytics'
-      }
-    },
-    {
-      id: 'comp-6',
-      name: 'Peak Consulting',
-      domain: 'peakconsulting.com',
-      logoBg: '#2563eb',
-      logoColor: '#ffffff',
-      logoInitial: 'P',
-      industry: 'Professional Services',
-      employees: '50 – 100',
-      revenue: '$3M – $5M',
-      location: 'Lagos, Nigeria',
-      opportunityScore: 62,
-      opportunityLevel: 'Medium',
-      scoreColor: '#d97706',
-      scoreTrend: [50, 54, 58, 60, 62],
-      isSaved: false,
-      signalsCount: 4,
-      activeSignals: [
-        {
-          type: 'compliance',
-          title: 'Regulatory Change',
-          description: 'New data protection advisory',
-          time: '2d ago',
-          iconType: 'compliance'
-        }
-      ],
-      lastActivity: '2d ago',
-      description: 'Boutique management advisory focused on enterprise human capital strategy and organizational redesign.',
-      founded: '2018',
-      headquarters: 'Lagos, Nigeria',
-      socials: {
-        linkedin: 'https://linkedin.com/company/peakconsulting'
-      }
-    },
-    {
-      id: 'comp-7',
-      name: 'Nova HealthTech',
-      domain: 'novahealthtech.com',
-      logoBg: '#ef4444',
-      logoColor: '#ffffff',
-      logoInitial: 'N',
-      industry: 'Healthcare',
-      employees: '50 – 100',
-      revenue: '$3M – $5M',
-      location: 'Abuja, Nigeria',
-      opportunityScore: 58,
-      opportunityLevel: 'Medium',
-      scoreColor: '#d97706',
-      scoreTrend: [45, 49, 52, 55, 58],
-      isSaved: false,
-      signalsCount: 3,
-      activeSignals: [
-        {
-          type: 'news',
-          title: 'Partnership Announcement',
-          description: 'Partnered with federal hospitals',
-          time: '3d ago',
-          iconType: 'news'
-        }
-      ],
-      lastActivity: '3d ago',
-      description: 'Telemedicine and health records interoperability software connecting patients with specialized medical care.',
-      founded: '2021',
-      headquarters: 'Abuja, Nigeria',
-      socials: {
-        linkedin: 'https://linkedin.com/company/novahealthtech'
-      }
-    },
-    {
-      id: 'comp-8',
-      name: 'Bluechip Industries',
-      domain: 'bluechipind.com',
-      logoBg: '#06b6d4',
-      logoColor: '#ffffff',
-      logoInitial: 'B',
-      industry: 'Manufacturing',
-      employees: '500 – 1,000',
-      revenue: '$50M – $100M',
-      location: 'Port Harcourt, Nigeria',
-      opportunityScore: 53,
-      opportunityLevel: 'Medium',
-      scoreColor: '#d97706',
-      scoreTrend: [42, 45, 48, 50, 53],
-      isSaved: false,
-      signalsCount: 3,
-      activeSignals: [
-        {
-          type: 'expansion',
-          title: 'Plant Expansion',
-          description: 'Commissioned automated packaging unit',
-          time: '3d ago',
-          iconType: 'expansion'
-        }
-      ],
-      lastActivity: '3d ago',
-      description: 'Large-scale industrial manufacturer of packaging goods, consumer materials, and chemical processing solutions.',
-      founded: '2008',
-      headquarters: 'Port Harcourt, Nigeria',
-      socials: {
-        linkedin: 'https://linkedin.com/company/bluechipindustries'
-      }
-    }
-];
-
 export const CompaniesPage: React.FC<CompaniesPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
-  const { companies: dynamicCompanies } = useHuntiq();
+  const { companies: dynamicCompanies, toggleSaveCompany } = useHuntiq();
   const [activeTab, setActiveTab] = useState('all');
   const [activeKpiFilter, setActiveKpiFilter] = useState('total');
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>('comp-1');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
 
   // Modals state
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false);
@@ -371,20 +58,34 @@ export const CompaniesPage: React.FC<CompaniesPageProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const companies = React.useMemo(() => {
-    const base = dynamicCompanies && dynamicCompanies.length > 0 ? dynamicCompanies : initialFallbackCompanies;
+    const base = dynamicCompanies || [];
     return base.map(c => ({
       ...c,
-      isSaved: savedMap[c.id] !== undefined ? savedMap[c.id] : c.isSaved
+      isSaved: savedMap[c.id] !== undefined ? savedMap[c.id] : Boolean(c.isSaved)
     }));
   }, [dynamicCompanies, savedMap]);
 
-  const selectedComp = companies.find((c) => c.id === selectedCompanyId) || companies[0];
+  const selectedComp = companies.find((c) => c.id === selectedCompanyId) || (companies.length > 0 ? companies[0] : null);
 
-  const handleToggleSave = (companyId: string) => {
-    setSavedMap((prev) => {
-      const current = companies.find(c => c.id === companyId)?.isSaved;
-      return { ...prev, [companyId]: !current };
-    });
+  const handleToggleSave = async (companyId: string) => {
+    const current = companies.find(c => c.id === companyId)?.isSaved;
+    const nextSaved = !current;
+    setSavedMap((prev) => ({ ...prev, [companyId]: nextSaved }));
+
+    try {
+      await toggleSaveCompany(companyId);
+      setToastMessage(nextSaved ? 'Company saved to bookmarks' : 'Company removed from bookmarks');
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err) {
+      console.error('Failed to toggle save company:', err);
+      setSavedMap((prev) => {
+        const copy = { ...prev };
+        delete copy[companyId];
+        return copy;
+      });
+      setToastMessage('Failed to update bookmark');
+      setTimeout(() => setToastMessage(null), 3000);
+    }
   };
 
   const handleExportCsv = () => {

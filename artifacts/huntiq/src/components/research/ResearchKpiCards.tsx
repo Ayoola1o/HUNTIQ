@@ -30,7 +30,7 @@ export const ResearchKpiCards: React.FC<ResearchKpiCardsProps> = ({
       iconBg: '#eff6ff',
       sparklineColor: '#6366f1',
       sparkPath: 'M0,18 Q20,10 40,16 T80,8 T110,14 T140,4',
-      badge: 'All Verified',
+      badge: safeSummary.totalReports > 0 ? 'All Verified' : '0 Reports',
       badgeColor: '#4338ca',
       badgeBg: '#eef2ff'
     },
@@ -43,7 +43,7 @@ export const ResearchKpiCards: React.FC<ResearchKpiCardsProps> = ({
       iconBg: '#fffbeb',
       sparklineColor: '#f59e0b',
       sparkPath: 'M0,16 Q25,6 50,14 T90,8 T120,16 T140,6',
-      badge: 'Live Syncing',
+      badge: safeSummary.inProgress > 0 ? 'Live Syncing' : 'Idle',
       badgeColor: '#b45309',
       badgeBg: '#fef3c7'
     },
@@ -56,7 +56,7 @@ export const ResearchKpiCards: React.FC<ResearchKpiCardsProps> = ({
       iconBg: '#ecfdf5',
       sparklineColor: '#10b981',
       sparkPath: 'M0,20 Q20,12 45,18 T85,6 T115,12 T140,4',
-      badge: '+18% vs last week',
+      badge: safeSummary.updatedThisWeek > 0 ? '+18% vs last week' : '0 new updates',
       badgeColor: '#047857',
       badgeBg: '#d1fae5'
     },
@@ -69,7 +69,7 @@ export const ResearchKpiCards: React.FC<ResearchKpiCardsProps> = ({
       iconBg: '#f5f3ff',
       sparklineColor: '#8b5cf6',
       sparkPath: 'M0,18 Q15,4 30,12 T60,6 T90,18 T120,2 T140,10',
-      badge: 'Ready for Outreach',
+      badge: safeSummary.highOpportunity > 0 ? 'Ready for Outreach' : 'None yet',
       badgeColor: '#6d28d9',
       badgeBg: '#ede9fe'
     }

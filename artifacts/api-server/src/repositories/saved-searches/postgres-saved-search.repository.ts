@@ -45,7 +45,7 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
       `;
       const result = await this.pool.query(query, params);
       if (result.rows.length === 0) {
-        return this.isProduction() ? [] : this.fallback.list(workspaceId, filter);
+        return [];
       }
 
       return result.rows.map(r => ({
@@ -79,7 +79,7 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
         (error as any).code = 'DATABASE_UNAVAILABLE';
         throw error;
       }
-      return this.fallback.list(workspaceId, filter);
+      return [];
     }
   }
 
@@ -92,7 +92,7 @@ export class PostgresSavedSearchRepository implements SavedSearchRepository {
       `;
       const result = await this.pool.query(query, [id, workspaceId]);
       if (!result.rows[0]) {
-        return this.isProduction() ? undefined : this.fallback.getById(id, workspaceId);
+        return undefined;
       }
       const r = result.rows[0];
       return {

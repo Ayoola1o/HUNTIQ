@@ -47,6 +47,12 @@ export const ResearchPage: React.FC<ResearchPageProps> = ({
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeKpiFilter, setActiveKpiFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   // Load Reports from Live API
   const loadReports = useCallback(async () => {
@@ -106,6 +112,7 @@ export const ResearchPage: React.FC<ResearchPageProps> = ({
 
     if (match) {
       setSelectedReport(match);
+      showToast(`Viewing existing report for ${match.companyName}`);
     } else {
       const detectedDomain = searchQuery.includes('.') ? searchQuery.toLowerCase().trim() : '';
       handleCompleteNewResearch(searchQuery, detectedDomain);
@@ -113,30 +120,34 @@ export const ResearchPage: React.FC<ResearchPageProps> = ({
   };
 
   const handleCompleteNewResearch = async (name: string, domain: string) => {
+    showToast(`⚡ Researching "${name}" across real-time sources...`);
     try {
       const newReport = await apiCreateResearchReport({
         companyName: name,
         domain
       });
-      setReports(prev => [newReport, ...prev]);
+      setReports(prev => [newReport, ...prev.filter(r => r.id !== newReport.id)]);
       setSelectedReport(newReport);
-    } catch (err) {
+      showToast(`✅ Research dossier generated for "${name}"!`);
+    } catch (err: any) {
       console.error('Failed to create research report via API:', err);
-      // Fallback
+      showToast(`❌ Failed to generate report: ${err?.message || 'Server error'}`);
       loadReports();
     }
   };
 
   const handleRefreshReport = async (id: string) => {
+    showToast('🔄 Refreshing company intelligence signals...');
     try {
       const refreshed = await apiRefreshResearchReport(id);
       setReports(prev => prev.map(r => r.id === id ? refreshed : r));
       if (selectedReport?.id === id) {
         setSelectedReport(refreshed);
       }
-    } catch (err) {
+      showToast('✅ Company intelligence refreshed!');
+    } catch (err: any) {
       console.warn('Failed to refresh report on backend:', err);
-      setReports(prev => prev.map(r => r.id === id ? { ...r, lastUpdated: 'Just now' } : r));
+      showToast(`❌ Refresh failed: ${err?.message || 'Server error'}`);
     }
   };
 
@@ -440,6 +451,29 @@ export const ResearchPage: React.FC<ResearchPageProps> = ({
           else handleCompleteNewResearch(comp, `${comp.toLowerCase().replace(/\s+/g, '')}.com`);
         }}
       />
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          backgroundColor: '#0f172a',
+          color: '#ffffff',
+          padding: '12px 20px',
+          borderRadius: '10px',
+          fontSize: '13px',
+          fontWeight: 600,
+          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          zIndex: 9999,
+          animation: 'fadeInUp 0.2s ease-out'
+        }}>
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 };

@@ -20,7 +20,11 @@ import {
   ChevronDown, 
   FolderDown 
 } from 'lucide-react';
-import { createSavedSearch } from '../../api';
+import { 
+  fetchSavedSearches, 
+  createSavedSearch, 
+  deleteSavedSearch as apiDeleteSavedSearch 
+} from '../../api';
 
 interface SavedSearchRecord {
   id: string;
@@ -73,33 +77,13 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
     dataFreshness: 'Real-time'
   });
 
-  // Saved searches persistent state
+  // Saved searches persistent state - strictly from backend API / empty by default
   const [savedSearches, setSavedSearches] = useState<SavedSearchRecord[]>(() => {
     try {
       const stored = localStorage.getItem('huntiq_saved_searches');
       if (stored) return JSON.parse(stored);
     } catch (_e) {}
-    return [
-      {
-        id: 'saved-1',
-        name: 'Lagos Tech & HR Scaleups',
-        createdAt: '2026-08-30T10:00:00Z',
-        autoAlert: true,
-        criteria: {
-          naturalQuery: 'High-growth B2B SaaS in Lagos with hiring surges',
-          tab: 'ai',
-          industries: ['Technology', 'Financial Services'],
-          locations: ['Lagos, Nigeria'],
-          companySize: '50 - 500 employees',
-          revenue: '$10M - $50M',
-          businessType: 'B2B',
-          technologies: ['React', 'PostgreSQL'],
-          yearsInBusiness: '3-10 years',
-          icpFit: 'High Propensity',
-          signals: ['Hiring Activity', 'Funding Raised', 'Expansion']
-        }
-      }
-    ];
+    return [];
   });
 
   // Modals state
@@ -117,6 +101,40 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
       localStorage.setItem('huntiq_saved_searches', JSON.stringify(savedSearches));
     } catch (_e) {}
   }, [savedSearches]);
+
+  // Load live saved searches from backend API on mount
+  useEffect(() => {
+    let mounted = true;
+    fetchSavedSearches()
+      .then(res => {
+        if (mounted && res && Array.isArray(res.searches)) {
+          const mapped: SavedSearchRecord[] = res.searches.map(item => ({
+            id: item.id,
+            name: item.name,
+            createdAt: item.createdAt || new Date().toISOString(),
+            autoAlert: !!item.monitoringEnabled,
+            criteria: {
+              naturalQuery: item.naturalQuery || '',
+              tab: 'ai',
+              industries: item.filters?.industries || [],
+              locations: item.filters?.locations || [],
+              companySize: item.filters?.companySizes?.[0] || '50 - 500 employees',
+              revenue: item.filters?.revenueRanges?.[0] || '$10M - $50M',
+              businessType: 'B2B',
+              technologies: [],
+              yearsInBusiness: 'All',
+              icpFit: 'All',
+              signals: item.signalsToWatch || []
+            }
+          }));
+          setSavedSearches(mapped);
+        }
+      })
+      .catch(err => {
+        console.warn('Could not sync saved searches from backend:', err);
+      });
+    return () => { mounted = false; };
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -145,9 +163,10 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
     });
   };
 
-  const handleSaveSearch = (name: string, autoAlert: boolean) => {
+  const handleSaveSearch = async (name: string, autoAlert: boolean) => {
+    const tempId = `temp-${Date.now()}`;
     const newRecord: SavedSearchRecord = {
-      id: `saved-${Date.now()}`,
+      id: tempId,
       name,
       createdAt: new Date().toISOString(),
       autoAlert,
@@ -155,26 +174,32 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
     };
 
     setSavedSearches(prev => [newRecord, ...prev]);
-    showToast(`✅ Saved search "${name}" successfully! Real-time alerts enabled.`);
 
-    // Persist to backend API
-    createSavedSearch({
-      name,
-      description: criteria.naturalQuery || `Prospects search with ${criteria.industries.length} industries & ${criteria.locations.length} locations.`,
-      searchType: activeTab === 'ai' ? 'ai_search' : (activeTab === 'geo-radar' ? 'signal_search' : 'advanced_search'),
-      naturalQuery: criteria.naturalQuery,
-      monitoringEnabled: autoAlert,
-      filters: {
-        industries: criteria.industries.length ? criteria.industries : ['Technology & SaaS'],
-        locations: criteria.locations.length ? criteria.locations : ['Lagos, Nigeria'],
-        companySizes: criteria.companySize ? (Array.isArray(criteria.companySize) ? criteria.companySize : [criteria.companySize]) : ['50 – 500'],
-        revenueRanges: criteria.revenue ? (Array.isArray(criteria.revenue) ? criteria.revenue : [criteria.revenue]) : undefined
-      },
-      signalsToWatch: criteria.signals.length ? criteria.signals : ['Hiring Surge', 'Regional Expansion'],
-      icpName: 'Primary ICP'
-    }).catch(err => {
-      console.warn('Could not sync saved search to backend:', err);
-    });
+    try {
+      const created = await createSavedSearch({
+        name,
+        description: criteria.naturalQuery || `Prospects search with ${criteria.industries.length} industries & ${criteria.locations.length} locations.`,
+        searchType: activeTab === 'ai' ? 'ai_search' : (activeTab === 'geo-radar' ? 'signal_search' : 'advanced_search'),
+        naturalQuery: criteria.naturalQuery,
+        monitoringEnabled: autoAlert,
+        filters: {
+          industries: criteria.industries.length ? criteria.industries : ['Technology & SaaS'],
+          locations: criteria.locations.length ? criteria.locations : ['Lagos, Nigeria'],
+          companySizes: criteria.companySize ? (Array.isArray(criteria.companySize) ? criteria.companySize : [criteria.companySize]) : ['50 – 500'],
+          revenueRanges: criteria.revenue ? (Array.isArray(criteria.revenue) ? criteria.revenue : [criteria.revenue]) : undefined
+        },
+        signalsToWatch: criteria.signals.length ? criteria.signals : ['Hiring Surge', 'Regional Expansion'],
+        icpName: 'Primary ICP'
+      });
+
+      if (created && created.id) {
+        setSavedSearches(prev => prev.map(s => s.id === tempId ? { ...s, id: created.id } : s));
+      }
+      showToast(`✅ Saved search "${name}" successfully! Real-time alerts enabled.`);
+    } catch (err: any) {
+      setSavedSearches(prev => prev.filter(s => s.id !== tempId));
+      showToast(`❌ Failed to save search: ${err?.message || 'Server error'}`);
+    }
   };
 
   const handleLoadSavedSearch = (saved: SavedSearchRecord) => {
@@ -183,10 +208,18 @@ export const FindProspectsPage: React.FC<FindProspectsPageProps> = ({
     showToast(`Loaded saved search "${saved.name}"`);
   };
 
-  const handleDeleteSavedSearch = (id: string, e: React.MouseEvent) => {
+  const handleDeleteSavedSearch = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const previous = savedSearches;
     setSavedSearches(prev => prev.filter(s => s.id !== id));
-    showToast('Search deleted');
+
+    try {
+      await apiDeleteSavedSearch(id);
+      showToast('Search deleted');
+    } catch (err: any) {
+      setSavedSearches(previous);
+      showToast(`❌ Failed to delete search: ${err?.message || 'Server error'}`);
+    }
   };
 
   const handleSelectTemplate = (template: QuickTemplate) => {

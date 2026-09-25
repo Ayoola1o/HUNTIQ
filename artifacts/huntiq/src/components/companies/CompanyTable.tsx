@@ -275,7 +275,37 @@ export const CompanyTable: React.FC<CompanyTableProps> = ({
 
       {/* Table Rows */}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {companies.map((comp) => {
+        {companies.length === 0 ? (
+          <div style={{
+            padding: '56px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px'
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              backgroundColor: '#eff6ff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#2563eb'
+            }}>
+              <Building2 size={24} />
+            </div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+              No companies found in this workspace
+            </div>
+            <div style={{ fontSize: '13px', color: '#64748b', maxWidth: '400px', lineHeight: 1.5 }}>
+              Launch Geo Radar or run an AI Search in Find Prospects to populate your pipeline with verified African enterprises.
+            </div>
+          </div>
+        ) : (
+          companies.map((comp) => {
           const isSelected = selectedCompanyId === comp.id;
           const isChecked = selectedIds.includes(comp.id);
 
@@ -404,7 +434,7 @@ export const CompanyTable: React.FC<CompanyTableProps> = ({
               </div>
             </div>
           );
-        })}
+        }))}
       </div>
 
       {/* Pagination Footer */}
@@ -417,79 +447,21 @@ export const CompanyTable: React.FC<CompanyTableProps> = ({
         fontSize: '12px',
         color: '#64748b'
       }}>
-        <span>Showing 1 to 8 of 2,842 companies</span>
+        <span>{companies.length === 0 ? 'Showing 0 companies' : ('Showing 1 to ' + companies.length + ' of ' + companies.length + ' companies')}</span>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <button
-            style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '6px',
-              border: '1px solid #e2e8f0',
-              backgroundColor: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#64748b'
-            }}
-          >
-            <ChevronLeft size={14} />
-          </button>
-
-          {[1, 2, 3].map((page) => (
-            <button
-              key={page}
-              style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '6px',
-                border: page === 1 ? '1px solid #6366f1' : '1px solid #e2e8f0',
-                backgroundColor: page === 1 ? '#ede9fe' : '#ffffff',
-                color: page === 1 ? '#6d28d9' : '#475569',
-                fontSize: '12px',
-                fontWeight: page === 1 ? 700 : 500,
-                cursor: 'pointer'
-              }}
-            >
-              {page}
+        {companies.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}>
+              <ChevronLeft size={14} />
             </button>
-          ))}
-
-          <span style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>
-
-          <button
-            style={{
-              width: '36px',
-              height: '28px',
-              borderRadius: '6px',
-              border: '1px solid #e2e8f0',
-              backgroundColor: '#ffffff',
-              color: '#475569',
-              fontSize: '12px',
-              cursor: 'pointer'
-            }}
-          >
-            356
-          </button>
-
-          <button
-            style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '6px',
-              border: '1px solid #e2e8f0',
-              backgroundColor: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#64748b'
-            }}
-          >
-            <ChevronRight size={14} />
-          </button>
-        </div>
+            <button style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #6366f1', backgroundColor: '#ede9fe', color: '#6d28d9', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+              1
+            </button>
+            <button style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
