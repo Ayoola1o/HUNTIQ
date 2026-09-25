@@ -1,42 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useHuntiq } from '../../context/HuntiqContext';
 
 export const SignalsByTypeCard: React.FC = () => {
   const { signals } = useHuntiq();
-  const [period, setPeriod] = useState('Last 30 days');
+  const [period, setPeriod] = useState<'Last 7 days' | 'Last 30 days' | 'Last 90 days' | 'All time'>('Last 30 days');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const signalCategories = React.useMemo(() => {
-    if (signals && signals.length > 0) {
-      const total = signals.length;
-      const countFor = (prefix: string) => signals.filter(s => s.type?.toLowerCase().includes(prefix.toLowerCase())).length;
-      
-      const hiringCount = countFor('hiring');
-      const expCount = countFor('expansion');
-      const leadCount = countFor('leadership');
-      const fundCount = countFor('funding');
-      const newsCount = countFor('news');
-      const techCount = countFor('tech') || countFor('digital');
+  const filteredSignals = useMemo(() => {
+    if (!signals || signals.length === 0) return [];
+    if (period === 'All time') return signals;
 
-      return [
-        { label: 'Hiring', pct: `${Math.max(5, Math.round((hiringCount / total) * 100))}%`, count: hiringCount || 1, color: '#3b82f6' },
-        { label: 'Expansion', pct: `${Math.max(5, Math.round((expCount / total) * 100))}%`, count: expCount || 1, color: '#06b6d4' },
-        { label: 'Leadership', pct: `${Math.max(5, Math.round((leadCount / total) * 100))}%`, count: leadCount || 1, color: '#f97316' },
-        { label: 'Funding', pct: `${Math.max(5, Math.round((fundCount / total) * 100))}%`, count: fundCount || 1, color: '#8b5cf6' },
-        { label: 'News', pct: `${Math.max(5, Math.round((newsCount / total) * 100))}%`, count: newsCount || 1, color: '#ef4444' },
-        { label: 'Technology', pct: `${Math.max(5, Math.round((techCount / total) * 100))}%`, count: techCount || 1, color: '#64748b' },
-      ];
-    }
-    return [
-      { label: 'Hiring', pct: '32%', count: 457, color: '#3b82f6' },
-      { label: 'Expansion', pct: '22%', count: 314, color: '#06b6d4' },
-      { label: 'Leadership', pct: '16%', count: 229, color: '#f97316' },
-      { label: 'Funding', pct: '12%', count: 172, color: '#8b5cf6' },
-      { label: 'News', pct: '10%', count: 143, color: '#ef4444' },
-      { label: 'Technology', pct: '8%', count: 114, color: '#64748b' },
-    ];
-  }, [signals]);
+    const now = Date.now();
+    const days = period === 'Last 7 days' ? 7 : period === 'Last 30 days' ? 30 : 90;
+    const cutoff = now - days * 86400000;
+
+    return signals.filter((s: any) => {
+      const dateVal = s.detectedTimestamp || s.firstDetected || s.detectedTime;
+      if (!dateVal) return true;
+      const parsed = Date.parse(dateVal);
+      if (isNaN(parsed)) return true;
+      return parsed >= cutoff;
+    });
+  }, [signals, period]);
+
+  const { signalCategories, totalCount } = useMemo(() => {
+    const total = filteredSignals.length;
+    const countFor = (prefix: string) =>
+      filteredSignals.filter((s) => s.type?.toLowerCase().includes(prefix.toLowerCase())).length;
+
+    const hiringCount = countFor('hiring');
+    const expCount = countFor('expansion');
+    const leadCount = countFor('leadership');
+    const fundCount = countFor('funding');
+    const newsCount = countFor('news');
+    const techCount = countFor('tech') || countFor('digital');
+
+    const categories = [
+      { label: 'Hiring', count: hiringCount, pctVal: total > 0 ? (hiringCount / total) * 100 : 0, color: '#3b82f6' },
+      { label: 'Expansion', count: expCount, pctVal: total > 0 ? (expCount / total) * 100 : 0, color: '#06b6d4' },
+      { label: 'Leadership', count: leadCount, pctVal: total > 0 ? (leadCount / total) * 100 : 0, color: '#f97316' },
+      { label: 'Funding', count: fundCount, pctVal: total > 0 ? (fundCount / total) * 100 : 0, color: '#8b5cf6' },
+      { label: 'News', count: newsCount, pctVal: total > 0 ? (newsCount / total) * 100 : 0, color: '#ef4444' },
+      { label: 'Technology', count: techCount, pctVal: total > 0 ? (techCount / total) * 100 : 0, color: '#64748b' },
+    ].map((cat) => ({
+      ...cat,
+      pct: `${Math.round(cat.pctVal)}%`
+    }));
+
+    return { signalCategories: categories, totalCount: total };
+  }, [filteredSignals]);
+
+  // Circumference of r=38 circle: 238.76
+  const circumference = 238.76;
+  let accumulatedOffset = 0;
+  const svgSlices = signalCategories.map((cat) => {
+    const dashLength = (cat.pctVal / 100) * circumference;
+    const slice = {
+      ...cat,
+      dashArray: `${dashLength} ${circumference - dashLength}`,
+      dashOffset: -accumulatedOffset,
+    };
+    accumulatedOffset += dashLength;
+    return slice;
+  });
 
   return (
     <div style={{
@@ -96,7 +123,7 @@ export const SignalsByTypeCard: React.FC = () => {
               zIndex: 20,
               minWidth: '110px'
             }}>
-              {['Last 7 days', 'Last 30 days', 'Last 90 days', 'All time'].map((opt) => (
+              {(['Last 7 days', 'Last 30 days', 'Last 90 days', 'All time'] as const).map((opt) => (
                 <div
                   key={opt}
                   onClick={() => {
@@ -124,67 +151,32 @@ export const SignalsByTypeCard: React.FC = () => {
         {/* Donut chart */}
         <div style={{ position: 'relative', width: '130px', height: '130px' }}>
           <svg width="130" height="130" viewBox="0 0 100 100">
-            {/* Slices calculated from circumference 238.7 */}
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#64748b"
-              strokeWidth="14"
-              strokeDasharray="19.1 238.7"
-              strokeDashoffset="0"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#ef4444"
-              strokeWidth="14"
-              strokeDasharray="23.9 238.7"
-              strokeDashoffset="-19.1"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#8b5cf6"
-              strokeWidth="14"
-              strokeDasharray="28.6 238.7"
-              strokeDashoffset="-43.0"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#f97316"
-              strokeWidth="14"
-              strokeDasharray="38.2 238.7"
-              strokeDashoffset="-71.6"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#06b6d4"
-              strokeWidth="14"
-              strokeDasharray="52.5 238.7"
-              strokeDashoffset="-109.8"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#3b82f6"
-              strokeWidth="14"
-              strokeDasharray="76.4 238.7"
-              strokeDashoffset="-162.3"
-            />
+            {totalCount === 0 ? (
+              <circle
+                cx="50"
+                cy="50"
+                r="38"
+                fill="transparent"
+                stroke="#f1f5f9"
+                strokeWidth="14"
+              />
+            ) : (
+              svgSlices.map((slice) =>
+                slice.count > 0 ? (
+                  <circle
+                    key={slice.label}
+                    cx="50"
+                    cy="50"
+                    r="38"
+                    fill="transparent"
+                    stroke={slice.color}
+                    strokeWidth="14"
+                    strokeDasharray={slice.dashArray}
+                    strokeDashoffset={slice.dashOffset}
+                  />
+                ) : null
+              )
+            )}
           </svg>
 
           {/* Center text */}
@@ -196,7 +188,7 @@ export const SignalsByTypeCard: React.FC = () => {
             textAlign: 'center'
           }}>
             <div style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
-              1,429
+              {totalCount.toLocaleString()}
             </div>
             <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>
               Total

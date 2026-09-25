@@ -6,7 +6,7 @@ import {
   Bot 
 } from 'lucide-react';
 
-import { copilotEngine } from '../../engine';
+import { executeCopilotPrompt } from '../../api/copilot';
 
 interface AiCopilotModalProps {
   isOpen: boolean;
@@ -25,14 +25,14 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'bot'; text: string; action?: { label: string; company: string } }>>([
     {
       sender: 'bot',
-      text: "Hello Ayoola! I'm your HUNTIQ Autonomous Intelligence Engine. I can discover ICP-matching accounts, calculate live Opportunity Scores, investigate companies 360°, draft multi-channel outreach, and detect buying signals."
+      text: "Hello! I'm your HUNTIQ Autonomous Intelligence Engine. I can discover ICP-matching accounts, calculate live Opportunity Scores, investigate companies 360°, draft multi-channel outreach, and detect buying signals."
     }
   ]);
   const [isTyping, setIsTyping] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const q = textToSend || query;
     if (!q.trim()) return;
 
@@ -41,8 +41,8 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
     setQuery('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      const result = copilotEngine.executePrompt(q);
+    try {
+      const result = await executeCopilotPrompt(q);
       let action: { label: string; company: string } | undefined = undefined;
 
       if (result.companies && result.companies.length > 0) {
@@ -53,15 +53,24 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
       }
 
       setMessages((prev) => [...prev, { sender: 'bot', text: result.message, action }]);
+    } catch (err: any) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: 'bot',
+          text: `⚠️ **Unable to execute Copilot query**: ${err?.message || 'Server connection error'}. Please try again.`
+        }
+      ]);
+    } finally {
       setIsTyping(false);
-    }, 450);
+    }
   };
 
   const quickPrompts = [
     'Which prospects should I contact today?',
-    'Why is Acme Technologies a 94/100 opportunity?',
-    'Show me expanding companies in Lagos',
-    'What trigger events happened in the last 24 hours?'
+    'Summarize my pipeline metrics',
+    'Show me expanding companies in my market',
+    'What trigger events happened recently?'
   ];
 
   return (

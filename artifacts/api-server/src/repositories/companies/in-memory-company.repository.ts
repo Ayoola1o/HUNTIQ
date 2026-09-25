@@ -104,5 +104,16 @@ export class InMemoryCompanyRepository implements CompanyRepository {
     }
     return company;
   }
+
+  async toggleSave(companyId: string, isSaved: boolean, workspaceId?: string): Promise<CompanyItem | undefined> {
+    if (workspaceId && this.companyWorkspaces.has(companyId)) {
+      if (this.companyWorkspaces.get(companyId) !== workspaceId) return undefined;
+    }
+    const company = this.companies.get(companyId);
+    if (!company) return undefined;
+    const updated = { ...company, isSaved };
+    this.companies.set(companyId, updated);
+    return updated;
+  }
 }
 

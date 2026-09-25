@@ -67,7 +67,7 @@ pipelineRouter.get('/pipeline/deals', async (req: AuthenticatedRequest, res: Res
   res.status(200).json(response);
 });
 
-pipelineRouter.post('/pipeline/deals', async (req: AuthenticatedRequest, res: Response) => {
+pipelineRouter.post(['/pipeline/deals', '/pipeline'], async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user?.id || DEFAULT_USER_ID;
   const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID;
 
@@ -111,7 +111,7 @@ pipelineRouter.post('/pipeline/deals', async (req: AuthenticatedRequest, res: Re
   });
 });
 
-pipelineRouter.patch('/pipeline/deals/:id', async (req: AuthenticatedRequest, res: Response) => {
+pipelineRouter.patch(['/pipeline/deals/:id', '/pipeline/:id', '/pipeline/deals/:id/stage', '/pipeline/:id/stage'], async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const userId = req.user?.id || DEFAULT_USER_ID;
   const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID;

@@ -26,7 +26,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onChangeTeam,
   onSearch
 }) => {
-  const { isLiveBackend, currentUser, navigateTo } = useHuntiq();
+  const { isLiveBackend, currentUser, navigateTo, signals } = useHuntiq();
   const [searchQuery, setSearchQuery] = useState('');
   const [isDateOpen, setIsDateOpen] = useState(false);
   const [isTeamOpen, setIsTeamOpen] = useState(false);
@@ -204,24 +204,26 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             >
               <Bell size={18} />
             </button>
-            <span style={{
-              position: 'absolute',
-              top: '-4px',
-              right: '-4px',
-              backgroundColor: '#ef4444',
-              color: '#ffffff',
-              fontSize: '10px',
-              fontWeight: 800,
-              width: '18px',
-              height: '18px',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '2px solid #f4f6fa'
-            }}>
-              12
-            </span>
+            {signals.length > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: '-4px',
+                right: '-4px',
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                fontSize: '10px',
+                fontWeight: 800,
+                width: '18px',
+                height: '18px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '2px solid #f4f6fa'
+              }}>
+                {Math.min(99, signals.length)}
+              </span>
+            )}
           </div>
 
           {/* User Avatar */}

@@ -17,6 +17,7 @@ interface CompanyRow {
   logo_url: string | null;
   linkedin_url: string | null;
   founded_year: number | null;
+  is_saved: boolean | null;
   updated_at: Date | string;
 }
 
@@ -53,6 +54,7 @@ const mapCompanyRow = (row: CompanyRow): CompanyItem => {
     opportunityLevel: opportunityLevelFor(score),
     scoreColor: scoreColorFor(score),
     scoreTrend: [],
+    isSaved: Boolean(row.is_saved),
     signalsCount: 0,
     activeSignals: [],
     lastActivity: 'No activity yet',
@@ -106,11 +108,11 @@ export class PostgresCompanyRepository implements CompanyRepository {
       }
 
       const result = await this.pool.query<CompanyRow>(
-        `select * from companies where ${conditions.join(' and ')} order by updated_at desc, name asc`,
+        `select * from companies where ${conditions.join(' and ')} order by is_saved desc, updated_at desc, name asc`,
         values,
       );
       if (result.rows.length === 0) {
-        return this.isProduction() ? [] : this.fallback.list(params, effectiveWorkspaceId);
+        return [];
       }
       return result.rows.map(mapCompanyRow);
     } catch (err: any) {
@@ -120,7 +122,7 @@ export class PostgresCompanyRepository implements CompanyRepository {
         (error as any).code = (err as any).code || 'DATABASE_UNAVAILABLE';
         throw error;
       }
-      return this.fallback.list(params, effectiveWorkspaceId);
+      return [];
     }
   }
 
@@ -134,7 +136,7 @@ export class PostgresCompanyRepository implements CompanyRepository {
         [effectiveWorkspaceId, companyId],
       );
       if (!result.rows[0]) {
-        return this.isProduction() ? undefined : this.fallback.getById(companyId, effectiveWorkspaceId);
+        return undefined;
       }
       return mapCompanyRow(result.rows[0]);
     } catch (err: any) {
@@ -144,7 +146,37 @@ export class PostgresCompanyRepository implements CompanyRepository {
         (error as any).code = 'DATABASE_UNAVAILABLE';
         throw error;
       }
-      return this.fallback.getById(companyId, effectiveWorkspaceId);
+      return undefined;
+    }
+  }
+
+  async toggleSave(companyId: string, isSaved: boolean, workspaceId?: string): Promise<CompanyItem | undefined> {
+    const effectiveWorkspaceId = workspaceId || (this.isProduction() ? '' : 'ws-default-001');
+    if (!effectiveWorkspaceId) {
+      const error = new Error('workspaceId is required in production');
+      (error as any).statusCode = 401;
+      (error as any).code = 'UNAUTHORIZED';
+      throw error;
+    }
+
+    try {
+      const result = await this.pool.query<CompanyRow>(
+        'update companies set is_saved = $1, updated_at = now() where id = $2 and workspace_id = $3 returning *',
+        [isSaved, companyId, effectiveWorkspaceId]
+      );
+      if (!result.rows[0]) {
+        return undefined;
+      }
+      return mapCompanyRow(result.rows[0]);
+    } catch (err: any) {
+      console.error('[PostgresCompanyRepository.toggleSave] Database error:', err.message);
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating company saved status: ${err.message}`);
+        (error as any).statusCode = 503;
+        (error as any).code = 'DATABASE_UNAVAILABLE';
+        throw error;
+      }
+      return this.fallback.toggleSave(companyId, isSaved, effectiveWorkspaceId);
     }
   }
 

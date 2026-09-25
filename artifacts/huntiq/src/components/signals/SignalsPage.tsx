@@ -35,7 +35,7 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
 
   // Date Range and Filter states
-  const [dateRange, setDateRange] = useState('May 16, 2025 - May 30, 2025');
+  const [dateRange, setDateRange] = useState('Last 30 Days');
   const [isDateMenuOpen, setIsDateMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [appliedFilters, setAppliedFilters] = useState<{
@@ -64,6 +64,19 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
   const selectedSig: SignalItem | undefined = (selectedSignalId ? signals.find((s: SignalItem) => s.id === selectedSignalId) : null) || signals[0];
 
   const filteredSignals = signals.filter((sig: SignalItem) => {
+    // Date Range Filter
+    if (dateRange !== 'All Time') {
+      const now = Date.now();
+      const rawTime = sig.detectedTimestamp || sig.firstDetected || sig.detectedTime;
+      const sigTime = rawTime ? new Date(rawTime).getTime() : NaN;
+      if (!isNaN(sigTime)) {
+        if (dateRange === 'Today' && sigTime < now - 24 * 3600 * 1000) return false;
+        if (dateRange === 'Last 7 Days' && sigTime < now - 7 * 86400 * 1000) return false;
+        if (dateRange === 'Last 30 Days' && sigTime < now - 30 * 86400 * 1000) return false;
+        if (dateRange === 'This Quarter' && sigTime < now - 90 * 86400 * 1000) return false;
+      }
+    }
+
     // Type Filter
     if (activeTypeFilter !== 'all' && sig.type !== activeTypeFilter) return false;
 
@@ -265,20 +278,22 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
               >
                 <Bell size={16} />
               </button>
-              <span style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-4px',
-                backgroundColor: '#e11d48',
-                color: '#ffffff',
-                fontSize: '10px',
-                fontWeight: 800,
-                borderRadius: '10px',
-                padding: '1px 5px',
-                pointerEvents: 'none'
-              }}>
-                12
-              </span>
+              {signals.length > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  backgroundColor: '#e11d48',
+                  color: '#ffffff',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  borderRadius: '10px',
+                  padding: '1px 5px',
+                  pointerEvents: 'none'
+                }}>
+                  {Math.min(99, signals.length)}
+                </span>
+              )}
             </div>
 
             {/* User Avatar */}
@@ -340,7 +355,7 @@ export const SignalsPage: React.FC<SignalsPageProps> = ({
                   minWidth: '200px',
                   padding: '6px'
                 }}>
-                  {['Today', 'Last 7 Days', 'Last 30 Days', 'May 16, 2025 - May 30, 2025', 'This Quarter'].map((range) => (
+                  {['Today', 'Last 7 Days', 'Last 30 Days', 'This Quarter', 'All Time'].map((range) => (
                     <button
                       key={range}
                       onClick={() => {

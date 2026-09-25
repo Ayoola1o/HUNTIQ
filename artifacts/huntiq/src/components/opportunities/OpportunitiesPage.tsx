@@ -34,10 +34,10 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
-  const { opportunities: dynamicOpportunities, isLiveBackend, isDataLoading, refreshData, addDealToPipeline } = useHuntiq();
+  const { opportunities: dynamicOpportunities, signals, isLiveBackend, isDataLoading, refreshData, addDealToPipeline } = useHuntiq();
   const [activeTab, setActiveTab] = useState('all');
   const [activeKpiFilter, setActiveKpiFilter] = useState('all');
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>('opp-c1');
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
@@ -51,7 +51,7 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
   // Search & Filter & UI States
   const [searchQuery, setSearchQuery] = useState('');
   const [isStarred, setIsStarred] = useState(false);
-  const [dateRange, setDateRange] = useState('May 16, 2025 - May 30, 2025');
+  const [dateRange, setDateRange] = useState('Last 30 Days');
   const [isDateMenuOpen, setIsDateMenuOpen] = useState(false);
   const [appliedFilters, setAppliedFilters] = useState<{
     minScore: number;
@@ -61,7 +61,7 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
   } | null>(null);
 
   // Live dataset from Huntiq engine
-  const [opportunities, setOpportunities] = useState<OpportunityItem[]>(() => dynamicOpportunities);
+  const [opportunities, setOpportunities] = useState<OpportunityItem[]>(() => dynamicOpportunities || []);
 
   const handleApplyFilters = (filters: {
     minScore: number;
@@ -76,9 +76,11 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
 
   // Reactively synchronize whenever live backend data refreshes
   React.useEffect(() => {
-    if (dynamicOpportunities && dynamicOpportunities.length > 0) {
+    if (dynamicOpportunities) {
       setOpportunities(dynamicOpportunities);
-      if (!selectedOpportunityId && dynamicOpportunities[0]) {
+      if (dynamicOpportunities.length === 0) {
+        setSelectedOpportunityId(null);
+      } else if (!selectedOpportunityId || !dynamicOpportunities.some((o) => o.id === selectedOpportunityId)) {
         setSelectedOpportunityId(dynamicOpportunities[0].id);
       }
     }
@@ -155,6 +157,21 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
 
   // Filter opportunities based on search query, active tab, and modal filters
   const filteredOpportunities = opportunities.filter((opp) => {
+    // Date Range Filter
+    if (dateRange !== 'All Time') {
+      const now = Date.now();
+      const idMatch = opp.id.match(/^opp-(\d+)$/);
+      if (idMatch) {
+        const oppTime = Number(idMatch[1]);
+        if (!isNaN(oppTime)) {
+          if (dateRange === 'Today' && oppTime < now - 24 * 3600 * 1000) return false;
+          if (dateRange === 'Last 7 Days' && oppTime < now - 7 * 86400 * 1000) return false;
+          if (dateRange === 'Last 30 Days' && oppTime < now - 30 * 86400 * 1000) return false;
+          if (dateRange === 'This Quarter' && oppTime < now - 90 * 86400 * 1000) return false;
+        }
+      }
+    }
+
     // Search query filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -422,20 +439,22 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
               >
                 <Bell size={16} />
               </button>
-              <span style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-4px',
-                backgroundColor: '#e11d48',
-                color: '#ffffff',
-                fontSize: '10px',
-                fontWeight: 800,
-                borderRadius: '10px',
-                padding: '1px 5px',
-                pointerEvents: 'none'
-              }}>
-                12
-              </span>
+              {signals.length > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  backgroundColor: '#e11d48',
+                  color: '#ffffff',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  borderRadius: '10px',
+                  padding: '1px 5px',
+                  pointerEvents: 'none'
+                }}>
+                  {Math.min(99, signals.length)}
+                </span>
+              )}
             </div>
 
             {/* User Avatar */}
@@ -497,7 +516,7 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
                   minWidth: '200px',
                   padding: '6px'
                 }}>
-                  {['Today', 'Last 7 Days', 'Last 30 Days', 'May 16, 2025 - May 30, 2025', 'This Quarter'].map((range) => (
+                  {['Today', 'Last 7 Days', 'Last 30 Days', 'This Quarter', 'All Time'].map((range) => (
                     <button
                       key={range}
                       onClick={() => {

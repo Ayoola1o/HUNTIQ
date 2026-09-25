@@ -53,51 +53,7 @@ export const AttentionFeed: React.FC<AttentionFeedProps> = ({ onOpenResearch, on
       });
     });
 
-    if (liveItems.length > 0) {
-      return liveItems;
-    }
-
-    return [
-      {
-        id: 'acme',
-        title: 'Acme Technologies',
-        score: 94,
-        scoreColor: '#0284c7',
-        scoreBorder: '#38bdf8',
-        typeBadge: 'HIGH PRIORITY',
-        typeColor: '#e11d48',
-        typeBg: '#ffe4e6',
-        typeIcon: <Flame size={14} color="#e11d48" />,
-        sub: 'Technology • 250-500 employees • Lagos, NG',
-        description: 'Hiring 38 new employees + opened a second office + appointed a new COO.',
-        tags: ['Hiring Surge', 'Expansion', 'New Executive'],
-        bestContact: {
-          name: 'Jane Smith',
-          role: 'Head of People',
-        },
-        hasResearchBtn: true,
-        hasContactBtn: true,
-      },
-      {
-        id: 'finserve',
-        title: 'FinServe Ltd',
-        score: 88,
-        scoreColor: '#d97706',
-        scoreBorder: '#f59e0b',
-        typeBadge: 'NEW SIGNAL',
-        typeColor: '#d97706',
-        typeBg: '#fef3c7',
-        typeIcon: <Zap size={14} color="#d97706" />,
-        sub: 'Financial Services • 200-500 employees • Lagos, NG',
-        description: 'Announced expansion into two new markets: Ghana and Kenya.',
-        tags: ['Expansion', 'News', 'Growth'],
-        bestContact: {
-          name: 'Michael Okoro',
-          role: 'HR Director',
-        },
-        customAction: 'View Intelligence',
-      }
-    ];
+    return liveItems;
   }, [signals, companies]);
 
   return (
@@ -126,19 +82,22 @@ export const AttentionFeed: React.FC<AttentionFeedProps> = ({ onOpenResearch, on
           <span style={{
             fontSize: '11px',
             fontWeight: 700,
-            backgroundColor: '#eff6ff',
-            color: '#2563eb',
+            backgroundColor: attentionItems.length > 0 ? '#eff6ff' : '#f8fafc',
+            color: attentionItems.length > 0 ? '#2563eb' : '#64748b',
             padding: '2px 8px',
             borderRadius: '12px',
-            border: '1px solid #bfdbfe'
+            border: `1px solid ${attentionItems.length > 0 ? '#bfdbfe' : '#e2e8f0'}`
           }}>
-            12 new updates
+            {attentionItems.length > 0 ? `${attentionItems.length} new update${attentionItems.length === 1 ? '' : 's'}` : '0 updates'}
           </span>
         </div>
 
         <a
           href="#updates"
-          onClick={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.preventDefault();
+            navigateTo('signals');
+          }}
           style={{
             fontSize: '12.5px',
             fontWeight: 600,
@@ -146,7 +105,8 @@ export const AttentionFeed: React.FC<AttentionFeedProps> = ({ onOpenResearch, on
             textDecoration: 'none',
             display: 'flex',
             alignItems: 'center',
-            gap: '4px'
+            gap: '4px',
+            cursor: 'pointer'
           }}
         >
           <span>View all updates</span>
@@ -156,7 +116,44 @@ export const AttentionFeed: React.FC<AttentionFeedProps> = ({ onOpenResearch, on
 
       {/* Feed Items List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {attentionItems.map((item) => (
+        {attentionItems.length === 0 ? (
+          <div style={{
+            padding: '32px 16px',
+            textAlign: 'center',
+            backgroundColor: '#fafbfc',
+            borderRadius: '12px',
+            border: '1px dashed #e2e8f0',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <Zap size={22} color="#94a3b8" />
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
+              No recent activity needing attention
+            </div>
+            <div style={{ fontSize: '11.5px', color: '#64748b', maxWidth: '320px' }}>
+              Verified buying signals, executive leadership updates, and expansion triggers will appear here in real-time.
+            </div>
+            <button
+              onClick={() => navigateTo('find-prospects')}
+              style={{
+                marginTop: '6px',
+                backgroundColor: '#4f46e5',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Discover Accounts
+            </button>
+          </div>
+        ) : (
+          attentionItems.map((item) => (
           <div
             key={item.id}
             style={{
@@ -366,7 +363,7 @@ export const AttentionFeed: React.FC<AttentionFeedProps> = ({ onOpenResearch, on
               </button>
             </div>
           </div>
-        ))}
+        )))}
       </div>
 
       {/* Show more updates */}

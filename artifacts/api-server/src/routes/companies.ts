@@ -117,6 +117,46 @@ companiesRouter.get('/companies/:id', async (req: AuthenticatedRequest, res: Res
 });
 
 /**
+ * POST /api/companies/:id/save
+ * Persists saved/bookmarked company state in PostgreSQL
+ */
+companiesRouter.post('/companies/:id/save', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+    });
+  }
+  const companyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const { isSaved } = req.body ?? {};
+  const shouldSave = typeof isSaved === 'boolean' ? isSaved : true;
+
+  try {
+    const updated = await companyRepository.toggleSave(companyId, shouldSave, workspaceId);
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'COMPANY_NOT_FOUND', message: `Company with ID '${companyId}' was not found.` },
+        meta: { timestamp: new Date().toISOString() }
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: updated,
+      meta: { timestamp: new Date().toISOString() }
+    });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({
+      success: false,
+      error: { code: err.code || 'UPDATE_FAILED', message: err.message },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
+});
+
+/**
  * POST /api/companies/resolve
  * Canonical entity resolution with domain normalization & fuzzy matching
  */

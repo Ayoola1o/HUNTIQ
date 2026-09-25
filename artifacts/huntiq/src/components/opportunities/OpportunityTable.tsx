@@ -427,14 +427,28 @@ export const OpportunityTable: React.FC<OpportunityTableProps> = ({
 
       {/* Table Rows */}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {opportunities.map((opp) => {
-          const isSelected = selectedOpportunityId === opp.id;
-          const isChecked = selectedIds.includes(opp.id);
+        {opportunities.length === 0 ? (
+          <div style={{
+            padding: '48px 24px',
+            textAlign: 'center',
+            color: '#64748b'
+          }}>
+            <p style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: '0 0 6px 0' }}>
+              No opportunities found
+            </p>
+            <p style={{ fontSize: '12.5px', color: '#64748b', margin: 0 }}>
+              No target accounts match the current filter criteria or have been captured yet.
+            </p>
+          </div>
+        ) : (
+          opportunities.map((opp) => {
+            const isSelected = selectedOpportunityId === opp.id;
+            const isChecked = selectedIds.includes(opp.id);
 
-          return (
-            <div
-              key={opp.id}
-              onClick={() => onSelectOpportunity(opp)}
+            return (
+              <div
+                key={opp.id}
+                onClick={() => onSelectOpportunity(opp)}
               style={{
                 display: 'grid',
                 gridTemplateColumns: '40px 2.2fr 1.1fr 1fr 2.8fr 1fr 1.1fr 1fr 30px',
@@ -573,7 +587,7 @@ export const OpportunityTable: React.FC<OpportunityTableProps> = ({
               </div>
             </div>
           );
-        })}
+        }))}
         </div>
         </div>
       </div>
@@ -588,9 +602,13 @@ export const OpportunityTable: React.FC<OpportunityTableProps> = ({
         fontSize: '12px',
         color: '#64748b'
       }}>
-        <span>Showing 1 to 6 of 284 opportunities</span>
+        <span>
+          {opportunities.length === 0
+            ? 'Showing 0 opportunities'
+            : `Showing 1 to ${opportunities.length} of ${opportunities.length} opportunities`}
+        </span>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ display: opportunities.length > 0 ? 'flex' : 'none', alignItems: 'center', gap: '4px' }}>
           <button
             style={{
               width: '28px',

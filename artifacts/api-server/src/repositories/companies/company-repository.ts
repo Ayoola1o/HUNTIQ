@@ -24,4 +24,5 @@ export interface CompanyRepository {
   list(params?: CompanySearchParams, workspaceId?: string): Promise<CompanyItem[]>;
   getById(companyId: string, workspaceId?: string): Promise<CompanyItem | undefined>;
   create(input: CreateCompanyInput, workspaceId?: string): Promise<CompanyItem>;
+  toggleSave(companyId: string, isSaved: boolean, workspaceId: string): Promise<CompanyItem | undefined>;
 }

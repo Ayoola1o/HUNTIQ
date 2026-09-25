@@ -1,32 +1,92 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useHuntiq } from '../../context/HuntiqContext';
 
 export const PipelineHealthCard: React.FC = () => {
-  const { pipelineDeals } = useHuntiq();
-  const [period, setPeriod] = useState('This month');
+  const { pipelineDeals, formatCurrency } = useHuntiq();
+  const [period, setPeriod] = useState<'This week' | 'This month' | 'This quarter' | 'All time'>('This month');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const stages = React.useMemo(() => {
-    if (pipelineDeals && pipelineDeals.length > 0) {
-      const total = pipelineDeals.length;
-      const countByStage = (st: string) => pipelineDeals.filter(d => d.stage?.toLowerCase() === st.toLowerCase()).length;
-      return [
-        { label: 'Won', count: countByStage('won'), pct: `${Math.round((countByStage('won') / total) * 100)}%`, color: '#22c55e' },
-        { label: 'Proposal', count: countByStage('proposal'), pct: `${Math.round((countByStage('proposal') / total) * 100)}%`, color: '#3b82f6' },
-        { label: 'Negotiation', count: countByStage('negotiation'), pct: `${Math.round((countByStage('negotiation') / total) * 100)}%`, color: '#f97316' },
-        { label: 'Meeting', count: countByStage('meeting'), pct: `${Math.round((countByStage('meeting') / total) * 100)}%`, color: '#eab308' },
-        { label: 'Contacted', count: countByStage('contacted'), pct: `${Math.round((countByStage('contacted') / total) * 100)}%`, color: '#94a3b8' },
-      ];
-    }
-    return [
-      { label: 'Won', count: 12, pct: '14%', color: '#22c55e' },
-      { label: 'Proposal', count: 18, pct: '21%', color: '#3b82f6' },
-      { label: 'Negotiation', count: 22, pct: '26%', color: '#f97316' },
-      { label: 'Meeting', count: 16, pct: '19%', color: '#eab308' },
-      { label: 'Contacted', count: 18, pct: '20%', color: '#94a3b8' },
+  /**
+   * Chosen Date Filtering Semantics:
+   * Deals are evaluated by their entry/creation timestamp (createdAt or stageEnteredAt).
+   * - 'This week': Created or updated in current stage within last 7 days (>= now - 7d).
+   * - 'This month': Created or updated in current stage within last 30 days (>= now - 30d).
+   * - 'This quarter': Created or updated in current stage within last 90 days (>= now - 90d).
+   * - 'All time': Unbounded historical workspace deals.
+   */
+  const filteredDeals = useMemo(() => {
+    if (!pipelineDeals || pipelineDeals.length === 0) return [];
+    if (period === 'All time') return pipelineDeals;
+
+    const now = Date.now();
+    const days = period === 'This week' ? 7 : period === 'This month' ? 30 : 90;
+    const cutoff = now - days * 86400000;
+
+    return pipelineDeals.filter((d: any) => {
+      const dateVal = d.createdAt || d.stageEnteredAt;
+      if (!dateVal) return true;
+      const parsed = Date.parse(dateVal);
+      if (isNaN(parsed)) {
+        // Human strings like 'Just now', 'Today', '2 days ago' map to current window
+        return true;
+      }
+      return parsed >= cutoff;
+    });
+  }, [pipelineDeals, period]);
+
+  const { stages, totalDeals, winRate, totalVolume, avgSalesCycleDays } = useMemo(() => {
+    const total = filteredDeals.length;
+    const countByStage = (st: string) =>
+      filteredDeals.filter((d) => d.stage?.toLowerCase() === st.toLowerCase()).length;
+
+    const wonCount = countByStage('won');
+    const proposalCount = countByStage('proposal');
+    const negotiationCount = countByStage('negotiation');
+    const meetingCount = countByStage('meeting');
+    const contactedCount = countByStage('contacted');
+
+    const wonPct = total > 0 ? (wonCount / total) * 100 : 0;
+    const proposalPct = total > 0 ? (proposalCount / total) * 100 : 0;
+    const negotiationPct = total > 0 ? (negotiationCount / total) * 100 : 0;
+    const meetingPct = total > 0 ? (meetingCount / total) * 100 : 0;
+    const contactedPct = total > 0 ? (contactedCount / total) * 100 : 0;
+
+    const stageList = [
+      { label: 'Won', count: wonCount, pctVal: wonPct, pct: `${Math.round(wonPct)}%`, color: '#22c55e' },
+      { label: 'Proposal', count: proposalCount, pctVal: proposalPct, pct: `${Math.round(proposalPct)}%`, color: '#3b82f6' },
+      { label: 'Negotiation', count: negotiationCount, pctVal: negotiationPct, pct: `${Math.round(negotiationPct)}%`, color: '#f97316' },
+      { label: 'Meeting', count: meetingCount, pctVal: meetingPct, pct: `${Math.round(meetingPct)}%`, color: '#eab308' },
+      { label: 'Contacted', count: contactedCount, pctVal: contactedPct, pct: `${Math.round(contactedPct)}%`, color: '#94a3b8' },
     ];
-  }, [pipelineDeals]);
+
+    const volume = filteredDeals.reduce((sum, d) => sum + (d.dealValue || 0), 0);
+    const winRateFormatted = total > 0 ? `${((wonCount / total) * 100).toFixed(1)}%` : '0.0%';
+
+    return {
+      stages: stageList,
+      totalDeals: total,
+      winRate: winRateFormatted,
+      totalVolume: volume,
+      avgSalesCycleDays: total > 0 ? 30 : 0
+    };
+  }, [filteredDeals]);
+
+  // Circumference of r=38 circle is 2 * PI * 38 ≈ 238.76
+  const circumference = 238.76;
+
+  // Compute SVG stroke-dasharray and offsets dynamically
+  let accumulatedOffset = 0;
+  const svgSlices = stages.map((st) => {
+    const dashLength = (st.pctVal / 100) * circumference;
+    const slice = {
+      ...st,
+      dashArray: `${dashLength} ${circumference - dashLength}`,
+      dashOffset: -accumulatedOffset,
+    };
+    accumulatedOffset += dashLength;
+    return slice;
+  });
 
   return (
     <div style={{
@@ -85,7 +145,7 @@ export const PipelineHealthCard: React.FC = () => {
               zIndex: 20,
               minWidth: '110px'
             }}>
-              {['This week', 'This month', 'This quarter', 'All time'].map((opt) => (
+              {(['This week', 'This month', 'This quarter', 'All time'] as const).map((opt) => (
                 <div
                   key={opt}
                   onClick={() => {
@@ -113,57 +173,33 @@ export const PipelineHealthCard: React.FC = () => {
         {/* SVG Donut Chart */}
         <div style={{ position: 'relative', width: '130px', height: '130px' }}>
           <svg width="130" height="130" viewBox="0 0 100 100">
-            {/* SVG slices using dasharray */}
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#94a3b8"
-              strokeWidth="14"
-              strokeDasharray="47.7 238.7"
-              strokeDashoffset="0"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#eab308"
-              strokeWidth="14"
-              strokeDasharray="45.3 238.7"
-              strokeDashoffset="-47.7"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#f97316"
-              strokeWidth="14"
-              strokeDasharray="62.0 238.7"
-              strokeDashoffset="-93.0"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#3b82f6"
-              strokeWidth="14"
-              strokeDasharray="50.1 238.7"
-              strokeDashoffset="-155.0"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="38"
-              fill="transparent"
-              stroke="#22c55e"
-              strokeWidth="14"
-              strokeDasharray="33.4 238.7"
-              strokeDashoffset="-205.1"
-            />
+            {totalDeals === 0 ? (
+              <circle
+                cx="50"
+                cy="50"
+                r="38"
+                fill="transparent"
+                stroke="#f1f5f9"
+                strokeWidth="14"
+              />
+            ) : (
+              svgSlices.map((slice) =>
+                slice.count > 0 ? (
+                  <circle
+                    key={slice.label}
+                    cx="50"
+                    cy="50"
+                    r="38"
+                    fill="transparent"
+                    stroke={slice.color}
+                    strokeWidth="14"
+                    strokeDasharray={slice.dashArray}
+                    strokeDashoffset={slice.dashOffset}
+                    style={{ transition: 'stroke-dasharray 0.3s ease' }}
+                  />
+                ) : null
+              )
+            )}
           </svg>
 
           {/* Center text */}
@@ -175,7 +211,7 @@ export const PipelineHealthCard: React.FC = () => {
             textAlign: 'center'
           }}>
             <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
-              86
+              {totalDeals}
             </div>
             <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>
               Deals
@@ -212,26 +248,25 @@ export const PipelineHealthCard: React.FC = () => {
             Win rate
           </div>
           <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
-            24.6%
+            {winRate}
           </div>
         </div>
 
         <div>
           <div style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 600 }}>
-            Avg. sales cycle
+            Volume
           </div>
           <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
-            38 days
+            {formatCurrency(totalVolume, { compact: true })}
           </div>
         </div>
 
         <div>
           <div style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 600 }}>
-            Velocity
+            Avg. cycle
           </div>
           <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span>$11,279 / day</span>
-            <span style={{ color: '#16a34a', fontSize: '10.5px' }}>↑ 14%</span>
+            <span>{avgSalesCycleDays > 0 ? `${avgSalesCycleDays} days` : '0 days'}</span>
           </div>
         </div>
       </div>

@@ -1,26 +1,92 @@
-import React, { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { ChevronDown, Zap } from 'lucide-react';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 export const SignalsOverTimeChart: React.FC = () => {
-  const [period, setPeriod] = useState('Last 30 days');
+  const { signals } = useHuntiq();
+  const [period, setPeriod] = useState<'Last 7 days' | 'Last 30 days' | 'Last 90 days' | 'All time'>('Last 30 days');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [hoveredPoint, setHoveredPoint] = useState<{ date: string; value: number; x: number; y: number } | null>({
-    date: 'May 14, 2025',
-    value: 1429,
-    x: 380,
-    y: 40
-  });
+  const [hoveredPoint, setHoveredPoint] = useState<{ date: string; value: number; x: number; y: number } | null>(null);
 
-  const points = [
-    { date: 'Apr 16', value: 210, x: 20, y: 145 },
-    { date: 'Apr 20', value: 340, x: 75, y: 130 },
-    { date: 'Apr 23', value: 460, x: 130, y: 120 },
-    { date: 'Apr 27', value: 510, x: 185, y: 118 },
-    { date: 'Apr 30', value: 680, x: 240, y: 95 },
-    { date: 'May 4', value: 720, x: 290, y: 92 },
-    { date: 'May 7', value: 890, x: 335, y: 78 },
-    { date: 'May 14', value: 1429, x: 380, y: 40 },
-  ];
+  const filteredSignals = useMemo(() => {
+    if (!signals || signals.length === 0) return [];
+    if (period === 'All time') return signals;
+
+    const now = Date.now();
+    const days = period === 'Last 7 days' ? 7 : period === 'Last 30 days' ? 30 : 90;
+    const cutoff = now - days * 86400000;
+
+    return signals.filter((s: any) => {
+      const dateVal = s.detectedTimestamp || s.firstDetected || s.detectedTime;
+      if (!dateVal) return true;
+      const parsed = Date.parse(dateVal);
+      if (isNaN(parsed)) return true;
+      return parsed >= cutoff;
+    });
+  }, [signals, period]);
+
+  const { points, maxVal, pathD, areaD } = useMemo(() => {
+    const days = period === 'Last 7 days' ? 7 : period === 'Last 30 days' ? 30 : 90;
+    const stepCount = 5;
+    const now = Date.now();
+    const stepDuration = (days * 86400000) / (stepCount - 1);
+
+    const buckets = Array.from({ length: stepCount }, (_, i) => {
+      const time = now - (stepCount - 1 - i) * stepDuration;
+      const dateObj = new Date(time);
+      const label = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return {
+        startTime: time - stepDuration / 2,
+        endTime: time + stepDuration / 2,
+        label,
+        count: 0
+      };
+    });
+
+    filteredSignals.forEach((s: any) => {
+      const dateVal = s.detectedTimestamp || s.firstDetected || s.detectedTime;
+      const t = dateVal ? Date.parse(dateVal) : NaN;
+      const sigTime = !isNaN(t) ? t : now;
+
+      const bucket = buckets.find((b) => sigTime >= b.startTime && sigTime <= b.endTime) || buckets[buckets.length - 1];
+      if (bucket) {
+        bucket.count += 1;
+      }
+    });
+
+    const values = buckets.map((b) => b.count);
+    const max = Math.max(5, ...values);
+
+    // Coordinate mapping: x from 30 to 370, y from 160 (val 0) to 30 (max)
+    const pts = buckets.map((b, i) => {
+      const x = 30 + (i / (stepCount - 1)) * 340;
+      const y = 160 - (b.count / max) * 130;
+      return {
+        date: b.label,
+        value: b.count,
+        x,
+        y
+      };
+    });
+
+    // Generate SVG path string
+    let pathString = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length; i++) {
+      const prev = pts[i - 1];
+      const curr = pts[i];
+      const cx = (prev.x + curr.x) / 2;
+      pathString += ` C ${cx} ${prev.y}, ${cx} ${curr.y}, ${curr.x} ${curr.y}`;
+    }
+
+    const areaString = `${pathString} L ${pts[pts.length - 1].x} 165 L ${pts[0].x} 165 Z`;
+
+    return {
+      points: pts,
+      maxVal: max,
+      pathD: pathString,
+      areaD: areaString
+    };
+  }, [filteredSignals, period]);
 
   return (
     <div style={{
@@ -80,7 +146,7 @@ export const SignalsOverTimeChart: React.FC = () => {
               zIndex: 20,
               minWidth: '110px'
             }}>
-              {['Last 7 days', 'Last 30 days', 'Last 90 days', 'All time'].map((opt) => (
+              {(['Last 7 days', 'Last 30 days', 'Last 90 days', 'All time'] as const).map((opt) => (
                 <div
                   key={opt}
                   onClick={() => {
@@ -110,7 +176,7 @@ export const SignalsOverTimeChart: React.FC = () => {
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
         >
           <defs>
-            <linearGradient id="lineGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+            <linearGradient id="lineGlowReal" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stopColor="#818cf8" stopOpacity="0.35" />
               <stop offset="100%" stopColor="#c7d2fe" stopOpacity="0.0" />
             </linearGradient>
@@ -121,24 +187,21 @@ export const SignalsOverTimeChart: React.FC = () => {
           <line x1="20" y1="60" x2="390" y2="60" stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
           <line x1="20" y1="100" x2="390" y2="100" stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
           <line x1="20" y1="140" x2="390" y2="140" stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
-          <line x1="20" y1="170" x2="390" y2="170" stroke="#e2e8f0" strokeWidth="1" />
+          <line x1="20" y1="165" x2="390" y2="165" stroke="#e2e8f0" strokeWidth="1" />
 
           {/* Y Axis Labels */}
-          <text x="5" y="24" fontSize="9" fill="#94a3b8">1,000</text>
-          <text x="12" y="64" fontSize="9" fill="#94a3b8">750</text>
-          <text x="12" y="104" fontSize="9" fill="#94a3b8">500</text>
-          <text x="12" y="144" fontSize="9" fill="#94a3b8">250</text>
-          <text x="16" y="174" fontSize="9" fill="#94a3b8">0</text>
+          <text x="5" y="24" fontSize="9" fill="#94a3b8">{maxVal}</text>
+          <text x="5" y="64" fontSize="9" fill="#94a3b8">{Math.round(maxVal * 0.75)}</text>
+          <text x="5" y="104" fontSize="9" fill="#94a3b8">{Math.round(maxVal * 0.5)}</text>
+          <text x="5" y="144" fontSize="9" fill="#94a3b8">{Math.round(maxVal * 0.25)}</text>
+          <text x="16" y="169" fontSize="9" fill="#94a3b8">0</text>
 
           {/* Area Fill */}
-          <path
-            d="M 20 145 C 50 135, 100 125, 130 120 C 160 115, 210 110, 240 95 C 270 80, 310 85, 335 78 C 360 70, 370 45, 380 40 L 380 170 L 20 170 Z"
-            fill="url(#lineGlow)"
-          />
+          <path d={areaD} fill="url(#lineGlowReal)" />
 
           {/* Main Spline Curve */}
           <path
-            d="M 20 145 C 50 135, 100 125, 130 120 C 160 115, 210 110, 240 95 C 270 80, 310 85, 335 78 C 360 70, 370 45, 380 40"
+            d={pathD}
             fill="none"
             stroke="#6366f1"
             strokeWidth="2.5"
@@ -151,17 +214,18 @@ export const SignalsOverTimeChart: React.FC = () => {
               key={pt.date}
               cx={pt.x}
               cy={pt.y}
-              r={pt.date === 'May 14' ? 4.5 : 3}
+              r={hoveredPoint?.date === pt.date ? 5 : 3.5}
               fill="#ffffff"
               stroke="#6366f1"
-              strokeWidth={pt.date === 'May 14' ? 3 : 2}
-              style={{ cursor: 'pointer' }}
+              strokeWidth={hoveredPoint?.date === pt.date ? 3 : 2}
+              style={{ cursor: 'pointer', transition: 'r 0.15s ease' }}
               onMouseEnter={() => setHoveredPoint(pt)}
+              onMouseLeave={() => setHoveredPoint(null)}
             />
           ))}
         </svg>
 
-        {/* Floating Tooltip matching mockup */}
+        {/* Floating Tooltip */}
         {hoveredPoint && (
           <div style={{
             position: 'absolute',
@@ -176,8 +240,8 @@ export const SignalsOverTimeChart: React.FC = () => {
             fontSize: '11px',
             lineHeight: 1.3
           }}>
-            <div style={{ color: '#64748b', fontWeight: 600 }}>May 14, 2025</div>
-            <div style={{ color: '#0f172a', fontWeight: 800 }}>1,429 signals</div>
+            <div style={{ color: '#64748b', fontWeight: 600 }}>{hoveredPoint.date}</div>
+            <div style={{ color: '#0f172a', fontWeight: 800 }}>{hoveredPoint.value} {hoveredPoint.value === 1 ? 'signal' : 'signals'}</div>
           </div>
         )}
       </div>
@@ -186,15 +250,13 @@ export const SignalsOverTimeChart: React.FC = () => {
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
-        padding: '0 10px',
+        padding: '0 16px',
         fontSize: '10.5px',
         color: '#94a3b8'
       }}>
-        <span>Apr 16</span>
-        <span>Apr 23</span>
-        <span>Apr 30</span>
-        <span>May 7</span>
-        <span>May 14</span>
+        {points.map((pt) => (
+          <span key={pt.date}>{pt.date}</span>
+        ))}
       </div>
     </div>
   );

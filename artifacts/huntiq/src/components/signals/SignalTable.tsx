@@ -412,14 +412,28 @@ export const SignalTable: React.FC<SignalTableProps> = ({
 
       {/* Table Rows */}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {signals.map((sig) => {
-          const isSelected = selectedSignalId === sig.id;
-          const isChecked = selectedIds.includes(sig.id);
+        {signals.length === 0 ? (
+          <div style={{
+            padding: '48px 24px',
+            textAlign: 'center',
+            color: '#64748b'
+          }}>
+            <p style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: '0 0 6px 0' }}>
+              No signals detected
+            </p>
+            <p style={{ fontSize: '12.5px', color: '#64748b', margin: 0 }}>
+              No market signals or hiring triggers have been recorded for this period.
+            </p>
+          </div>
+        ) : (
+          signals.map((sig) => {
+            const isSelected = selectedSignalId === sig.id;
+            const isChecked = selectedIds.includes(sig.id);
 
-          return (
-            <div
-              key={sig.id}
-              onClick={() => onSelectSignal(sig)}
+            return (
+              <div
+                key={sig.id}
+                onClick={() => onSelectSignal(sig)}
               style={{
                 display: 'grid',
                 gridTemplateColumns: '40px 2.4fr 1.8fr 1fr 1fr 1fr 3fr 70px 30px',
@@ -523,7 +537,7 @@ export const SignalTable: React.FC<SignalTableProps> = ({
               </div>
             </div>
           );
-        })}
+        }))}
         </div>
         </div>
       </div>

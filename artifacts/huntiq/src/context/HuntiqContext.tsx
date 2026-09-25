@@ -19,6 +19,8 @@ import {
   createPipelineDeal,
   updatePipelineDeal
 } from '../api';
+import { saveCompany } from '../api/companies';
+import { executeCopilotPrompt } from '../api/copilot';
 import { currencyService, type CurrencyCode } from '../services/currencyService';
 import { getStoredUser, fetchUserActivityLogs, fetchUserOnboarding, saveUserOnboarding, type UserAccount } from '../api/auth';
 import type { ProspectPitchPayload } from '../types/outreach';
@@ -82,10 +84,10 @@ interface HuntiqContextType {
 
   // Action Dispatchers (Optimized & Cached)
   searchCompanies: (query?: string, industry?: string) => CompanyItem[];
-  addDealToPipeline: (deal: Partial<PipelineDealItem>) => void;
-  updateDealStage: (dealId: string, stage: PipelineStage) => void;
-  toggleSaveCompany: (companyId: string) => void;
-  executeCopilotCommand: (prompt: string) => CopilotExecutionResult;
+  addDealToPipeline: (deal: Partial<PipelineDealItem>) => Promise<PipelineDealItem | void>;
+  updateDealStage: (dealId: string, stage: PipelineStage) => Promise<void>;
+  toggleSaveCompany: (companyId: string) => Promise<void>;
+  executeCopilotCommand: (prompt: string) => Promise<CopilotExecutionResult>;
   captureGeoBusinesses: (businesses: any[]) => void;
 
   // Multi-Currency Engine
@@ -267,81 +269,10 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   }, [currency]);
 
   
-  // Data State
-  const [companies, setCompanies] = useState<CompanyItem[]>(() => prospectorEngine.getAllCompanies());
-  const [signals, setSignals] = useState<SignalItem[]>(() => signalEngine.getAllSignals());
-  
-  const [pipelineDeals, setPipelineDeals] = useState<PipelineDealItem[]>([
-    {
-      id: 'deal-1',
-      companyName: 'Acme Technologies',
-      domain: 'acme.io',
-      dealTitle: 'Enterprise Talent Scaling & Mgmt',
-      serviceName: 'HR Advisory Suite',
-      dealValue: 25000,
-      probability: 75,
-      opportunityScore: 94,
-      stage: 'proposal',
-      stageEnteredAt: '2 days ago',
-      expectedCloseDate: 'Aug 30, 2026',
-      ownerName: 'Ayoola Ade',
-      contactName: 'Jane Smith',
-      contactRole: 'Head of People',
-      contactAvatarBg: '#eff6ff',
-      contactAvatarColor: '#1d4ed8',
-      lastActivity: 'Proposal sent yesterday',
-      nextAction: 'Executive follow-up call',
-      nextActionDueDate: 'Tomorrow, 2 PM',
-      priority: 'High',
-      activities: []
-    },
-    {
-      id: 'deal-2',
-      companyName: 'FinServe Ltd',
-      domain: 'finserve.africa',
-      dealTitle: 'Regional Expansion Advisory',
-      serviceName: 'Expansion Strategy',
-      dealValue: 35000,
-      probability: 60,
-      opportunityScore: 91,
-      stage: 'meeting',
-      stageEnteredAt: '4 days ago',
-      expectedCloseDate: 'Sep 15, 2026',
-      ownerName: 'Ayoola Ade',
-      contactName: 'Michael Okoro',
-      contactRole: 'HR Director',
-      contactAvatarBg: '#fef3c7',
-      contactAvatarColor: '#b45309',
-      lastActivity: 'Discovery call held',
-      nextAction: 'Draft custom scoping deck',
-      nextActionDueDate: 'Thursday',
-      priority: 'High',
-      activities: []
-    },
-    {
-      id: 'deal-3',
-      companyName: 'Paystack',
-      domain: 'paystack.com',
-      dealTitle: 'Cross-Border Compliance Platform',
-      serviceName: 'Regulatory Cloud',
-      dealValue: 48000,
-      probability: 85,
-      opportunityScore: 94,
-      stage: 'negotiation',
-      stageEnteredAt: '1 week ago',
-      expectedCloseDate: 'Aug 28, 2026',
-      ownerName: 'Ayoola Ade',
-      contactName: 'Babafemi Lawson',
-      contactRole: 'Head of Operations',
-      contactAvatarBg: '#ecfdf5',
-      contactAvatarColor: '#047857',
-      lastActivity: 'MSA & SLA under legal review',
-      nextAction: 'Final terms confirmation',
-      nextActionDueDate: 'Friday, 11 AM',
-      priority: 'High',
-      activities: []
-    }
-  ]);
+  // Data State - initialized cleanly with zero demo data
+  const [companies, setCompanies] = useState<CompanyItem[]>([]);
+  const [signals, setSignals] = useState<SignalItem[]>([]);
+  const [pipelineDeals, setPipelineDeals] = useState<PipelineDealItem[]>([]);
 
   // Modals & Research Dossier
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
@@ -500,18 +431,18 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
         apiFetchPipelineDeals()
       ]);
 
-      if (liveCompanies.status === 'fulfilled' && liveCompanies.value && liveCompanies.value.length > 0) {
-        setCompanies(liveCompanies.value);
+      if (liveCompanies.status === 'fulfilled') {
+        setCompanies(Array.isArray(liveCompanies.value) ? liveCompanies.value : []);
       }
-      if (liveSignals.status === 'fulfilled' && liveSignals.value && liveSignals.value.length > 0) {
-        setSignals(liveSignals.value);
+      if (liveSignals.status === 'fulfilled') {
+        setSignals(Array.isArray(liveSignals.value) ? liveSignals.value : []);
       }
-      if (liveDeals.status === 'fulfilled' && Array.isArray(liveDeals.value)) {
-        setPipelineDeals(liveDeals.value);
+      if (liveDeals.status === 'fulfilled') {
+        setPipelineDeals(Array.isArray(liveDeals.value) ? liveDeals.value : []);
       }
       refreshActivityLogs();
-    } catch {
-      // Graceful local engine fallback
+    } catch (err) {
+      console.warn('[HUNTIQ] Error refreshing data from API:', err);
     } finally {
       setIsDataLoading(false);
     }
@@ -522,61 +453,106 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   }, [refreshData, currentUser]);
 
 
-  // Deal Management
-  const addDealToPipeline = useCallback(async (deal: Partial<PipelineDealItem>) => {
-    const newDeal: PipelineDealItem = {
-      id: `deal-${Date.now()}`,
+  // Deal Management with optimistic update & authoritative backend rollback
+  const addDealToPipeline = useCallback(async (deal: Partial<PipelineDealItem>): Promise<PipelineDealItem | void> => {
+    const tempId = `temp-${Date.now()}`;
+    const optimisticDeal: PipelineDealItem = {
+      id: tempId,
       companyName: deal.companyName || 'New Target Account',
       domain: deal.domain || null,
-      dealTitle: deal.dealTitle || 'Strategic Advisory Deal',
+      dealTitle: deal.dealTitle || (deal as any).title || 'Strategic Advisory Deal',
       serviceName: deal.serviceName || 'Core Consulting',
       dealValue: deal.dealValue || 20000,
       probability: deal.probability || 50,
       opportunityScore: deal.opportunityScore || 85,
       stage: deal.stage || 'contacted',
-      stageEnteredAt: 'Just now',
+      stageEnteredAt: new Date().toISOString(),
       expectedCloseDate: deal.expectedCloseDate || 'In 30 days',
-      ownerName: 'Ayoola Ade',
+      ownerName: currentUser?.fullName || 'Ayoola Ade',
       contactName: deal.contactName || 'Decision Maker',
       contactRole: deal.contactRole || 'Executive',
       contactAvatarBg: '#eff6ff',
       contactAvatarColor: '#1d4ed8',
-      lastActivity: 'Added from HUNTIQ Intelligence Engine',
-      nextAction: 'Send introductory outreach',
-      nextActionDueDate: 'Tomorrow',
-      priority: 'High',
+      lastActivity: 'Added to Pipeline',
+      nextAction: deal.nextAction || 'Send introductory outreach',
+      nextActionDueDate: deal.nextActionDueDate || 'Tomorrow',
+      priority: deal.priority || 'High',
       activities: []
     };
 
-    setPipelineDeals((prev) => [newDeal, ...prev]);
+    setPipelineDeals((prev) => [optimisticDeal, ...prev]);
 
     try {
-      await createPipelineDeal(newDeal);
-    } catch {
-      // Optimistic update retained
+      const persisted = await createPipelineDeal(deal);
+      setPipelineDeals((prev) =>
+        prev.map((d) => (d.id === tempId ? { ...optimisticDeal, ...persisted } : d))
+      );
+      return persisted;
+    } catch (err: any) {
+      setPipelineDeals((prev) => prev.filter((d) => d.id !== tempId));
+      console.error('[HUNTIQ] Failed to persist pipeline deal:', err);
+      throw err;
     }
-  }, []);
+  }, [currentUser]);
 
-  const updateDealStage = useCallback(async (dealId: string, newStage: PipelineStage) => {
+  const updateDealStage = useCallback(async (dealId: string, newStage: PipelineStage): Promise<void> => {
+    let prevStage: PipelineStage | undefined;
     setPipelineDeals((prev) =>
-      prev.map((d) => (d.id === dealId ? { ...d, stage: newStage, stageEnteredAt: 'Just now' } : d))
+      prev.map((d) => {
+        if (d.id === dealId) {
+          prevStage = d.stage;
+          return { ...d, stage: newStage, stageEnteredAt: new Date().toISOString() };
+        }
+        return d;
+      })
     );
 
     try {
-      await updatePipelineDeal(dealId, { stage: newStage });
-    } catch {
-      // Optimistic update retained
+      const updated = await updatePipelineDeal(dealId, { stage: newStage });
+      if (updated) {
+        setPipelineDeals((prev) =>
+          prev.map((d) => (d.id === dealId ? { ...d, ...updated } : d))
+        );
+      }
+    } catch (err: any) {
+      if (prevStage) {
+        setPipelineDeals((prev) =>
+          prev.map((d) => (d.id === dealId ? { ...d, stage: prevStage! } : d))
+        );
+      }
+      console.error('[HUNTIQ] Failed to update deal stage:', err);
+      throw err;
     }
   }, []);
 
-  const toggleSaveCompany = useCallback((companyId: string) => {
+  const toggleSaveCompany = useCallback(async (companyId: string): Promise<void> => {
+    let prevSaved = false;
+    let nextSaved = true;
+
     setCompanies((prev) =>
-      prev.map((c) => (c.id === companyId ? { ...c, isSaved: !c.isSaved } : c))
+      prev.map((c) => {
+        if (c.id === companyId) {
+          prevSaved = Boolean(c.isSaved);
+          nextSaved = !c.isSaved;
+          return { ...c, isSaved: nextSaved };
+        }
+        return c;
+      })
     );
+
+    try {
+      await saveCompany(companyId, nextSaved);
+    } catch (err: any) {
+      setCompanies((prev) =>
+        prev.map((c) => (c.id === companyId ? { ...c, isSaved: prevSaved } : c))
+      );
+      console.error('[HUNTIQ] Failed to persist saved status for company:', err);
+      throw err;
+    }
   }, []);
 
-  const executeCopilotCommand = useCallback((prompt: string): CopilotExecutionResult => {
-    return copilotEngine.executePrompt(prompt);
+  const executeCopilotCommand = useCallback(async (prompt: string): Promise<CopilotExecutionResult> => {
+    return await executeCopilotPrompt(prompt);
   }, []);
 
   const captureGeoBusinesses = useCallback((scrapedList: any[]) => {
@@ -618,49 +594,6 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
       const filtered = newCompanies.filter(c => !existingNames.has(c.name.toLowerCase()));
       return [...filtered, ...prev];
     });
-
-    // Automatically create and push deals into the active pipeline
-    const newDeals: PipelineDealItem[] = scrapedList.map((b) => {
-      const audit = b.digitalAudit;
-      const pkg = audit?.recommendedPackage;
-      const dealVal = pkg?.estimatedValue?.max || b.estimatedDealValue || 15000;
-      const score = b.opportunityScore || 85;
-      const derivedDomain = b.domain || (b.website ? b.website.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] : null);
-
-      return {
-        id: `deal-geo-${b.id}-${Date.now()}`,
-        companyName: b.name,
-        domain: derivedDomain,
-        dealTitle: pkg ? `${pkg.packageName} (${audit.gapScore >= 70 ? 'Turnkey Fix' : 'Growth Optimization'})` : 'Digital Transformation & Acquisition Package',
-        serviceName: pkg?.packageName || 'Digital Modernization Suite',
-        dealValue: dealVal,
-        probability: Math.min(95, Math.round(score * 0.85)),
-        opportunityScore: score,
-        stage: 'contacted' as const,
-        stageEnteredAt: 'Just now',
-        expectedCloseDate: 'In 21 days',
-        ownerName: 'Ayoola Ade',
-        contactName: b.decisionMakers?.[0]?.name || '',
-        contactRole: b.decisionMakers?.[0]?.role || '',
-        contactAvatarBg: '#eff6ff',
-        contactAvatarColor: '#1d4ed8',
-        lastActivity: `Discovered & audited via HUNTIQ Geo Radar in ${b.district || 'Commercial District'}`,
-        nextAction: `Deliver customized ${pkg?.packageName || 'Proposal'} Scoping Brief`,
-        nextActionDueDate: 'Tomorrow, 10 AM',
-        priority: (score >= 85 ? 'High' : 'Medium') as 'High' | 'Medium' | 'Low',
-        activities: [
-          {
-            id: `act-${Date.now()}`,
-            type: 'note' as const,
-            title: 'Lead Captured via Live Geo Radar',
-            detail: `Audited ${b.name}: ${audit?.issuesDetected?.length || 2} digital gaps detected. Recommended package: ${pkg?.packageName || 'Turnkey Solution'} ($${dealVal.toLocaleString()}).`,
-            timestamp: 'Just now'
-          }
-        ]
-      };
-    });
-
-    setPipelineDeals((prev) => [...newDeals, ...prev]);
 
     // Push new buying & digital gap signals into global feed
     const newSignals: SignalItem[] = scrapedList.map((b) => ({

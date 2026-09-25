@@ -1,27 +1,29 @@
 import { apiClient } from './client';
 import type { CompanyItem } from '../types/company';
-import { prospectorEngine } from '../engine/prospectorEngine';
 
 export async function fetchCompanies(query?: string, industry?: string): Promise<CompanyItem[]> {
   try {
-    return await apiClient.get<CompanyItem[]>('/api/companies', {
+    const list = await apiClient.get<CompanyItem[]>('/api/companies', {
       params: { q: query, industry }
     });
-  } catch (_err) {
-    // Engine Fallback
-    return prospectorEngine.searchProspects({
-      query,
-      industries: industry && industry !== 'All' ? [industry] : undefined
-    });
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    console.error('[HUNTIQ] Error fetching companies:', err);
+    throw err;
   }
 }
 
 export async function fetchCompanyById(id: string): Promise<CompanyItem | null> {
   try {
     return await apiClient.get<CompanyItem>(`/api/companies/${id}`);
-  } catch (_err) {
-    return prospectorEngine.getCompanyById(id) || null;
+  } catch (err) {
+    console.error(`[HUNTIQ] Error fetching company ${id}:`, err);
+    return null;
   }
+}
+
+export async function saveCompany(companyId: string, isSaved: boolean): Promise<CompanyItem> {
+  return await apiClient.post<CompanyItem>(`/api/companies/${companyId}/save`, { isSaved });
 }
 
 export async function resolveCompany(params: {
@@ -40,4 +42,3 @@ export async function resolveCompany(params: {
 export async function mergeCompanies(sourceCompanyId: string, targetCompanyId: string): Promise<any> {
   return await apiClient.post('/api/companies/merge', { sourceCompanyId, targetCompanyId });
 }
-

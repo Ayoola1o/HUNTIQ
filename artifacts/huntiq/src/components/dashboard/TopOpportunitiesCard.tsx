@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Target } from 'lucide-react';
 import { useHuntiq } from '../../context/HuntiqContext';
 
 interface TopOpportunitiesCardProps {
@@ -17,17 +17,11 @@ export const TopOpportunitiesCard: React.FC<TopOpportunitiesCardProps> = ({ onSe
         .map((opp, idx) => ({
           rank: idx + 1,
           name: opp.companyName,
-          location: opp.location || 'Lagos, Nigeria',
-          score: opp.score || 90
+          location: opp.location || 'Unknown',
+          score: opp.score || 0
         }));
     }
-    return [
-      { rank: 1, name: 'Acme Technologies', location: 'Lagos, Nigeria', score: 94 },
-      { rank: 2, name: 'FinServe Ltd', location: 'Lagos, Nigeria', score: 88 },
-      { rank: 3, name: 'Delta Systems', location: 'Abuja, Nigeria', score: 81 },
-      { rank: 4, name: 'Vertex Solutions', location: 'Lagos, Nigeria', score: 78 },
-      { rank: 5, name: 'Nimbus Analytics', location: 'Lagos, Nigeria', score: 76 },
-    ];
+    return [];
   }, [opportunities]);
 
   return (
@@ -66,7 +60,8 @@ export const TopOpportunitiesCard: React.FC<TopOpportunitiesCardProps> = ({ onSe
             textDecoration: 'none',
             display: 'flex',
             alignItems: 'center',
-            gap: '3px'
+            gap: '3px',
+            cursor: 'pointer'
           }}
         >
           <span>View all</span>
@@ -76,76 +71,98 @@ export const TopOpportunitiesCard: React.FC<TopOpportunitiesCardProps> = ({ onSe
 
       {/* List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {topList.map((item) => (
-          <div
-            key={item.name}
-            onClick={() => onSelectCompany(item.name)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 10px',
-              borderRadius: '10px',
-              backgroundColor: '#fafbfc',
-              border: '1px solid #f1f5f9',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#f5f3ff';
-              e.currentTarget.style.borderColor = '#ddd6fe';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#fafbfc';
-              e.currentTarget.style.borderColor = '#f1f5f9';
-            }}
-          >
-            {/* Rank + Company Info */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {topList.length === 0 ? (
+          <div style={{
+            padding: '24px 12px',
+            textAlign: 'center',
+            backgroundColor: '#fafbfc',
+            borderRadius: '10px',
+            border: '1px dashed #e2e8f0',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <Target size={18} color="#94a3b8" />
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+              No opportunities scored yet
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b' }}>
+              Add target accounts to compute opportunity scores and ICP fit rankings.
+            </div>
+          </div>
+        ) : (
+          topList.map((item) => (
+            <div
+              key={item.name}
+              onClick={() => onSelectCompany(item.name)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 10px',
+                borderRadius: '10px',
+                backgroundColor: '#fafbfc',
+                border: '1px solid #f1f5f9',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#f5f3ff';
+                e.currentTarget.style.borderColor = '#ddd6fe';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#fafbfc';
+                e.currentTarget.style.borderColor = '#f1f5f9';
+              }}
+            >
+              {/* Rank + Company Info */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '50%',
+                  backgroundColor: '#f1f5f9',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#475569',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  {item.rank}
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                    {item.name}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b' }}>
+                    {item.location}
+                  </div>
+                </div>
+              </div>
+
+              {/* Score pill */}
               <div style={{
-                width: '22px',
-                height: '22px',
+                width: '26px',
+                height: '26px',
                 borderRadius: '50%',
-                backgroundColor: '#f1f5f9',
-                fontSize: '11px',
-                fontWeight: 700,
-                color: '#475569',
+                border: '1.5px solid #10b981',
+                color: '#059669',
+                fontSize: '11.5px',
+                fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                flexShrink: 0
+                lineHeight: 1
               }}>
-                {item.rank}
-              </div>
-
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-                  {item.name}
-                </div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>
-                  {item.location}
-                </div>
+                {item.score}
               </div>
             </div>
-
-            {/* Score pill */}
-            <div style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '50%',
-              border: '1.5px solid #10b981',
-              color: '#059669',
-              fontSize: '11.5px',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              lineHeight: 1
-            }}>
-              {item.score}
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

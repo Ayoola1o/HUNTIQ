@@ -46410,6 +46410,16 @@ var InMemoryCompanyRepository = class {
     }
     return company;
   }
+  async toggleSave(companyId, isSaved, workspaceId) {
+    if (workspaceId && this.companyWorkspaces.has(companyId)) {
+      if (this.companyWorkspaces.get(companyId) !== workspaceId) return void 0;
+    }
+    const company = this.companies.get(companyId);
+    if (!company) return void 0;
+    const updated = { ...company, isSaved };
+    this.companies.set(companyId, updated);
+    return updated;
+  }
 };
 
 // src/repositories/companies/postgres-company.repository.ts
@@ -46443,6 +46453,7 @@ var mapCompanyRow = (row) => {
     opportunityLevel: opportunityLevelFor(score),
     scoreColor: scoreColorFor(score),
     scoreTrend: [],
+    isSaved: Boolean(row.is_saved),
     signalsCount: 0,
     activeSignals: [],
     lastActivity: "No activity yet",
@@ -46489,11 +46500,11 @@ var PostgresCompanyRepository = class {
         conditions.push(`coalesce(industry, '') ilike $${values.length}`);
       }
       const result = await this.pool.query(
-        `select * from companies where ${conditions.join(" and ")} order by updated_at desc, name asc`,
+        `select * from companies where ${conditions.join(" and ")} order by is_saved desc, updated_at desc, name asc`,
         values
       );
       if (result.rows.length === 0) {
-        return this.isProduction() ? [] : this.fallback.list(params, effectiveWorkspaceId);
+        return [];
       }
       return result.rows.map(mapCompanyRow);
     } catch (err) {
@@ -46503,7 +46514,7 @@ var PostgresCompanyRepository = class {
         error.code = err.code || "DATABASE_UNAVAILABLE";
         throw error;
       }
-      return this.fallback.list(params, effectiveWorkspaceId);
+      return [];
     }
   }
   async getById(companyId, workspaceId) {
@@ -46515,7 +46526,7 @@ var PostgresCompanyRepository = class {
         [effectiveWorkspaceId, companyId]
       );
       if (!result.rows[0]) {
-        return this.isProduction() ? void 0 : this.fallback.getById(companyId, effectiveWorkspaceId);
+        return void 0;
       }
       return mapCompanyRow(result.rows[0]);
     } catch (err) {
@@ -46525,7 +46536,35 @@ var PostgresCompanyRepository = class {
         error.code = "DATABASE_UNAVAILABLE";
         throw error;
       }
-      return this.fallback.getById(companyId, effectiveWorkspaceId);
+      return void 0;
+    }
+  }
+  async toggleSave(companyId, isSaved, workspaceId) {
+    const effectiveWorkspaceId = workspaceId || (this.isProduction() ? "" : "ws-default-001");
+    if (!effectiveWorkspaceId) {
+      const error = new Error("workspaceId is required in production");
+      error.statusCode = 401;
+      error.code = "UNAUTHORIZED";
+      throw error;
+    }
+    try {
+      const result = await this.pool.query(
+        "update companies set is_saved = $1, updated_at = now() where id = $2 and workspace_id = $3 returning *",
+        [isSaved, companyId, effectiveWorkspaceId]
+      );
+      if (!result.rows[0]) {
+        return void 0;
+      }
+      return mapCompanyRow(result.rows[0]);
+    } catch (err) {
+      console.error("[PostgresCompanyRepository.toggleSave] Database error:", err.message);
+      if (this.isProduction()) {
+        const error = new Error(`Database error updating company saved status: ${err.message}`);
+        error.statusCode = 503;
+        error.code = "DATABASE_UNAVAILABLE";
+        throw error;
+      }
+      return this.fallback.toggleSave(companyId, isSaved, effectiveWorkspaceId);
     }
   }
   async create(input, workspaceId) {
@@ -49051,6 +49090,39 @@ companiesRouter.get("/companies/:id", async (req, res) => {
     meta: { timestamp: (/* @__PURE__ */ new Date()).toISOString() }
   });
 });
+companiesRouter.post("/companies/:id/save", async (req, res) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: "UNAUTHORIZED", message: "Authentication required" }
+    });
+  }
+  const companyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const { isSaved } = req.body ?? {};
+  const shouldSave = typeof isSaved === "boolean" ? isSaved : true;
+  try {
+    const updated = await companyRepository.toggleSave(companyId, shouldSave, workspaceId);
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        error: { code: "COMPANY_NOT_FOUND", message: `Company with ID '${companyId}' was not found.` },
+        meta: { timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      data: updated,
+      meta: { timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({
+      success: false,
+      error: { code: err.code || "UPDATE_FAILED", message: err.message },
+      meta: { timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+    });
+  }
+});
 companiesRouter.post("/companies/resolve", async (req, res) => {
   const { name, domain, website, sourceUrl, boardToken, industry, city, country } = req.body || {};
   const workspaceId = req.user?.workspaceId || req.body?.workspaceId || "ws-default-001";
@@ -51423,16 +51495,16 @@ signalsRouter.get("/signals", async (req, res) => {
   }
   const type = req.query.type;
   const companyId = req.query.companyId;
-  const signalRepo = createSignalRepository();
-  const companyRepo = createCompanyRepository();
+  const signalRepo2 = createSignalRepository();
+  const companyRepo2 = createCompanyRepository();
   let signals = [];
   try {
     if (companyId) {
-      signals = await signalRepo.findByCompanyId(companyId, workspaceId);
+      signals = await signalRepo2.findByCompanyId(companyId, workspaceId);
     } else if (type && type !== "all") {
-      signals = await signalRepo.findByType(type, workspaceId);
+      signals = await signalRepo2.findByType(type, workspaceId);
     } else {
-      signals = await signalRepo.list(50, 0, workspaceId);
+      signals = await signalRepo2.list(50, 0, workspaceId);
     }
   } catch {
     signals = [];
@@ -51450,7 +51522,7 @@ signalsRouter.get("/signals", async (req, res) => {
   const enriched = await Promise.all(signals.map(async (s) => {
     let comp = null;
     try {
-      comp = await companyRepo.getById(s.companyId, workspaceId);
+      comp = await companyRepo2.getById(s.companyId, workspaceId);
     } catch {
       comp = null;
     }
@@ -51486,11 +51558,11 @@ signalsRouter.post("/signals/generate", async (req, res) => {
       meta: { timestamp: (/* @__PURE__ */ new Date()).toISOString() }
     });
   }
-  const companyRepo = createCompanyRepository();
-  const signalRepo = createSignalRepository();
+  const companyRepo2 = createCompanyRepository();
+  const signalRepo2 = createSignalRepository();
   let company = null;
   try {
-    company = await companyRepo.getById(companyId, workspaceId);
+    company = await companyRepo2.getById(companyId, workspaceId);
   } catch {
     company = null;
   }
@@ -51518,7 +51590,7 @@ signalsRouter.post("/signals/generate", async (req, res) => {
     };
     db.signals.push(signalRecord);
     try {
-      await signalRepo.create({
+      await signalRepo2.create({
         workspaceId,
         companyId,
         type: bundle.signal.type,
@@ -51569,10 +51641,10 @@ signalsRouter.get("/signals/:companyId", async (req, res) => {
     return res.status(401).json({ success: false, error: { code: "UNAUTHORIZED", message: "Authentication required" } });
   }
   const { companyId } = req.params;
-  const signalRepo = createSignalRepository();
+  const signalRepo2 = createSignalRepository();
   let signals = [];
   try {
-    signals = await signalRepo.findByCompanyId(companyId, workspaceId);
+    signals = await signalRepo2.findByCompanyId(companyId, workspaceId);
   } catch {
     signals = [];
   }
@@ -52324,7 +52396,7 @@ pipelineRouter.get("/pipeline/deals", async (req, res) => {
   };
   res.status(200).json(response);
 });
-pipelineRouter.post("/pipeline/deals", async (req, res) => {
+pipelineRouter.post(["/pipeline/deals", "/pipeline"], async (req, res) => {
   const userId = req.user?.id || DEFAULT_USER_ID2;
   const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID2;
   const dealPayload = {
@@ -52364,7 +52436,7 @@ pipelineRouter.post("/pipeline/deals", async (req, res) => {
     meta: { timestamp: (/* @__PURE__ */ new Date()).toISOString() }
   });
 });
-pipelineRouter.patch("/pipeline/deals/:id", async (req, res) => {
+pipelineRouter.patch(["/pipeline/deals/:id", "/pipeline/:id", "/pipeline/deals/:id/stage", "/pipeline/:id/stage"], async (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id || DEFAULT_USER_ID2;
   const workspaceId = req.user?.workspaceId || DEFAULT_WORKSPACE_ID2;
@@ -52510,116 +52582,148 @@ var CopilotEngine = class {
     return "UNKNOWN";
   }
   /**
-   * Executes intent and returns structured action cards, companies, or intelligence payloads.
+   * Executes intent and returns structured action cards, companies, or intelligence payloads using live context when available.
    */
-  executePrompt(prompt) {
+  executePrompt(prompt, context) {
     const intent = this.classifyIntent(prompt);
     const q = prompt.toLowerCase();
+    const companies = context?.companies ?? prospectorEngine.getAllCompanies();
+    const signals = context?.signals ?? signalEngine.getAllSignals();
+    const deals = context?.deals ?? [];
     switch (intent) {
       case "SEARCH": {
-        const results = prospectorEngine.searchProspects({ query: prompt });
+        const queryTerms = q.replace(/find|search|look for|discover|show companies/g, "").trim().split(/\s+/).filter(Boolean);
+        const results = companies.filter((c) => {
+          if (queryTerms.length === 0) return true;
+          const text = `${c.name} ${c.industry || ""} ${c.location || ""} ${c.description || ""}`.toLowerCase();
+          return queryTerms.some((term) => text.includes(term));
+        });
         return {
           intent: "SEARCH",
-          message: `I searched the intelligence database and found ${results.length} companies matching your criteria with verified buying signals.`,
-          actionTaken: "Executed natural language prospect filter",
+          message: results.length > 0 ? `I searched your workspace and found ${results.length} companies matching your criteria.` : `I searched your workspace and found 0 companies matching your criteria. Try scanning for businesses with Geo Radar or adjusting your query.`,
+          actionTaken: "Executed workspace prospect filter",
           companies: results,
-          suggestedFollowUps: [
+          suggestedFollowUps: results.length > 0 ? [
             `Research ${results[0]?.name || "top company"}`,
-            "Draft outreach for top 3 prospects",
+            "Draft outreach for top prospects",
             "Save search as daily alert"
+          ] : [
+            "Scan new companies via Geo Radar",
+            "View all workspace companies",
+            "Import prospect list"
           ]
         };
       }
       case "RESEARCH": {
-        const allCompanies = prospectorEngine.getAllCompanies();
-        const found = allCompanies.find((c) => q.includes(c.name.toLowerCase()));
-        const targetName = found ? found.name : "Paystack";
-        const dossier = researchEngine.generateDossier(targetName);
+        const found = companies.find((c) => q.includes(c.name.toLowerCase()));
+        if (!found) {
+          return {
+            intent: "RESEARCH",
+            message: `Could not find a company matching that name in your workspace directory. You can discover and add companies via Geo Radar.`,
+            actionTaken: "Company lookup in workspace",
+            suggestedFollowUps: [
+              "View workspace companies",
+              "Run Geo Radar scan",
+              "Search for prospects"
+            ]
+          };
+        }
+        const dossier = researchEngine.generateDossier(found.name);
         return {
           intent: "RESEARCH",
-          message: `I compiled a 360\xB0 Intelligence Dossier on ${targetName}. Identified ${dossier.decisionMakers.length} key decision-makers and ${dossier.painPoints.length} high-urgency pain points.`,
-          actionTaken: `Generated 360\xB0 dossier for ${targetName}`,
+          message: `I compiled an Intelligence Dossier for **${found.name}** (${found.industry || "Enterprise"}, ${found.location || "Location"}). Identified key operational pain points and growth triggers.`,
+          actionTaken: `Generated dossier for ${found.name}`,
           researchData: dossier,
           suggestedFollowUps: [
-            `Draft outreach to ${dossier.decisionMakers[0]?.name || "Head of People"}`,
-            `Add ${targetName} to Pipeline as Discovery Deal`,
-            `Find similar companies in ${dossier.company.industry || "FinTech"}`
+            `Draft outreach to ${found.name}`,
+            `Add ${found.name} to Pipeline`,
+            "View similar accounts"
           ]
         };
       }
       case "PRIORITIZE": {
-        const topOpps = prospectorEngine.searchProspects({ minOpportunityScore: 80 });
+        const topOpps = companies.filter((c) => (c.opportunityScore || 0) >= 80);
         return {
           intent: "PRIORITIZE",
-          message: `You have ${topOpps.length} high-priority opportunities scoring above 80/100 today based on recent trigger velocity.`,
+          message: topOpps.length > 0 ? `You have ${topOpps.length} high-priority opportunities scoring above 80/100 in your workspace based on verified signals.` : `You currently have 0 accounts scoring above 80/100 in your workspace. You can scan new prospects or refresh signals.`,
           actionTaken: "Calculated Opportunity Score rankings",
           companies: topOpps,
           suggestedFollowUps: [
-            "Launch multi-touch campaign for these 5 accounts",
-            "View buying signals breakdown",
-            "Schedule follow-up tasks"
+            "View active buying signals",
+            "Promote top prospects to Pipeline",
+            "Discover new leads"
           ]
         };
       }
       case "OUTREACH": {
-        const allCompanies = prospectorEngine.getAllCompanies();
-        const found = allCompanies.find((c) => q.includes(c.name.toLowerCase())) || allCompanies[0];
+        const found = companies.find((c) => q.includes(c.name.toLowerCase())) || companies[0];
+        if (!found) {
+          return {
+            intent: "OUTREACH",
+            message: `You don't have any companies in your workspace yet to generate outreach for. Add companies first to enable autonomous pitch generation.`,
+            actionTaken: "Checked available accounts",
+            suggestedFollowUps: ["Find prospects", "Scan with Geo Radar"]
+          };
+        }
         const outreach = outreachEngine.generateOutreach(
           found.name,
-          "Babafemi Lawson",
-          "Head of People & Operations",
-          "Expansion into Francophone West Africa"
+          "Decision Maker",
+          "Executive Leadership",
+          "Expansion & Operational Efficiency"
         );
         return {
           intent: "OUTREACH",
-          message: `I generated a signal-anchored outreach package for ${found.name} addressing their recent expansion trigger.`,
+          message: `I generated a signal-anchored outreach package for **${found.name}** targeting their executive team.`,
           actionTaken: `Drafted Email, LinkedIn InMail, and Executive Call Script`,
           outreachData: outreach,
           suggestedFollowUps: [
             "Send via connected email inbox",
             "Log outreach in CRM timeline",
-            "Create 3-day follow-up task"
+            "Create follow-up task"
           ]
         };
       }
       case "CRM_ACTION": {
         return {
           intent: "CRM_ACTION",
-          message: `Updated CRM record stage to **Qualified Pipeline**. Deal value set to $18,000 ARR with 60-day target close date.`,
-          actionTaken: "Updated Deal Stage & Pipeline Probability",
+          message: `Pipeline command acknowledged. Navigate to Pipeline to view and manage active stages and values.`,
+          actionTaken: "Navigated to Pipeline",
           targetView: "pipeline",
           suggestedFollowUps: [
             "View Pipeline Kanban",
-            "Schedule demo meeting with decision-maker",
-            "Prepare executive brief"
+            "Add deal to pipeline",
+            "Update deal stage"
           ]
         };
       }
       case "REPORT": {
+        const totalDeals = deals.length;
+        const pipelineValue = deals.reduce((sum, d) => sum + (d.dealValue || 0), 0);
+        const wonDeals = deals.filter((d) => d.stage === "won").length;
+        const activeDeals = deals.filter((d) => d.stage !== "lost" && d.stage !== "won").length;
         return {
           intent: "REPORT",
-          message: `Your Weekly Sales Intelligence brief is ready: **48 Opportunities Monitored**, **$428.6k Pipeline Value**, **14 Deals Advanced**, and **18.4% Outbound Response Rate**.`,
-          actionTaken: "Synthesized Weekly Pipeline Attribution Matrix",
+          message: totalDeals > 0 ? `Your Workspace Brief: **${companies.length} Companies Monitored**, **${totalDeals} Deals** ($${pipelineValue.toLocaleString()} Pipeline Value), **${activeDeals} Active Deals**, and **${wonDeals} Deals Won**.` : `Your Workspace Brief: **${companies.length} Companies Monitored**, **0 Deals in Pipeline**, and **${signals.length} Signals Detected**. Start adding prospects to build pipeline.`,
+          actionTaken: "Synthesized Workspace Pipeline & Intelligence Summary",
           targetView: "reports",
           suggestedFollowUps: [
-            "Open full Executive PDF brief",
-            "Compare against last month baseline",
-            "Export attribution data to CSV"
+            "View Pipeline Deals",
+            "Check Signals Feed",
+            "Export summary"
           ]
         };
       }
       case "MARKET_INTEL": {
-        const topSignals = signalEngine.getAllSignals();
         return {
           intent: "MARKET_INTEL",
-          message: `Detected 12 new signals across West African FinTech & Enterprise SaaS this week. Strongest cluster: **Leadership Changes (42%)** and **Hiring Surges (33%)**.`,
+          message: signals.length > 0 ? `Detected **${signals.length} verified buying signals** across your workspace accounts.` : `No market signals detected in your workspace yet. Discover companies to stream real-time hiring and expansion signals.`,
           actionTaken: "Aggregated regional market signals",
-          signals: topSignals,
-          targetView: "market-intel",
+          signals,
+          targetView: "signals",
           suggestedFollowUps: [
-            "Filter companies affected by these signals",
-            "Set up automated Slack alerts for Series B announcements",
-            "Open Market Intelligence Map"
+            "Filter signals by type",
+            "View high-impact alerts",
+            "Discover new companies"
           ]
         };
       }
@@ -52643,15 +52747,15 @@ var CopilotEngine = class {
         };
       }
       default: {
-        const topOpps = prospectorEngine.searchProspects({});
+        const pipelineValue = deals.reduce((sum, d) => sum + (d.dealValue || 0), 0);
         return {
           intent: "UNKNOWN",
-          message: `I analyzed your workspace: You currently have **${topOpps.length} active target accounts**, **5 unread buying signals**, and **$428k in open deal pipeline**. What would you like to investigate?`,
+          message: `I analyzed your workspace: You currently have **${companies.length} target accounts**, **${signals.length} buying signals**, and **$${pipelineValue.toLocaleString()} in open deal pipeline**. What would you like to investigate?`,
           suggestedFollowUps: [
-            "Find 25 technology companies in Lagos hiring engineers",
             "Which prospects should I contact today?",
-            "Research Paystack",
-            "Draft an email for my hottest prospect"
+            "Show expanding companies in my market",
+            "Summarize my pipeline metrics",
+            "Draft outreach for top prospects"
           ]
         };
       }
@@ -52662,8 +52766,13 @@ var copilotEngine = new CopilotEngine();
 
 // src/routes/copilot.ts
 var copilotRouter = (0, import_express7.Router)();
-copilotRouter.post("/copilot/execute", (req, res) => {
-  const { prompt } = req.body || {};
+var companyRepo = createCompanyRepository();
+var pipelineRepo = createPipelineRepository();
+var signalRepo = createSignalRepository();
+copilotRouter.post(["/copilot/execute", "/copilot/chat"], async (req, res) => {
+  const prompt = req.body?.prompt || req.body?.message;
+  const workspaceId = req.user?.workspaceId;
+  const userId = req.user?.id;
   if (!prompt || typeof prompt !== "string") {
     return res.status(400).json({
       success: false,
@@ -52674,10 +52783,36 @@ copilotRouter.post("/copilot/execute", (req, res) => {
       meta: { timestamp: (/* @__PURE__ */ new Date()).toISOString() }
     });
   }
-  const result = copilotEngine.executePrompt(prompt);
+  let companies = [];
+  let deals = [];
+  let signals = [];
+  if (workspaceId) {
+    try {
+      const [fetchedCompanies, fetchedDeals, fetchedSignals] = await Promise.all([
+        companyRepo.list({}, workspaceId).catch(() => []),
+        userId ? pipelineRepo.listByUser(userId, workspaceId).catch(() => []) : [],
+        signalRepo.list(50, 0, workspaceId).catch(() => [])
+      ]);
+      companies = fetchedCompanies;
+      deals = fetchedDeals;
+      signals = fetchedSignals;
+    } catch (err) {
+      console.warn("[HUNTIQ-COPILOT] Error loading workspace context for copilot:", err);
+    }
+  }
+  const result = copilotEngine.executePrompt(prompt, {
+    companies,
+    deals,
+    signals,
+    workspaceId,
+    userId
+  });
   const response = {
     success: true,
-    data: result,
+    data: {
+      ...result,
+      reply: result.message
+    },
     meta: {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     }
