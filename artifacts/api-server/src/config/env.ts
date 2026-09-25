@@ -53,10 +53,10 @@ export function getProductionConfigErrors(env: Record<string, string | undefined
     if (!env.DATABASE_URL) {
       errors.push('DATABASE_URL must be set in production.');
     }
-    // If Google OAuth integration is enabled in production, encryption key is required
+    // If Google OAuth integration is enabled in production, encryption key or JWT secret is required
     const hasGoogleAuth = Boolean(env.GOOGLE_CLIENT_ID?.trim() || env.GOOGLE_CLIENT_SECRET?.trim());
-    if (hasGoogleAuth && !env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim()) {
-      errors.push('GOOGLE_TOKEN_ENCRYPTION_KEY must be configured in production when Google integration is active.');
+    if (hasGoogleAuth && !env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim() && !env.JWT_SECRET?.trim()) {
+      errors.push('GOOGLE_TOKEN_ENCRYPTION_KEY or JWT_SECRET must be configured in production when Google integration is active.');
     }
     if (env.ALLOW_DEV_AUTH_BYPASS === 'true') {
       errors.push('ALLOW_DEV_AUTH_BYPASS cannot be enabled in production.');

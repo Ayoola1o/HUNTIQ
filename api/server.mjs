@@ -24117,8 +24117,8 @@ function getProductionConfigErrors(env = process.env) {
       errors.push("DATABASE_URL must be set in production.");
     }
     const hasGoogleAuth = Boolean(env.GOOGLE_CLIENT_ID?.trim() || env.GOOGLE_CLIENT_SECRET?.trim());
-    if (hasGoogleAuth && !env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim()) {
-      errors.push("GOOGLE_TOKEN_ENCRYPTION_KEY must be configured in production when Google integration is active.");
+    if (hasGoogleAuth && !env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim() && !env.JWT_SECRET?.trim()) {
+      errors.push("GOOGLE_TOKEN_ENCRYPTION_KEY or JWT_SECRET must be configured in production when Google integration is active.");
     }
     if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
       errors.push("ALLOW_DEV_AUTH_BYPASS cannot be enabled in production.");
@@ -41511,11 +41511,11 @@ var require_nodemailer = __commonJS({
 import crypto4 from "node:crypto";
 function getDerivedKey() {
   if (cachedKey) return cachedKey;
-  const rawKey = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim();
+  const rawKey = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim() || process.env.JWT_SECRET?.trim();
   const isProd = config.nodeEnv === "production" || process.env.VERCEL === "1";
   if (!rawKey) {
     if (isProd) {
-      throw new Error("[CRYPTO] GOOGLE_TOKEN_ENCRYPTION_KEY is required in production.");
+      throw new Error("[CRYPTO] GOOGLE_TOKEN_ENCRYPTION_KEY or JWT_SECRET is required in production.");
     }
     cachedKey = crypto4.scryptSync("huntiq_dev_encryption_key_insecure", "huntiq_dev_salt", 32);
     return cachedKey;
@@ -41541,7 +41541,7 @@ var init_cryptoService = __esm({
     cachedKey = null;
     CryptoService = class {
       static isConfigured() {
-        return Boolean(process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim());
+        return Boolean(process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim() || process.env.JWT_SECRET?.trim());
       }
       /**
        * Encrypts a token using AES-256-GCM.

@@ -9,12 +9,12 @@ let cachedKey: Buffer | null = null;
 function getDerivedKey(): Buffer {
   if (cachedKey) return cachedKey;
 
-  const rawKey = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim();
+  const rawKey = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim() || process.env.JWT_SECRET?.trim();
   const isProd = config.nodeEnv === 'production' || process.env.VERCEL === '1';
 
   if (!rawKey) {
     if (isProd) {
-      throw new Error('[CRYPTO] GOOGLE_TOKEN_ENCRYPTION_KEY is required in production.');
+      throw new Error('[CRYPTO] GOOGLE_TOKEN_ENCRYPTION_KEY or JWT_SECRET is required in production.');
     }
     // Fallback key ONLY for local development/testing
     cachedKey = crypto.scryptSync('huntiq_dev_encryption_key_insecure', 'huntiq_dev_salt', 32);
@@ -40,7 +40,7 @@ function getDerivedKey(): Buffer {
 
 export class CryptoService {
   public static isConfigured(): boolean {
-    return Boolean(process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim());
+    return Boolean(process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim() || process.env.JWT_SECRET?.trim());
   }
 
   /**
