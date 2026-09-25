@@ -45,9 +45,15 @@ export const runMigrations = async (poolOrUrl?: Pool | string) => {
   const shouldClosePool = !(poolOrUrl instanceof Pool);
   const client = await pool.connect();
 
+  let hasLock = false;
   try {
-    // Acquire PostgreSQL session advisory lock to prevent concurrent migration races across instances
-    await client.query("SELECT pg_advisory_lock(hashtext('huntiq_migrations_lock'))");
+    // Attempt non-blocking advisory lock, but continue safely if connection pooler (PgBouncer/Supavisor) rejects session locks
+    try {
+      const lockRes = await client.query("SELECT pg_try_advisory_lock(hashtext('huntiq_migrations_lock')) as locked");
+      hasLock = Boolean(lockRes.rows[0]?.locked);
+    } catch (err: any) {
+      console.warn('[HUNTIQ-MIGRATE] Advisory lock skipped or unsupported by connection pooler:', err.message || err);
+    }
 
     await client.query(`
       create table if not exists schema_migrations (
@@ -81,10 +87,12 @@ export const runMigrations = async (poolOrUrl?: Pool | string) => {
     }
     migrationCompleted = true;
   } finally {
-    try {
-      await client.query("SELECT pg_advisory_unlock(hashtext('huntiq_migrations_lock'))");
-    } catch {
-      // Lock will auto-release on connection close if unlock fails
+    if (hasLock) {
+      try {
+        await client.query("SELECT pg_advisory_unlock(hashtext('huntiq_migrations_lock'))");
+      } catch {
+        // Lock will auto-release on connection close if unlock fails
+      }
     }
     client.release();
     if (shouldClosePool) {
