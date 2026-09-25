@@ -1,4 +1,4 @@
-name: HUNTIQ Background Campaign Scheduler
+name: HUNTIQ Background Scheduler (Campaigns & Gmail Watch Renewal)
 
 on:
   schedule:
@@ -7,13 +7,21 @@ on:
   workflow_dispatch:
 
 jobs:
-  trigger-campaigns:
+  trigger-background-tasks:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Campaign Dispatcher
         run: |
-          URL="${{ secrets.HUNTIQ_APP_URL || 'https://huntiq.vercel.app' }}"
+          URL="${{ secrets.HUNTIQ_APP_URL || 'https://huntiq-drab.vercel.app' }}"
           echo "Pinging ${URL}/api/cron/campaigns..."
           curl -s -X POST "${URL}/api/cron/campaigns" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" || true
+
+      - name: Ping Gmail Watch Renewal
+        run: |
+          URL="${{ secrets.HUNTIQ_APP_URL || 'https://huntiq-drab.vercel.app' }}"
+          echo "Pinging ${URL}/api/cron/renew-watches..."
+          curl -s -X GET "${URL}/api/cron/renew-watches" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" || true

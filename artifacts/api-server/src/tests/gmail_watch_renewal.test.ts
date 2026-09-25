@@ -471,23 +471,46 @@ async function runAllTests() {
     const baseUrl = `http://127.0.0.1:${port}`;
 
     try {
-      // Unauthorized request should fail with 401
+      // 8b-1. Unauthorized request should fail with 401
       const unauthRes = await fetch(`${baseUrl}/api/v1/cron/renew-watches`, {
         method: 'POST'
       });
       assert.strictEqual(unauthRes.status, 401, 'Request without CRON_SECRET must be rejected with 401');
 
-      // Authorized request with x-cron-secret header should succeed
+      // 8b-2. Vercel Cron sends GET /api/cron/renew-watches with Authorization: Bearer <CRON_SECRET>
+      const vercelCronRes = await fetch(`${baseUrl}/api/cron/renew-watches`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${testSecret}`
+        }
+      });
+      assert.strictEqual(vercelCronRes.status, 200, 'Vercel GET cron request must return 200 OK');
+      const vercelBody: any = await vercelCronRes.json();
+      assert.strictEqual(vercelBody.success, true);
+      assert.ok(typeof vercelBody.data.checked === 'number');
+
+      // 8b-3. Authorized POST request with x-cron-secret header should succeed
       const authRes = await fetch(`${baseUrl}/api/v1/cron/renew-watches`, {
         method: 'POST',
         headers: {
           'x-cron-secret': testSecret
         }
       });
-      assert.strictEqual(authRes.status, 200, 'Authorized cron request must return 200 OK');
+      assert.strictEqual(authRes.status, 200, 'Authorized POST cron request must return 200 OK');
       const body: any = await authRes.json();
       assert.strictEqual(body.success, true);
       assert.ok(typeof body.data.checked === 'number');
+
+      // 8b-4. GET status check
+      const statusRes = await fetch(`${baseUrl}/api/cron/status`, {
+        headers: {
+          'Authorization': `Bearer ${testSecret}`
+        }
+      });
+      assert.strictEqual(statusRes.status, 200);
+      const statusBody: any = await statusRes.json();
+      assert.strictEqual(statusBody.success, true);
+      assert.ok(statusBody.data.totalWatchRenewalsRun >= 1);
     } finally {
       delete process.env.CRON_SECRET;
       server.close();

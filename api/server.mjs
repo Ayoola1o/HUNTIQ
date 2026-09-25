@@ -45810,6 +45810,9 @@ var DEFAULT_WORKSPACE_ID2 = "ws-default-001";
 var userRepository = createUserRepository();
 var apiKeyRepository = createApiKeyRepository();
 var authenticateApiKeyOrJwt = async (req, res, next) => {
+  if (req.path.startsWith("/api/v1/cron") || req.path.startsWith("/api/cron") || req.path.startsWith("/cron") || req.path.startsWith("/jobs")) {
+    return next();
+  }
   const authHeader = req.headers.authorization;
   const rawApiKey = req.headers["x-huntiq-api-key"];
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -61712,18 +61715,19 @@ function verifyCronAuth(req, res, next) {
   const headerSecret = req.headers["x-cron-secret"];
   const authHeader = req.headers.authorization;
   const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7).trim() : null;
-  if (headerSecret === cronSecret || bearerToken === cronSecret) {
+  const querySecret = typeof req.query.cron_secret === "string" ? req.query.cron_secret : typeof req.query.key === "string" ? req.query.key : null;
+  if (headerSecret === cronSecret || bearerToken === cronSecret || querySecret === cronSecret) {
     return next();
   }
   return res.status(401).json({
     success: false,
     error: {
       code: "CRON_UNAUTHORIZED",
-      message: "Unauthorized cron request. Valid x-cron-secret or Authorization header required."
+      message: "Unauthorized cron request. Valid x-cron-secret, Authorization header, or query key required."
     }
   });
 }
-cronRouter.post(["/cron/renew-watches", "/jobs/renew-watches", "/auth/google/watch/renew-all"], verifyCronAuth, async (_req, res) => {
+var renewWatchesHandler = async (_req, res) => {
   try {
     const summary = await SchedulerService.runWatchRenewalJob();
     return res.status(200).json({
@@ -61743,8 +61747,8 @@ cronRouter.post(["/cron/renew-watches", "/jobs/renew-watches", "/auth/google/wat
       }
     });
   }
-});
-cronRouter.post(["/cron/campaigns", "/jobs/campaigns"], verifyCronAuth, async (req, res) => {
+};
+var campaignsHandler = async (req, res) => {
   try {
     const workspaceId = req.user?.workspaceId || req.query.workspaceId;
     const result = await SchedulerService.runCampaignExecutionJob(workspaceId);
@@ -61764,8 +61768,8 @@ cronRouter.post(["/cron/campaigns", "/jobs/campaigns"], verifyCronAuth, async (r
       }
     });
   }
-});
-cronRouter.post(["/cron/run-all", "/jobs/run-all"], verifyCronAuth, async (req, res) => {
+};
+var runAllHandler = async (req, res) => {
   try {
     const watchSummary = await SchedulerService.runWatchRenewalJob();
     const workspaceId = req.user?.workspaceId || req.query.workspaceId;
@@ -61789,7 +61793,16 @@ cronRouter.post(["/cron/run-all", "/jobs/run-all"], verifyCronAuth, async (req, 
       }
     });
   }
-});
+};
+var watchRenewalPaths = ["/cron/renew-watches", "/renew-watches", "/jobs/renew-watches", "/auth/google/watch/renew-all"];
+cronRouter.get(watchRenewalPaths, verifyCronAuth, renewWatchesHandler);
+cronRouter.post(watchRenewalPaths, verifyCronAuth, renewWatchesHandler);
+var campaignPaths = ["/cron/campaigns", "/campaigns", "/jobs/campaigns"];
+cronRouter.get(campaignPaths, verifyCronAuth, campaignsHandler);
+cronRouter.post(campaignPaths, verifyCronAuth, campaignsHandler);
+var runAllPaths = ["/cron/run-all", "/run-all", "/jobs/run-all"];
+cronRouter.get(runAllPaths, verifyCronAuth, runAllHandler);
+cronRouter.post(runAllPaths, verifyCronAuth, runAllHandler);
 cronRouter.get(["/cron/status", "/jobs/status"], verifyCronAuth, (_req, res) => {
   const status = SchedulerService.getStatus();
   return res.status(200).json({

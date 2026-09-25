@@ -27,6 +27,16 @@ export const authenticateApiKeyOrJwt = async (
   res: Response,
   next: NextFunction
 ) => {
+  // Cron endpoints manage their own authorization via verifyCronAuth
+  if (
+    req.path.startsWith('/api/v1/cron') ||
+    req.path.startsWith('/api/cron') ||
+    req.path.startsWith('/cron') ||
+    req.path.startsWith('/jobs')
+  ) {
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
   const rawApiKey = req.headers['x-huntiq-api-key'];
 

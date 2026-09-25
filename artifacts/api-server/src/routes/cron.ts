@@ -21,26 +21,24 @@ function verifyCronAuth(req: Request, res: Response, next: () => void) {
   const authHeader = req.headers.authorization;
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
 
-  if (headerSecret === cronSecret || bearerToken === cronSecret) {
+  const querySecret = typeof req.query.cron_secret === 'string' 
+    ? req.query.cron_secret 
+    : (typeof req.query.key === 'string' ? req.query.key : null);
+
+  if (headerSecret === cronSecret || bearerToken === cronSecret || querySecret === cronSecret) {
     return next();
   }
-
 
   return res.status(401).json({
     success: false,
     error: {
       code: 'CRON_UNAUTHORIZED',
-      message: 'Unauthorized cron request. Valid x-cron-secret or Authorization header required.'
+      message: 'Unauthorized cron request. Valid x-cron-secret, Authorization header, or query key required.'
     }
   });
 }
 
-/**
- * POST /api/cron/renew-watches (or /api/v1/cron/renew-watches)
- * Triggers Gmail watch renewal across all eligible workspaces.
- * Trace: scheduler/cron -> application endpoint/job -> GmailReplySyncService.checkAndRenewAllWatches()
- */
-cronRouter.post(['/cron/renew-watches', '/jobs/renew-watches', '/auth/google/watch/renew-all'], verifyCronAuth, async (_req: Request, res: Response) => {
+const renewWatchesHandler = async (_req: Request, res: Response) => {
   try {
     const summary = await SchedulerService.runWatchRenewalJob();
     return res.status(200).json({
@@ -60,13 +58,9 @@ cronRouter.post(['/cron/renew-watches', '/jobs/renew-watches', '/auth/google/wat
       }
     });
   }
-});
+};
 
-/**
- * POST /api/cron/campaigns (or /api/v1/cron/campaigns)
- * Triggers due campaign sequence processing across active campaigns.
- */
-cronRouter.post(['/cron/campaigns', '/jobs/campaigns'], verifyCronAuth, async (req: Request, res: Response) => {
+const campaignsHandler = async (req: Request, res: Response) => {
   try {
     const workspaceId = (req as any).user?.workspaceId || (req.query.workspaceId as string);
     const result = await SchedulerService.runCampaignExecutionJob(workspaceId);
@@ -86,13 +80,9 @@ cronRouter.post(['/cron/campaigns', '/jobs/campaigns'], verifyCronAuth, async (r
       }
     });
   }
-});
+};
 
-/**
- * POST /api/cron/run-all (or /api/v1/cron/run-all)
- * Triggers all background jobs (watch renewal + due campaign steps).
- */
-cronRouter.post(['/cron/run-all', '/jobs/run-all'], verifyCronAuth, async (req: Request, res: Response) => {
+const runAllHandler = async (req: Request, res: Response) => {
   try {
     const watchSummary = await SchedulerService.runWatchRenewalJob();
     const workspaceId = (req as any).user?.workspaceId || (req.query.workspaceId as string);
@@ -117,7 +107,32 @@ cronRouter.post(['/cron/run-all', '/jobs/run-all'], verifyCronAuth, async (req: 
       }
     });
   }
-});
+};
+
+/**
+ * GET & POST /api/cron/renew-watches (or /api/v1/cron/renew-watches)
+ * Triggers Gmail watch renewal across all eligible workspaces.
+ * Trace: scheduler/cron -> application endpoint/job -> GmailReplySyncService.checkAndRenewAllWatches()
+ */
+const watchRenewalPaths = ['/cron/renew-watches', '/renew-watches', '/jobs/renew-watches', '/auth/google/watch/renew-all'];
+cronRouter.get(watchRenewalPaths, verifyCronAuth, renewWatchesHandler);
+cronRouter.post(watchRenewalPaths, verifyCronAuth, renewWatchesHandler);
+
+/**
+ * GET & POST /api/cron/campaigns (or /api/v1/cron/campaigns)
+ * Triggers due campaign sequence processing across active campaigns.
+ */
+const campaignPaths = ['/cron/campaigns', '/campaigns', '/jobs/campaigns'];
+cronRouter.get(campaignPaths, verifyCronAuth, campaignsHandler);
+cronRouter.post(campaignPaths, verifyCronAuth, campaignsHandler);
+
+/**
+ * GET & POST /api/cron/run-all (or /api/v1/cron/run-all)
+ * Triggers all background jobs (watch renewal + due campaign steps).
+ */
+const runAllPaths = ['/cron/run-all', '/run-all', '/jobs/run-all'];
+cronRouter.get(runAllPaths, verifyCronAuth, runAllHandler);
+cronRouter.post(runAllPaths, verifyCronAuth, runAllHandler);
 
 /**
  * GET /api/cron/status (or /api/v1/cron/status)
