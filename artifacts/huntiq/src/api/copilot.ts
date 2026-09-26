@@ -1,8 +1,8 @@
 import { apiClient } from './client';
+import type { CompanyItem } from '../types/company';
+import type { OpportunityItem } from '../types/opportunity';
+import type { SignalItem } from '../types/signal';
 import type { 
-  CompanyItem, 
-  OpportunityItem, 
-  SignalItem, 
   ResearchDossier, 
   GeneratedOutreach,
   CopilotIntentType 

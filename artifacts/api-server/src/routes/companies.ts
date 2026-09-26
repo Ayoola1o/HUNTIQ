@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import type { ApiResponse } from '../types/api';
 import { createCompanyRepository, InMemoryCompanyRepository } from '../repositories/companies';
 import { CompanyResolver } from '../engine';
@@ -160,9 +160,17 @@ companiesRouter.post('/companies/:id/save', async (req: AuthenticatedRequest, re
  * POST /api/companies/resolve
  * Canonical entity resolution with domain normalization & fuzzy matching
  */
-companiesRouter.post('/companies/resolve', async (req: Request, res: Response) => {
+companiesRouter.post('/companies/resolve', async (req: AuthenticatedRequest, res: Response) => {
   const { name, domain, website, sourceUrl, boardToken, industry, city, country } = req.body || {};
-  const workspaceId = (req as any).user?.workspaceId || (req.body as any)?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
 
   try {
     const result = await CompanyResolver.resolve({
@@ -194,9 +202,17 @@ companiesRouter.post('/companies/resolve', async (req: Request, res: Response) =
  * POST /api/companies/merge
  * Consolidates duplicate company into target canonical company
  */
-companiesRouter.post('/companies/merge', async (req: Request, res: Response) => {
+companiesRouter.post('/companies/merge', async (req: AuthenticatedRequest, res: Response) => {
   const { sourceCompanyId, targetCompanyId } = req.body || {};
-  const workspaceId = (req as any).user?.workspaceId || (req.body as any)?.workspaceId || 'ws-default-001';
+  const workspaceId = req.user?.workspaceId;
+
+  if (!workspaceId) {
+    return res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  }
 
   if (!sourceCompanyId || !targetCompanyId) {
     return res.status(400).json({

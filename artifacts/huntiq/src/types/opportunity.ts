@@ -10,8 +10,8 @@ export interface OpportunitySignalItem {
   type: string;
   title: string;
   detail: string;
-  timeAgo: string;
-  confidence: number;
+  timeAgo?: string;
+  confidence?: number;
 }
 
 export interface ScoreFactors {
@@ -19,8 +19,9 @@ export interface ScoreFactors {
   buyingIntent: { score: number; max: number };
   triggerEvents: { score: number; max: number };
   decisionMakerAccess: { score: number; max: number };
-  companySize: { score: number; max: number };
-  engagement: { score: number; max: number };
+  // companySize and engagement are not always calculable from available data
+  companySize?: { score: number; max: number };
+  engagement?: { score: number; max: number };
 }
 
 export interface OpportunityItem {
@@ -38,17 +39,19 @@ export interface OpportunityItem {
   tags: string[];
   estimatedValue: number;
   stage: OpportunityStage;
-  lastActivity: string;
-  lastActivityType: 'signal' | 'stage_change' | 'outreach' | 'research';
-  website: string;
-  revenue: string;
-  linkedInUrl: string;
+  // lastActivity is not always available from real signal data
+  lastActivity?: string;
+  lastActivityType?: 'signal' | 'stage_change' | 'outreach' | 'research';
+  website?: string;
+  revenue?: string;
+  linkedInUrl?: string;
   signals: OpportunitySignalItem[];
   scoreFactors: ScoreFactors;
   bestNextStep: {
     actionText: string;
     targetRole: string;
-    targetName: string;
+    // targetName requires a real contact record — may be absent
+    targetName?: string;
   };
   source?: OpportunitySource;
   opportunityType?: OpportunityType;

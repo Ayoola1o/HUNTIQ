@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 import { useHuntiq } from '../../context/HuntiqContext';
-import { syncCompanyJobs, autoQualifyLeads } from '../../api';
+import { autoQualifyLeads } from '../../api';
 import { MobileBottomNav } from '../navigation/MobileBottomNav';
 
 interface OpportunitiesPageProps {
@@ -34,12 +34,13 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
-  const { opportunities: dynamicOpportunities, signals, isLiveBackend, isDataLoading, refreshData, addDealToPipeline } = useHuntiq();
+  const { opportunities: dynamicOpportunities, signals, isLiveBackend, isDataLoading, dataLoadError, refreshData, addDealToPipeline } = useHuntiq();
   const [activeTab, setActiveTab] = useState('all');
   const [activeKpiFilter, setActiveKpiFilter] = useState('all');
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
+  const [syncToastIsError, setSyncToastIsError] = useState(false);
 
   // Modals state
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -88,19 +89,18 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
 
   const handleQuickLiveSync = async () => {
     setIsSyncing(true);
+    setSyncToastIsError(false);
     try {
-      // Trigger live sync for Paystack
-      await syncCompanyJobs({ domain: 'paystack.com', provider: 'GREENHOUSE', boardToken: 'paystack' });
-      // Run auto qualification
+      // Run auto qualification across all workspace companies
       await autoQualifyLeads();
       // Reload fresh data into state
       await refreshData();
-      setSyncToast('Live Greenhouse sync completed! Paystack + Moniepoint updated.');
+      setSyncToast('Live data refreshed. Opportunities rescored from workspace data.');
       setTimeout(() => setSyncToast(null), 4000);
     } catch (_err) {
-      await refreshData();
-      setSyncToast('Refreshed live opportunity scores.');
-      setTimeout(() => setSyncToast(null), 3000);
+      setSyncToastIsError(true);
+      setSyncToast('Refresh failed. Backend may be unavailable.');
+      setTimeout(() => setSyncToast(null), 4000);
     } finally {
       setIsSyncing(false);
     }
@@ -108,51 +108,56 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
 
   const selectedOpp = opportunities.find((o) => o.id === selectedOpportunityId) || opportunities[0];
 
-  const handleAddOpportunity = (newOppData: Partial<OpportunityItem>) => {
-    const newOpp: OpportunityItem = {
-      id: `opp-${Date.now()}`,
-      companyName: newOppData.companyName || 'New Company',
-      avatarLetter: newOppData.avatarLetter || 'N',
-      avatarBg: newOppData.avatarBg || '#6366f1',
-      industry: newOppData.industry || 'Technology',
-      employees: newOppData.employees || '100-250 employees',
-      location: newOppData.location || 'Lagos, Nigeria',
-      score: newOppData.score || 85,
-      scoreTrend: 'up',
-      priority: newOppData.priority || 'High',
-      whyNow: newOppData.whyNow || 'High timing intent detected.',
-      tags: newOppData.tags || ['Inbound'],
-      estimatedValue: newOppData.estimatedValue || 25000,
-      stage: newOppData.stage || 'Discovery',
-      lastActivity: 'Just now',
-      lastActivityType: 'stage_change',
-      website: newOppData.website || 'example.com',
-      revenue: newOppData.revenue || '$10M - $25M',
-      linkedInUrl: newOppData.linkedInUrl || '#',
-      signals: newOppData.signals || [],
-      scoreFactors: newOppData.scoreFactors || {
-        icpFit: { score: 22, max: 25 },
-        buyingIntent: { score: 20, max: 25 },
-        triggerEvents: { score: 18, max: 20 },
-        decisionMakerAccess: { score: 12, max: 15 },
-        companySize: { score: 9, max: 10 },
-        engagement: { score: 4, max: 5 }
-      },
-      bestNextStep: newOppData.bestNextStep || {
-        actionText: 'Reach out to primary decision maker.',
-        targetRole: 'Executive',
-        targetName: 'Decision Maker'
-      }
-    };
-
-    setOpportunities((prev) => [newOpp, ...prev]);
-    setSelectedOpportunityId(newOpp.id);
+  /**
+   * handleAddOpportunity
+   * Routes new opportunity creation through the backend pipeline endpoint.
+   * The backend is authoritative for record identity and persistence.
+   * On failure: the deal is rolled back by addDealToPipeline's internal rollback logic.
+   */
+  const handleAddOpportunity = async (newOppData: Partial<OpportunityItem>) => {
+    setSyncToastIsError(false);
+    try {
+      await addDealToPipeline({
+        companyName: newOppData.companyName || 'New Target Account',
+        domain: newOppData.website,
+        dealTitle: newOppData.companyName
+          ? `${newOppData.companyName} - New Opportunity`
+          : 'New Strategic Opportunity',
+        dealValue: newOppData.estimatedValue || 0,
+        probability: newOppData.score ? Math.min(90, Math.round(newOppData.score * 0.9)) : 50,
+        opportunityScore: newOppData.score,
+        stage: 'contacted',
+        contactRole: newOppData.bestNextStep?.targetRole || 'Executive',
+        nextAction: newOppData.bestNextStep?.actionText || 'Initial outreach',
+        priority: (newOppData.priority === 'Medium' || newOppData.priority === 'Low')
+          ? newOppData.priority
+          : 'High',
+      });
+      setSyncToast('Opportunity added to your CRM pipeline.');
+      setTimeout(() => setSyncToast(null), 4000);
+      setIsNewModalOpen(false);
+    } catch (err: any) {
+      setSyncToastIsError(true);
+      setSyncToast(`Failed to create opportunity: ${err?.message || 'Backend error'}`);
+      setTimeout(() => setSyncToast(null), 5000);
+    }
   };
 
-  const handleStageChange = (id: string, newStage: OpportunityStage) => {
-    setOpportunities((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, stage: newStage, lastActivity: 'Just now' } : o))
-    );
+  /**
+   * handleStageChange
+   * Opportunity stage is currently a derived/computed view from company+signal data.
+   * The opportunity concept does not yet have a dedicated backend persistence endpoint.
+   * Stage changes are not persisted — this is displayed honestly to the user.
+   *
+   * TRACK-OPP-STAGE-01: Implement a dedicated backend opportunity stage endpoint
+   * and wire it here when the backend contract is established.
+   */
+  const handleStageChange = (_id: string, _newStage: OpportunityStage) => {
+    // Not yet implemented: opportunity stage changes are not persisted to the backend.
+    // Silently ignoring would hide a missing feature — instead we show an error toast.
+    setSyncToastIsError(true);
+    setSyncToast('Stage changes are not yet persisted. This will be available in a future update.');
+    setTimeout(() => setSyncToast(null), 4000);
   };
 
   // Filter opportunities based on search query, active tab, and modal filters
@@ -579,24 +584,46 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
             padding: '20px 0 36px'
           }}
         >
-          {/* Live Ingestion Feedback Toast */}
-          {syncToast && (
+          {/* Load / mutation error banner */}
+          {(dataLoadError) && (
             <div style={{
               margin: '0 32px',
               padding: '10px 16px',
-              backgroundColor: '#ecfdf5',
-              border: '1px solid #6ee7b7',
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fca5a5',
               borderRadius: '10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               fontSize: '13px',
               fontWeight: 600,
-              color: '#065f46',
-              boxShadow: '0 2px 6px rgba(16, 185, 129, 0.1)'
+              color: '#b91c1c',
+              boxShadow: '0 2px 6px rgba(220, 38, 38, 0.08)'
+            }}>
+              <span>{dataLoadError}</span>
+            </div>
+          )}
+
+          {/* Feedback Toast (success/error) */}
+          {syncToast && (
+            <div style={{
+              margin: '0 32px',
+              padding: '10px 16px',
+              backgroundColor: syncToastIsError ? '#fef2f2' : '#ecfdf5',
+              border: `1px solid ${syncToastIsError ? '#fca5a5' : '#6ee7b7'}`,
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: syncToastIsError ? '#b91c1c' : '#065f46',
+              boxShadow: syncToastIsError
+                ? '0 2px 6px rgba(220, 38, 38, 0.08)'
+                : '0 2px 6px rgba(16, 185, 129, 0.1)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Zap size={15} color="#059669" fill="#059669" />
+                <Zap size={15} color={syncToastIsError ? '#dc2626' : '#059669'} fill={syncToastIsError ? '#dc2626' : '#059669'} />
                 <span>{syncToast}</span>
               </div>
               <button
@@ -604,7 +631,7 @@ export const OpportunitiesPage: React.FC<OpportunitiesPageProps> = ({
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#047857',
+                  color: syncToastIsError ? '#b91c1c' : '#047857',
                   cursor: 'pointer',
                   fontWeight: 700,
                   fontSize: '12px'

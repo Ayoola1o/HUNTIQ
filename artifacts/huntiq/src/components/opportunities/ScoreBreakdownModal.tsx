@@ -24,8 +24,12 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ opp, o
     { label: 'Buying Intent', score: opp.scoreFactors.buyingIntent.score, max: opp.scoreFactors.buyingIntent.max, icon: <Flame size={15} color="#e11d48" />, note: 'Strong active research on org scaling & management frameworks.' },
     { label: 'Trigger Events', score: opp.scoreFactors.triggerEvents.score, max: opp.scoreFactors.triggerEvents.max, icon: <Zap size={15} color="#d97706" />, note: '38 new open roles + Abuja branch expansion + new COO.' },
     { label: 'Decision Maker Access', score: opp.scoreFactors.decisionMakerAccess.score, max: opp.scoreFactors.decisionMakerAccess.max, icon: <Users size={15} color="#2563eb" />, note: 'Verified contact details for Head of People & COO.' },
-    { label: 'Company Size Fit', score: opp.scoreFactors.companySize.score, max: opp.scoreFactors.companySize.max, icon: <Building size={15} color="#7c3aed" />, note: 'Ideal $25K-$50K contract capacity.' },
-    { label: 'Engagement History', score: opp.scoreFactors.engagement.score, max: opp.scoreFactors.engagement.max, icon: <MessageSquare size={15} color="#059669" />, note: 'Prior newsletter subscriber and content download.' },
+    ...(opp.scoreFactors.companySize
+      ? [{ label: 'Company Size Fit', score: opp.scoreFactors.companySize.score, max: opp.scoreFactors.companySize.max, icon: <Building size={15} color="#7c3aed" />, note: 'Ideal $25K-$50K contract capacity.' }]
+      : []),
+    ...(opp.scoreFactors.engagement
+      ? [{ label: 'Engagement History', score: opp.scoreFactors.engagement.score, max: opp.scoreFactors.engagement.max, icon: <MessageSquare size={15} color="#059669" />, note: 'Prior newsletter subscriber and content download.' }]
+      : []),
   ];
 
   return (

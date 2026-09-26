@@ -204,7 +204,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({ action, onExecute, onVie
               gap: '6px'
             }}
           >
-            <span>View 50 Results</span>
+            <span>View {action.results?.totalFound !== undefined ? `${action.results.totalFound} ` : ''}Results</span>
             <ArrowRight size={14} />
           </button>
         )}

@@ -40,8 +40,8 @@ export interface OnboardingData {
 }
 
 export const initialOnboardingData: OnboardingData = {
-  workspaceName: 'Peak Consulting',
-  website: 'https://peakconsulting.com',
+  workspaceName: '',
+  website: '',
   whatYouSell: 'HR Consulting & Employee Training Services',
   description: 'We help growing companies build high-performing teams through HR strategy, leadership development, employee training, and organizational design.',
   primaryObjective: 'generate_clients',

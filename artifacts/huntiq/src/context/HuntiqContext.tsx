@@ -63,6 +63,7 @@ interface HuntiqContextType {
   pipelineDeals: PipelineDealItem[];
   isLiveBackend: boolean;
   isDataLoading: boolean;
+  dataLoadError: string | null;
   refreshData: () => Promise<void>;
   
   // Modals & Active Inspect
@@ -125,6 +126,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   const [currentView, setCurrentView] = useState<AppView>(initialView);
   const [isLiveBackend, setIsLiveBackend] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(false);
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // User Session & Activity State
@@ -286,11 +288,16 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   }, [researchedCompany]);
 
   // Memoized Scored Opportunities
+  // Scores are derived from the scoringEngine using actual company and signal data.
+  // No fabricated values are inserted — fields without real data are left undefined.
   const opportunities = useMemo(() => {
     return companies.map((c) => {
       const evaluation = scoringEngine.evaluateOpportunity(c, signals);
       const isDigitalGap = c.tags?.includes('Digital Gap') || !!c.digitalAudit;
       const estimatedValue = c.digitalAudit?.recommendedPackage?.estimatedValue?.max || (evaluation.totalScore * 450);
+
+      // Use the first real active signal for this company (if any)
+      const primarySignal = c.activeSignals?.[0];
 
       const opp: OpportunityItem = {
         id: `opp-${c.id}`,
@@ -304,36 +311,43 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
         scoreTrend: 'up',
         priority: evaluation.tier === 'High Intent' ? 'Hot' : 'High',
         whyNow: c.digitalAudit?.issuesDetected?.map((i: any) => i.title).join(' • ') || evaluation.whyNowSummary,
-        tags: c.tags || (c.activeSignals?.map(s => s.type) || ['High Intent']),
+        tags: c.tags || (c.activeSignals?.map(s => s.type) || []),
         estimatedValue,
         stage: 'Discovery',
-        lastActivity: '2 hours ago',
-        lastActivityType: 'signal',
+        // lastActivity is not fabricated — it is left as a live signal timestamp or undefined
+        lastActivity: primarySignal?.time || undefined,
+        lastActivityType: primarySignal ? 'signal' : undefined,
         website: c.domain,
         revenue: c.revenue,
-        linkedInUrl: c.socials?.linkedin || 'https://linkedin.com',
-        signals: [
-          {
-            id: `sig-opp-${c.id}`,
-            type: isDigitalGap ? 'digital_gap' : 'expansion',
-            title: c.activeSignals?.[0]?.title || 'Recent Regional Expansion',
-            detail: c.activeSignals?.[0]?.description || 'Hiring spike and new office locations',
-            timeAgo: '2h ago',
-            confidence: 94
-          }
-        ],
+        linkedInUrl: c.socials?.linkedin,
+        signals: primarySignal
+          ? [
+              {
+                id: `sig-opp-${c.id}`,
+                type: isDigitalGap ? 'digital_gap' : 'expansion',
+                title: primarySignal.title,
+                detail: primarySignal.description,
+                // timeAgo and confidence only included if provided by the real signal data
+                timeAgo: primarySignal.time,
+                confidence: undefined
+              }
+            ]
+          : [],
         scoreFactors: {
+          // Scores from the deterministic scoringEngine — no hardcoded overrides
           icpFit: { score: evaluation.icpFitScore, max: 100 },
           buyingIntent: { score: evaluation.signalVelocityScore, max: 100 },
           triggerEvents: { score: evaluation.hiringSurgeScore, max: 100 },
           decisionMakerAccess: { score: evaluation.reachabilityScore, max: 100 },
-          companySize: { score: 85, max: 100 },
-          engagement: { score: 70, max: 100 }
+          // companySize and engagement are not calculated yet — left undefined rather than fabricated
+          companySize: undefined,
+          engagement: undefined
         },
         bestNextStep: {
           actionText: c.digitalAudit?.recommendedPackage?.packageName || evaluation.recommendedAction,
           targetRole: isDigitalGap ? 'Managing Director / Owner' : 'Head of Operations',
-          targetName: 'Decision Maker'
+          // targetName is not known without a real contact record
+          targetName: undefined
         },
         source: isDigitalGap ? 'GEO_RADAR' : 'AI_SEARCH',
         opportunityType: isDigitalGap ? 'DIGITAL_GAP' : 'HIGH_GROWTH',
@@ -412,12 +426,15 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
   }, []);
 
   // Data Hydration & Live Sync
+  // On API failure the previous state is preserved and an error message is set so
+  // the UI can surface it. State is NEVER replaced with demo/fake data on failure.
   const refreshData = useCallback(async () => {
     if (!localStorage.getItem('huntiq_auth_token')) {
       setIsDataLoading(false);
       return;
     }
     setIsDataLoading(true);
+    setDataLoadError(null);
     try {
       const health = await checkApiHealth();
       if ((health.status === 'ok' || health.status === 'degraded' || health.service === 'huntiq-api') && health.environment !== 'browser-local') {
@@ -430,18 +447,37 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
         apiFetchPipelineDeals()
       ]);
 
+      const errors: string[] = [];
+
       if (liveCompanies.status === 'fulfilled') {
         setCompanies(Array.isArray(liveCompanies.value) ? liveCompanies.value : []);
+      } else {
+        errors.push('companies');
+        console.error('[HUNTIQ] Failed to load companies:', liveCompanies.reason);
       }
+
       if (liveSignals.status === 'fulfilled') {
         setSignals(Array.isArray(liveSignals.value) ? liveSignals.value : []);
+      } else {
+        errors.push('signals');
+        console.error('[HUNTIQ] Failed to load signals:', liveSignals.reason);
       }
+
       if (liveDeals.status === 'fulfilled') {
         setPipelineDeals(Array.isArray(liveDeals.value) ? liveDeals.value : []);
+      } else {
+        errors.push('pipeline deals');
+        console.error('[HUNTIQ] Failed to load pipeline deals:', liveDeals.reason);
       }
+
+      if (errors.length > 0) {
+        setDataLoadError(`Failed to load: ${errors.join(', ')}. Previous data shown.`);
+      }
+
       refreshActivityLogs();
     } catch (err) {
-      console.warn('[HUNTIQ] Error refreshing data from API:', err);
+      console.error('[HUNTIQ] Error refreshing data from API:', err);
+      setDataLoadError('Failed to connect to the HUNTIQ backend. Please refresh.');
     } finally {
       setIsDataLoading(false);
     }
@@ -631,6 +667,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     pipelineDeals,
     isLiveBackend,
     isDataLoading,
+    dataLoadError,
     refreshData,
     isCopilotOpen,
     openCopilot,
@@ -675,6 +712,7 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     pipelineDeals,
     isLiveBackend,
     isDataLoading,
+    dataLoadError,
     refreshData,
     isCopilotOpen,
     openCopilot,

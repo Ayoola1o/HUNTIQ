@@ -33,8 +33,8 @@ export const CompanyResearchModal: React.FC<CompanyResearchModalProps> = ({
   };
 
   const primaryContact = dossier.decisionMakers[0] || { name: 'Executive Leader', role: 'Decision Maker' };
-  const senderName = currentUser?.name || 'Executive Account Lead';
-  const senderOrg = onboardingData?.companyName || currentUser?.workspaceName || 'Enterprise Growth';
+  const senderName = currentUser?.fullName || 'Executive Account Lead';
+  const senderOrg = onboardingData?.workspaceName || currentUser?.companyName || 'Enterprise Growth';
 
   const sampleEmail = `Subject: Supporting ${companyName}'s strategic expansion & growth
 

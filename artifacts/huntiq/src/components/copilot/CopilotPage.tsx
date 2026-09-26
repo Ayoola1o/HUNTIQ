@@ -243,39 +243,11 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
     handleSendMessage(promptToRetry);
   };
 
-  const handleExecuteAction = (actionId: string) => {
-    setMessages((prev) =>
-      prev.map((msg) => {
-        if (msg.actionCard && msg.actionCard.id === actionId) {
-          return {
-            ...msg,
-            actionCard: {
-              ...msg.actionCard,
-              status: 'running'
-            }
-          };
-        }
-        return msg;
-      })
-    );
-
-    setTimeout(() => {
-      setMessages((prev) =>
-        prev.map((msg) => {
-          if (msg.actionCard && msg.actionCard.id === actionId) {
-            return {
-              ...msg,
-              actionCard: {
-                ...msg.actionCard,
-                status: 'completed'
-              }
-            };
-          }
-          return msg;
-        })
-      );
-      onNavigate('opportunities');
-    }, 600);
+  const handleExecuteAction = (_actionId: string) => {
+    // Honest handling: do NOT simulate proposed -> running -> completed with a timer.
+    // If fixing background autonomous action execution requires a separate endpoint, leave it for the next prompt.
+    // Route directly to the relevant view if supported.
+    onNavigate('opportunities');
   };
 
   const handleConfirmCrm = (msgId: string) => {
@@ -385,10 +357,10 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
                 </span>
               </div>
               <span style={{ fontSize: '11px', color: '#64748b' }}>
-                Context: {onboardingData?.companyName
-                  ? `${onboardingData.companyName} (${onboardingData.targetMarket || 'Target Market'} • ${companies.length} Accounts)`
-                  : currentUser?.workspaceName
-                    ? `${currentUser.workspaceName} (${companies.length} Accounts Monitored)`
+                Context: {onboardingData?.workspaceName
+                  ? `${onboardingData.workspaceName} (${onboardingData.geographicMarkets?.[0] || 'All Markets'} • ${companies.length} Accounts)`
+                  : currentUser?.companyName
+                    ? `${currentUser.companyName} (${companies.length} Accounts Monitored)`
                     : 'Live Workspace Intelligence (Active Pipeline & Verified Signals)'}
               </span>
             </div>
