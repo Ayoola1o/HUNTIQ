@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { SearchCriteria } from '../../types/prospectHunter';
 import { X, Bookmark, Check } from 'lucide-react';
 
@@ -15,8 +15,23 @@ export const SaveSearchModal: React.FC<SaveSearchModalProps> = ({
   criteria,
   onSave
 }) => {
-  const [searchName, setSearchName] = useState('Lagos Tech & HR Scaleups');
+  const [searchName, setSearchName] = useState('');
   const [autoAlert, setAutoAlert] = useState(true);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (criteria.naturalQuery && criteria.naturalQuery.trim()) {
+        const q = criteria.naturalQuery.trim();
+        setSearchName(q.length > 50 ? `${q.substring(0, 47)}...` : q);
+      } else if ((criteria.industries && criteria.industries.length > 0) || (criteria.locations && criteria.locations.length > 0)) {
+        const ind = criteria.industries?.length ? criteria.industries.join(', ') : 'All Prospects';
+        const loc = criteria.locations?.length ? ` in ${criteria.locations.join(', ')}` : '';
+        setSearchName(`${ind}${loc}`);
+      } else {
+        setSearchName('Target Prospect Search');
+      }
+    }
+  }, [isOpen, criteria]);
 
   if (!isOpen) return null;
 
@@ -113,9 +128,9 @@ export const SaveSearchModal: React.FC<SaveSearchModalProps> = ({
             gap: '4px'
           }}>
             <div style={{ fontWeight: 700, color: '#0f172a' }}>Active Criteria Snapshot:</div>
-            <div>• Locations: {criteria.locations.join(', ') || 'Lagos, Nigeria'}</div>
-            <div>• Size: {criteria.companySize}</div>
-            <div>• Signals: {criteria.signals.slice(0, 3).join(', ')}</div>
+            <div>• Locations: {criteria.locations?.length ? criteria.locations.join(', ') : 'All locations'}</div>
+            <div>• Size: {criteria.companySize || 'Any size'}</div>
+            <div>• Signals: {criteria.signals?.length ? criteria.signals.slice(0, 3).join(', ') : 'All active triggers'}</div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

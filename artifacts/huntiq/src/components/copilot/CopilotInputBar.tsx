@@ -17,7 +17,7 @@ export const CopilotInputBar: React.FC<CopilotInputBarProps> = ({ onSend, isLoad
     { label: '🔍 Find Prospects', prompt: 'Find 25 technology companies in Lagos that are hiring.' },
     { label: '⚡ Analyze Signals', prompt: 'What industries are showing the strongest buying signals this week?' },
     { label: '🎯 Today’s Leads', prompt: 'Which prospects should I contact today?' },
-    { label: '✉️ Draft Outreach', prompt: 'Draft a personalized outreach email for Acme Technologies.' },
+    { label: '✉️ Draft Outreach', prompt: 'Draft a personalized outreach email for my top opportunity.' },
     { label: '📊 Pipeline Risk', prompt: 'Which deals in my pipeline are currently at risk?' },
   ];
 
@@ -48,7 +48,8 @@ export const CopilotInputBar: React.FC<CopilotInputBarProps> = ({ onSend, isLoad
         {quickPills.map((pill) => (
           <button
             key={pill.label}
-            onClick={() => onSend(pill.prompt)}
+            onClick={() => !isLoading && onSend(pill.prompt)}
+            disabled={isLoading}
             style={{
               padding: '5px 12px',
               borderRadius: '20px',
@@ -58,21 +59,25 @@ export const CopilotInputBar: React.FC<CopilotInputBarProps> = ({ onSend, isLoad
               fontWeight: 600,
               color: '#475569',
               whiteSpace: 'nowrap',
-              cursor: 'pointer',
+              cursor: isLoading ? 'default' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
               transition: 'all 0.15s ease'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#ede9fe';
-              e.currentTarget.style.color = '#5b21b6';
-              e.currentTarget.style.borderColor = '#c4b5fd';
+              if (!isLoading) {
+                e.currentTarget.style.backgroundColor = '#ede9fe';
+                e.currentTarget.style.color = '#5b21b6';
+                e.currentTarget.style.borderColor = '#c4b5fd';
+              }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#f8fafc';
-              e.currentTarget.style.color = '#475569';
-              e.currentTarget.style.borderColor = '#e2e8f0';
+              if (!isLoading) {
+                e.currentTarget.style.backgroundColor = '#f8fafc';
+                e.currentTarget.style.color = '#475569';
+                e.currentTarget.style.borderColor = '#e2e8f0';
+              }
             }}
           >
             {pill.label}
@@ -152,10 +157,10 @@ export const CopilotInputBar: React.FC<CopilotInputBarProps> = ({ onSend, isLoad
           onClick={handleSend}
           disabled={!text.trim() || isLoading}
           style={{
-            background: text.trim()
+            background: text.trim() && !isLoading
               ? 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)'
               : '#f1f5f9',
-            color: text.trim() ? '#ffffff' : '#94a3b8',
+            color: text.trim() && !isLoading ? '#ffffff' : '#94a3b8',
             border: 'none',
             borderRadius: '9px',
             width: '36px',
@@ -163,8 +168,8 @@ export const CopilotInputBar: React.FC<CopilotInputBarProps> = ({ onSend, isLoad
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            cursor: text.trim() ? 'pointer' : 'default',
-            boxShadow: text.trim() ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none',
+            cursor: text.trim() && !isLoading ? 'pointer' : 'default',
+            boxShadow: text.trim() && !isLoading ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none',
             transition: 'all 0.15s ease'
           }}
         >

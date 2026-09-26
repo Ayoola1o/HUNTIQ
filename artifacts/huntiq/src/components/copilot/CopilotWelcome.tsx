@@ -39,7 +39,7 @@ export const CopilotWelcome: React.FC<CopilotWelcomeProps> = ({ onSelectPrompt }
     },
     {
       category: 'Company Research',
-      prompt: 'Research Acme Technologies.',
+      prompt: 'Research top target account.',
       desc: 'Deep 360° dossier with org charts, tech stack, and pain points.',
       icon: <Compass size={18} color="#7c3aed" />,
       iconBg: '#f3e8ff'

@@ -38,10 +38,10 @@ export const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
     },
     {
       id: 'chat-2',
-      title: 'Prospect research — FinServe',
+      title: 'Target account 360° research',
       category: 'today',
       timestamp: '9:15 AM',
-      preview: '360° intelligence brief generated for FinServe...'
+      preview: '360° intelligence brief generated for target opportunity...'
     },
     {
       id: 'chat-3',
@@ -256,7 +256,7 @@ export const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
             Personalization Memory Active
           </div>
           <div style={{ fontSize: '10.5px', color: '#7e22ce', lineHeight: 1.3, marginTop: '2px' }}>
-            Target: Peak Consulting (HR Strategy, $25K deals, Lagos/US)
+            Active Strategy: High-Intent Accounts & Signals
           </div>
         </div>
       </div>

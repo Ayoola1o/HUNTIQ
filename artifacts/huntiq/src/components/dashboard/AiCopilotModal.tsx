@@ -8,6 +8,13 @@ import {
 
 import { executeCopilotPrompt } from '../../api/copilot';
 
+interface MessageItem {
+  sender: 'user' | 'bot';
+  text: string;
+  retryQuery?: string;
+  action?: { label: string; company: string };
+}
+
 interface AiCopilotModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -22,7 +29,7 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
   onInvestigateCompany
 }) => {
   const [query, setQuery] = useState(initialQuery);
-  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'bot'; text: string; action?: { label: string; company: string } }>>([
+  const [messages, setMessages] = useState<MessageItem[]>([
     {
       sender: 'bot',
       text: "Hello! I'm your HUNTIQ Autonomous Intelligence Engine. I can discover ICP-matching accounts, calculate live Opportunity Scores, investigate companies 360°, draft multi-channel outreach, and detect buying signals."
@@ -34,9 +41,9 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
 
   const handleSend = async (textToSend?: string) => {
     const q = textToSend || query;
-    if (!q.trim()) return;
+    if (!q.trim() || isTyping) return;
 
-    const userMsg = { sender: 'user' as const, text: q };
+    const userMsg: MessageItem = { sender: 'user', text: q };
     setMessages((prev) => [...prev, userMsg]);
     setQuery('');
     setIsTyping(true);
@@ -45,11 +52,14 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
       const result = await executeCopilotPrompt(q);
       let action: { label: string; company: string } | undefined = undefined;
 
-      if (result.companies && result.companies.length > 0) {
-        const top = result.companies[0];
+      const companies = result.results?.companies || result.companies;
+      const researchData = result.results?.researchData || result.researchData;
+
+      if (companies && companies.length > 0) {
+        const top = companies[0];
         action = { label: `Investigate ${top.name} (${top.opportunityScore}/100) →`, company: top.name };
-      } else if (result.researchData) {
-        action = { label: `View ${result.researchData.company.name} Full Dossier →`, company: result.researchData.company.name };
+      } else if (researchData) {
+        action = { label: `View ${researchData.company.name} Full Dossier →`, company: researchData.company.name };
       }
 
       setMessages((prev) => [...prev, { sender: 'bot', text: result.message, action }]);
@@ -58,7 +68,8 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
         ...prev,
         {
           sender: 'bot',
-          text: `⚠️ **Unable to execute Copilot query**: ${err?.message || 'Server connection error'}. Please try again.`
+          text: `⚠️ **Unable to execute Copilot query**: ${err?.message || 'Server connection error'}. Please try again.`,
+          retryQuery: q
         }
       ]);
     } finally {
@@ -193,6 +204,29 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 }} />
 
+                {msg.retryQuery && (
+                  <button
+                    onClick={() => handleSend(msg.retryQuery)}
+                    disabled={isTyping}
+                    style={{
+                      marginTop: '10px',
+                      backgroundColor: '#ede9fe',
+                      border: '1px solid #c4b5fd',
+                      color: '#6d28d9',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: isTyping ? 'default' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <span>Retry Request</span>
+                  </button>
+                )}
+
                 {msg.action && (
                   <button
                     onClick={() => {
@@ -238,15 +272,16 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
             {quickPrompts.map((p) => (
               <button
                 key={p}
-                onClick={() => handleSend(p)}
+                onClick={() => !isTyping && handleSend(p)}
+                disabled={isTyping}
                 style={{
                   backgroundColor: '#f1f5f9',
                   border: '1px solid #e2e8f0',
                   borderRadius: '16px',
                   padding: '4px 10px',
                   fontSize: '11.5px',
-                  color: '#475569',
-                  cursor: 'pointer',
+                  color: isTyping ? '#94a3b8' : '#475569',
+                  cursor: isTyping ? 'default' : 'pointer',
                   fontWeight: 500
                 }}
               >
@@ -268,9 +303,10 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
           <input
             type="text"
             value={query}
+            disabled={isTyping}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSend();
+              if (e.key === 'Enter' && !isTyping) handleSend();
             }}
             placeholder="Ask anything about prospects, buying signals, or outreach..."
             style={{
@@ -280,11 +316,14 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
               borderRadius: '10px',
               border: '1px solid #cbd5e1',
               fontSize: '13.5px',
-              outline: 'none'
+              outline: 'none',
+              backgroundColor: isTyping ? '#f8fafc' : '#ffffff',
+              color: isTyping ? '#64748b' : '#0f172a'
             }}
           />
           <button
             onClick={() => handleSend()}
+            disabled={!query.trim() || isTyping}
             style={{
               backgroundColor: '#4f46e5',
               color: '#ffffff',
@@ -295,7 +334,8 @@ export const AiCopilotModal: React.FC<AiCopilotModalProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer'
+              cursor: !query.trim() || isTyping ? 'default' : 'pointer',
+              opacity: !query.trim() || isTyping ? 0.6 : 1
             }}
           >
             <Send size={16} />

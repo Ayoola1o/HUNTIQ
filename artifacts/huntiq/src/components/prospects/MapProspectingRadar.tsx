@@ -8,7 +8,9 @@ import {
   ChevronRight, 
   Search, 
   CheckSquare, 
-  Square 
+  Square,
+  Loader2,
+  Compass
 } from 'lucide-react';
 import { 
   GEO_LOCATION_PRESETS,
@@ -48,21 +50,31 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
   const [gapFilter, setGapFilter] = useState<string>('ALL');
 
   // Business Records & Selection State
-  const [businesses, setBusinesses] = useState<GeoScrapedBusiness[]>(MOCK_GEO_BUSINESSES);
+  const [businesses, setBusinesses] = useState<GeoScrapedBusiness[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [inspectedBusiness, setInspectedBusiness] = useState<GeoScrapedBusiness | null>(null);
   const [addressReport, setAddressReport] = useState<ExtractedAddressReport | null>(null);
 
   // Status & Telemetry
-  const [isSearching, setIsSearching] = useState(false);
+  const [isSearching, setIsSearching] = useState(true);
   const [captureToast, setCaptureToast] = useState<string | null>(null);
 
   // 1. Initial Discovery on mount
   React.useEffect(() => {
     let isMounted = true;
+    setIsSearching(true);
     geoapifyService.discoverPlacesInBounds(null, mapCenter, radiusKm, selectedCategory, discoveryMode)
       .then(results => {
-        if (isMounted) setBusinesses(results);
+        if (isMounted) {
+          setBusinesses(results || []);
+        }
+      })
+      .catch(err => {
+        console.warn('[HUNTIQ-RADAR] Initial geo discovery fallback:', err);
+        if (isMounted) setBusinesses([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsSearching(false);
       });
     return () => { isMounted = false; };
   }, []);
@@ -745,91 +757,161 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {filteredBusinesses.map((biz) => {
-              const isChecked = selectedIds.has(biz.id);
-              const isInspected = inspectedBusiness?.id === biz.id;
-              const visuals = getPinVisuals(biz);
-
-              return (
-                <div
-                  key={biz.id}
+            {isSearching ? (
+              <div style={{
+                padding: '32px 16px',
+                textAlign: 'center',
+                backgroundColor: '#ffffff',
+                borderRadius: '10px',
+                border: '1px dashed #cbd5e1',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <Loader2 size={24} className="animate-spin" color="#4f46e5" />
+                <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+                  Scanning radar for businesses in {radiusKm}km radius...
+                </span>
+              </div>
+            ) : filteredBusinesses.length === 0 ? (
+              <div style={{
+                padding: '36px 16px',
+                textAlign: 'center',
+                backgroundColor: '#ffffff',
+                borderRadius: '10px',
+                border: '1px dashed #cbd5e1',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  backgroundColor: '#f1f5f9',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748b'
+                }}>
+                  <Compass size={18} />
+                </div>
+                <h5 style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b', margin: 0 }}>
+                  No Businesses in This Zone
+                </h5>
+                <p style={{ fontSize: '11px', color: '#64748b', margin: 0, maxWidth: '220px', lineHeight: 1.4 }}>
+                  Expand the radar radius or adjust the industry filter above to detect more local targets.
+                </p>
+                <button
                   onClick={() => {
-                    setInspectedBusiness(biz);
-                    onSelectBusiness?.(biz);
+                    setRadiusKm(15);
+                    setSelectedCategory('All Industries');
+                    setGapFilter('ALL');
                   }}
                   style={{
-                    padding: '12px',
-                    backgroundColor: '#ffffff',
-                    borderRadius: '10px',
-                    border: isInspected ? `2px solid ${visuals.bg}` : isChecked ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
-                    cursor: 'pointer',
-                    boxShadow: isInspected ? '0 4px 12px rgba(0,0,0,0.06)' : 'none',
-                    transition: 'all 0.15s ease'
+                    marginTop: '8px',
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    backgroundColor: '#eef2ff',
+                    color: '#4f46e5',
+                    border: '1px solid #c7d2fe',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                    {/* Checkbox */}
-                    <div
-                      onClick={(e) => toggleSelectBusiness(biz.id, e)}
-                      style={{ cursor: 'pointer', marginTop: '2px' }}
-                    >
-                      {isChecked ? (
-                        <CheckSquare size={16} color="#4f46e5" fill="#eef2ff" />
-                      ) : (
-                        <Square size={16} color="#94a3b8" />
-                      )}
-                    </div>
+                  Expand Radius to 15km
+                </button>
+              </div>
+            ) : (
+              filteredBusinesses.map((biz) => {
+                const isChecked = selectedIds.has(biz.id);
+                const isInspected = inspectedBusiness?.id === biz.id;
+                const visuals = getPinVisuals(biz);
 
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <h4 style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                          {biz.name}
-                        </h4>
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: 800,
-                          backgroundColor: visuals.bg,
-                          color: '#ffffff',
-                          padding: '1px 6px',
-                          borderRadius: '4px'
+                return (
+                  <div
+                    key={biz.id}
+                    onClick={() => {
+                      setInspectedBusiness(biz);
+                      onSelectBusiness?.(biz);
+                    }}
+                    style={{
+                      padding: '12px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '10px',
+                      border: isInspected ? `2px solid ${visuals.bg}` : isChecked ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
+                      cursor: 'pointer',
+                      boxShadow: isInspected ? '0 4px 12px rgba(0,0,0,0.06)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                      {/* Checkbox */}
+                      <div
+                        onClick={(e) => toggleSelectBusiness(biz.id, e)}
+                        style={{ cursor: 'pointer', marginTop: '2px' }}
+                      >
+                        {isChecked ? (
+                          <CheckSquare size={16} color="#4f46e5" fill="#eef2ff" />
+                        ) : (
+                          <Square size={16} color="#94a3b8" />
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <h4 style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                            {biz.name}
+                          </h4>
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: 800,
+                            backgroundColor: visuals.bg,
+                            color: '#ffffff',
+                            padding: '1px 6px',
+                            borderRadius: '4px'
+                          }}>
+                            {biz.targetType === 'ENTERPRISE' ? 'Growth' : `Gap: ${biz.digitalAudit?.gapScore ?? 50}`}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: '11px', color: '#64748b', margin: '2px 0 6px 0' }}>
+                          {biz.category} • {biz.district}
+                        </div>
+
+                        {/* Top Problem / Signal */}
+                        <div style={{
+                          fontSize: '11px',
+                          color: biz.targetType === 'ENTERPRISE' ? '#4338ca' : '#9f1239',
+                          backgroundColor: biz.targetType === 'ENTERPRISE' ? '#eef2ff' : '#fff1f2',
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          marginBottom: '6px'
                         }}>
-                          {biz.targetType === 'ENTERPRISE' ? 'Growth' : `Gap: ${biz.digitalAudit?.gapScore ?? 50}`}
-                        </span>
-                      </div>
+                          <strong>{biz.targetType === 'ENTERPRISE' ? 'Growth Signal: ' : 'Top Gap: '}</strong>
+                          {biz.targetType === 'ENTERPRISE'
+                            ? (biz.detectedSignals?.[0] || 'Regional Expansion & Hiring Signal')
+                            : (biz.digitalAudit?.issuesDetected?.[0]?.title || 'Digital Modernization Gap')}
+                        </div>
 
-                      <div style={{ fontSize: '11px', color: '#64748b', margin: '2px 0 6px 0' }}>
-                        {biz.category} • {biz.district}
-                      </div>
-
-                      {/* Top Problem / Signal */}
-                      <div style={{
-                        fontSize: '11px',
-                        color: biz.targetType === 'ENTERPRISE' ? '#4338ca' : '#9f1239',
-                        backgroundColor: biz.targetType === 'ENTERPRISE' ? '#eef2ff' : '#fff1f2',
-                        padding: '4px 8px',
-                        borderRadius: '6px',
-                        marginBottom: '6px'
-                      }}>
-                        <strong>{biz.targetType === 'ENTERPRISE' ? 'Growth Signal: ' : 'Top Gap: '}</strong>
-                        {biz.targetType === 'ENTERPRISE'
-                          ? (biz.detectedSignals?.[0] || 'Regional Expansion & Hiring Signal')
-                          : (biz.digitalAudit?.issuesDetected?.[0]?.title || 'Digital Modernization Gap')}
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11.5px', color: '#059669', fontWeight: 800 }}>
-                          Est: ${(biz.digitalAudit?.recommendedPackage?.estimatedValue?.max || 25000).toLocaleString()}
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4f46e5', fontSize: '11px', fontWeight: 700 }}>
-                          <span>View Audit</span>
-                          <ChevronRight size={13} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11.5px', color: '#059669', fontWeight: 800 }}>
+                            Est: ${(biz.digitalAudit?.recommendedPackage?.estimatedValue?.max || 25000).toLocaleString()}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4f46e5', fontSize: '11px', fontWeight: 700 }}>
+                            <span>View Audit</span>
+                            <ChevronRight size={13} />
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </div>

@@ -18,10 +18,12 @@ import {
   Zap, 
   Microscope, 
   CheckCircle, 
-  Copy 
+  Copy,
+  RotateCcw
 } from 'lucide-react';
-import { copilotEngine } from '../../engine';
 import { geminiService } from '../../services/geminiService';
+import { executeCopilotPrompt } from '../../api/copilot';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface CopilotPageProps {
   onNavigate: (nav: string) => void;
@@ -33,6 +35,7 @@ interface Message {
   sender: 'user' | 'bot';
   timestamp: string;
   text: string;
+  failedPrompt?: string;
   actionCard?: ActionCardData;
   opportunities?: OpportunityCardData[];
   crmConfirmation?: {
@@ -50,6 +53,7 @@ interface Message {
 }
 
 export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnboarding }) => {
+  const { currentUser, onboardingData, companies } = useHuntiq();
   const [currentChatId, setCurrentChatId] = useState('chat-1');
   const [isHistoryOpen, setIsHistoryOpen] = useState(true);
   const [selectedModel, setSelectedModel] = useState<'fast' | 'reasoning' | 'research'>('reasoning');
@@ -61,106 +65,47 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
   const [copiedDraftId, setCopiedDraftId] = useState<string | null>(null);
 
-  // Messages list state
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'm-1',
-      sender: 'user',
-      timestamp: '10:42 AM',
-      text: 'Which prospects should I contact today?'
-    },
-    {
-      id: 'm-2',
-      sender: 'bot',
-      timestamp: '10:42 AM',
-      text: 'I queried our continuous market radar and cross-referenced your **Peak Consulting ICP** (HR Strategy, $25K deals). I found **7 high-priority opportunities** with recent timing triggers. Here are the top 3 with immediate buying intent:',
-      opportunities: [
-        {
-          id: 'opp-1',
-          rank: 1,
-          name: 'Acme Technologies',
-          score: 94,
-          badge: 'HOT',
-          industry: 'Technology & Cloud',
-          location: 'Lagos, Nigeria',
-          size: '250–500 employees',
-          whyNow: 'Hiring 38 new employees + opened second office + appointed new COO 18 days ago.',
-          evidence: ['38 new job postings', 'New Abuja office', 'COO addition'],
-          bestContact: {
-            name: 'Jane Smith',
-            role: 'Head of People',
-            confidence: '94%'
-          }
-        },
-        {
-          id: 'opp-2',
-          rank: 2,
-          name: 'FinServe Ltd',
-          score: 91,
-          badge: 'HOT',
-          industry: 'Financial Services',
-          location: 'Lagos, Nigeria',
-          size: '200–500 employees',
-          whyNow: 'Announced geographic expansion into Ghana & Kenya + closed $8M Growth round.',
-          evidence: ['Regional expansion', 'Funding round', 'HR Director role opened'],
-          bestContact: {
-            name: 'Michael Okoro',
-            role: 'HR Director',
-            confidence: '91%'
-          }
-        },
-        {
-          id: 'opp-3',
-          rank: 3,
-          name: 'Delta Systems',
-          score: 87,
-          badge: 'HIGH',
-          industry: 'Software Infrastructure',
-          location: 'Abuja, Nigeria',
-          size: '100–250 employees',
-          whyNow: 'Active research detected on management scaling frameworks in last 7 days.',
-          evidence: ['Intent surge', 'Series A completion', 'CTO hiring'],
-          bestContact: {
-            name: 'David Jonah',
-            role: 'CTO / Co-Founder',
-            confidence: '88%'
-          }
-        }
-      ]
-    }
-  ]);
+  // Messages list state - initialized empty so production welcomes user without fake records
+  const [messages, setMessages] = useState<Message[]>([]);
 
   const handleSendMessage = async (inputText: string) => {
+    const trimmedInput = inputText.trim();
+    if (!trimmedInput || isLoading) return;
+
     const userMsg: Message = {
       id: `m-${Date.now()}`,
       sender: 'user',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      text: inputText
+      text: trimmedInput
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
     try {
-      const result = copilotEngine.executePrompt(inputText);
+      // Authoritative API call: no silent fallback to local/demo execution!
+      const result = await executeCopilotPrompt(trimmedInput, selectedModel);
       let responseText = result.message;
 
       // Enhance with live Gemini reasoning if configured
       if (geminiService.isConfigured()) {
         try {
           const geminiEnhanced = await geminiService.generateCopilotResponse(
-            inputText,
+            trimmedInput,
             `User Intent: ${result.intent}. Proposed Action: ${result.actionTaken || 'None'}. Engine Context: ${result.message}`
           );
           if (geminiEnhanced) {
             responseText = geminiEnhanced;
           }
         } catch {
-          // Keep deterministic text fallback
+          // Keep deterministic text from backend
         }
       }
 
       let botMsg: Message;
+      const companies = result.results?.companies || result.companies || [];
+      const researchData = result.results?.researchData || result.researchData;
+      const outreachData = result.results?.outreachData || result.outreachData;
 
       if (result.intent === 'SEARCH') {
         botMsg = {
@@ -168,38 +113,41 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           text: responseText,
-          actionCard: {
+          actionCard: companies.length > 0 ? {
             id: `act-${Date.now()}`,
             type: 'search',
-            status: 'proposed',
-            title: `Prospect Search: ${result.companies?.length || 4} Matched Accounts`,
+            status: 'completed',
+            title: result.actionTaken || `Prospect Search: ${companies.length} Matched Accounts`,
             parameters: {
-              industry: 'Target ICP Sectors',
-              location: 'West Africa & Global Hubs',
-              size: '50 – 500 employees',
-              signals: ['Hiring Surge', 'Expansion & Regional Licensing']
+              industry: companies[0]?.industry,
+              location: companies[0]?.location
+            },
+            results: {
+              totalFound: companies.length,
+              highIntent: companies.filter((c) => (c.opportunityScore || 0) >= 80).length,
+              hotOpportunities: companies.filter((c) => (c.opportunityScore || 0) >= 85).length
             }
-          },
-          opportunities: result.companies?.map((c, idx) => ({
+          } : undefined,
+          opportunities: companies.map((c, idx) => ({
             id: c.id,
             rank: idx + 1,
             name: c.name,
-            score: c.opportunityScore,
-            badge: c.opportunityScore >= 90 ? 'HOT' : 'HIGH',
-            industry: c.industry,
-            location: c.location,
-            size: `${c.employees} employees`,
-            whyNow: c.activeSignals?.[0]?.title || 'Active expansion triggers detected.',
-            evidence: c.activeSignals?.map(s => s.title) || ['Hiring spike', 'Funding momentum'],
+            score: c.opportunityScore || 85,
+            badge: (c.opportunityScore || 85) >= 90 ? 'HOT' : 'HIGH',
+            industry: c.industry || 'Enterprise',
+            location: c.location || 'Unknown',
+            size: typeof c.employees === 'number' ? `${c.employees} employees` : (c.employees || '50-200 employees'),
+            whyNow: c.activeSignals?.[0]?.title || 'Opportunity signal detected.',
+            evidence: c.activeSignals?.map((s: any) => s.title) || ['Market momentum recorded'],
             bestContact: {
-              name: 'Head of Operations',
+              name: 'Executive Contact',
               role: 'Decision Maker',
-              confidence: '94%'
+              confidence: `${c.opportunityScore || 90}%`
             }
           }))
         };
-      } else if (result.intent === 'RESEARCH' && result.researchData) {
-        const d = result.researchData;
+      } else if (result.intent === 'RESEARCH' && researchData) {
+        const d = researchData;
         botMsg = {
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
@@ -210,68 +158,55 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
               id: d.company.id,
               rank: 1,
               name: d.company.name,
-              score: d.company.opportunityScore,
-              badge: 'HOT',
-              industry: d.company.industry,
-              location: d.company.location,
-              size: `${d.company.employees} employees`,
+              score: d.company.opportunityScore || 85,
+              badge: (d.company.opportunityScore || 85) >= 90 ? 'HOT' : 'HIGH',
+              industry: d.company.industry || 'Enterprise',
+              location: d.company.location || 'Unknown',
+              size: `${d.company.employees || 100} employees`,
               whyNow: d.executiveSummary,
               evidence: d.painPoints.slice(0, 3),
               bestContact: {
-                name: d.decisionMakers[0]?.name || 'Jane Smith',
-                role: d.decisionMakers[0]?.role || 'Head of People',
-                confidence: `${d.decisionMakers[0]?.confidence || 94}%`
+                name: d.decisionMakers[0]?.name || 'Executive Contact',
+                role: d.decisionMakers[0]?.role || 'Decision Maker',
+                confidence: `${d.decisionMakers[0]?.confidence || 90}%`
               }
             }
           ]
         };
-      } else if (result.intent === 'OUTREACH' && result.outreachData) {
+      } else if (result.intent === 'OUTREACH' && outreachData) {
         botMsg = {
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           text: responseText,
           outreachDraft: {
-            target: 'Babafemi Lawson (Head of People & Ops)',
-            company: 'Paystack',
-            subject: result.outreachData.email.subject,
-            body: result.outreachData.email.body
+            target: 'Executive Leadership',
+            company: result.actionTaken?.replace(/^Drafted.*?for\s+/i, '') || companies[0]?.name || 'Target Account',
+            subject: outreachData.email.subject,
+            body: outreachData.email.body
           }
         };
-      } else if (result.intent === 'CRM_ACTION') {
+      } else if (result.intent === 'PRIORITIZE' && companies.length > 0) {
         botMsg = {
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           text: responseText,
-          crmConfirmation: {
-            company: 'Paystack',
-            stage: 'Qualified Pipeline',
-            dealValue: '$18,000 ARR',
-            isConfirmed: true
-          }
-        };
-      } else if (result.intent === 'PRIORITIZE' && result.companies) {
-        botMsg = {
-          id: `m-bot-${Date.now()}`,
-          sender: 'bot',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: responseText,
-          opportunities: result.companies.map((c, idx) => ({
+          opportunities: companies.map((c, idx) => ({
             id: c.id,
             rank: idx + 1,
             name: c.name,
-            score: c.opportunityScore,
-            badge: c.opportunityScore >= 90 ? 'HOT' : 'HIGH',
-            industry: c.industry,
-            location: c.location,
-            size: `${c.employees} employees`,
+            score: c.opportunityScore || 85,
+            badge: (c.opportunityScore || 85) >= 90 ? 'HOT' : 'HIGH',
+            industry: c.industry || 'Enterprise',
+            location: c.location || 'Unknown',
+            size: typeof c.employees === 'number' ? `${c.employees} employees` : (c.employees || '50-200 employees'),
             whyNow: c.activeSignals?.[0]?.title || 'Recent high-intent trigger detected.',
-            evidence: c.activeSignals?.map(s => s.title) || ['Hiring spike', 'Expansion'],
+            evidence: c.activeSignals?.map((s: any) => s.title) || ['Market momentum recorded'],
             bestContact: {
               name: 'Executive Contact',
               role: 'Head of Department',
-              confidence: '92%'
+              confidence: `${c.opportunityScore || 90}%`
             }
           }))
         };
@@ -285,9 +220,27 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
       }
 
       setMessages((prev) => [...prev, botMsg]);
+    } catch (err: any) {
+      console.error('[HUNTIQ-COPILOT] Execution error:', err);
+      const errorMsg = err?.message || 'Server connection error or backend execution failure.';
+
+      const errorBotMsg: Message = {
+        id: `m-bot-err-${Date.now()}`,
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: `⚠️ **Unable to execute Copilot request**: ${errorMsg}. Please try again.`,
+        failedPrompt: trimmedInput
+      };
+
+      setMessages((prev) => [...prev, errorBotMsg]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleRetry = (promptToRetry: string) => {
+    if (!promptToRetry || isLoading) return;
+    handleSendMessage(promptToRetry);
   };
 
   const handleExecuteAction = (actionId: string) => {
@@ -314,19 +267,15 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
               ...msg,
               actionCard: {
                 ...msg.actionCard,
-                status: 'completed',
-                results: {
-                  totalFound: 50,
-                  highIntent: 14,
-                  hotOpportunities: 6
-                }
+                status: 'completed'
               }
             };
           }
           return msg;
         })
       );
-    }, 1200);
+      onNavigate('opportunities');
+    }, 600);
   };
 
   const handleConfirmCrm = (msgId: string) => {
@@ -425,18 +374,22 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
                   AI Sales Copilot
                 </h1>
                 <span style={{
-                  fontSize: '10.5px',
-                  fontWeight: 700,
+                  fontSize: '11px',
+                  fontWeight: 600,
                   backgroundColor: '#ede9fe',
                   color: '#6d28d9',
-                  padding: '2px 7px',
+                  padding: '2px 8px',
                   borderRadius: '10px'
                 }}>
                   Autonomous Agent
                 </span>
               </div>
               <span style={{ fontSize: '11px', color: '#64748b' }}>
-                Context: Peak Consulting (HR Strategy • $25K Deal Size • Lagos & US)
+                Context: {onboardingData?.companyName
+                  ? `${onboardingData.companyName} (${onboardingData.targetMarket || 'Target Market'} • ${companies.length} Accounts)`
+                  : currentUser?.workspaceName
+                    ? `${currentUser.workspaceName} (${companies.length} Accounts Monitored)`
+                    : 'Live Workspace Intelligence (Active Pipeline & Verified Signals)'}
               </span>
             </div>
           </div>
@@ -593,6 +546,31 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
                     <div dangerouslySetInnerHTML={{
                       __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                     }} />
+
+                    {msg.failedPrompt && (
+                      <div style={{ marginTop: '10px' }}>
+                        <button
+                          onClick={() => handleRetry(msg.failedPrompt!)}
+                          disabled={isLoading}
+                          style={{
+                            backgroundColor: '#ede9fe',
+                            border: '1px solid #c4b5fd',
+                            color: '#6d28d9',
+                            borderRadius: '6px',
+                            padding: '6px 12px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: isLoading ? 'default' : 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <RotateCcw size={12} />
+                          <span>Retry Request</span>
+                        </button>
+                      </div>
+                    )}
 
                     {/* Action Card Render */}
                     {msg.actionCard && (

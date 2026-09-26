@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Building2, 
   X, 
   Copy 
 } from 'lucide-react';
+import { researchEngine } from '../../engine/researchEngine';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface CompanyResearchModalProps {
   companyName: string | null;
@@ -14,10 +16,15 @@ export const CompanyResearchModal: React.FC<CompanyResearchModalProps> = ({
   companyName,
   onClose
 }) => {
+  const { currentUser, onboardingData } = useHuntiq();
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'brief' | 'signals' | 'people' | 'outreach'>('brief');
 
-  if (!companyName) return null;
+  const dossier = useMemo(() => {
+    return companyName ? researchEngine.generateDossier(companyName) : null;
+  }, [companyName]);
+
+  if (!companyName || !dossier) return null;
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -25,21 +32,25 @@ export const CompanyResearchModal: React.FC<CompanyResearchModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const sampleEmail = `Subject: Supporting Acme's expansion into Abuja & scaling leadership
+  const primaryContact = dossier.decisionMakers[0] || { name: 'Executive Leader', role: 'Decision Maker' };
+  const senderName = currentUser?.name || 'Executive Account Lead';
+  const senderOrg = onboardingData?.companyName || currentUser?.workspaceName || 'Enterprise Growth';
 
-Hi Jane,
+  const sampleEmail = `Subject: Supporting ${companyName}'s strategic expansion & growth
 
-I noticed Acme Technologies recently posted 38 new openings and appointed a new COO to spearhead regional expansion. Congratulations on the massive growth!
+Hi ${primaryContact.name.split(' ')[0]},
 
-As teams scale from 250 to 500+ employees, leadership alignment and rapid onboarding bottlenecks often become critical friction points. 
+I noticed ${companyName} has recently demonstrated strong momentum in ${dossier.company.industry || 'the market'}. Congratulations on your continued acceleration!
 
-At Peak Consulting, we help high-growth tech leaders build agile management structures and retention frameworks that reduce new-hire ramp time by 40%.
+${dossier.painPoints[0] ? `As high-velocity teams scale, priorities like ${dossier.painPoints[0].toLowerCase()} often emerge as key milestones.` : 'As high-velocity teams expand, executive coordination and rapid scaling become crucial advantages.'}
+
+At ${senderOrg}, we partner with leading leadership teams to optimize execution velocity and unlock operational clarity.
 
 Would you be open to a brief 15-minute introductory conversation this Thursday at 2:00 PM?
 
 Best regards,
-Ayoola Ade
-Peak Consulting`;
+${senderName}
+${senderOrg}`;
 
   return (
     <div style={{
@@ -101,11 +112,11 @@ Peak Consulting`;
                   padding: '2px 8px',
                   borderRadius: '10px'
                 }}>
-                  94/100 HOT OPPORTUNITY
+                  {dossier.company.opportunityScore || 90}/100 {dossier.company.opportunityLevel?.toUpperCase() || 'HIGH'} OPPORTUNITY
                 </span>
               </div>
               <p style={{ fontSize: '12px', color: '#94a3b8', margin: '3px 0 0 0' }}>
-                Technology & SaaS • 250–500 employees • Lagos, Nigeria
+                {dossier.company.industry || 'Technology'} • {dossier.company.employees} employees • {dossier.company.location}
               </p>
             </div>
           </div>
@@ -165,7 +176,7 @@ Peak Consulting`;
                   Company Overview
                 </h4>
                 <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.5, margin: 0 }}>
-                  {companyName} is an enterprise cloud and software architecture provider serving financial institutions across West Africa. They recently secured $12M Series A funding to expand into enterprise infrastructure.
+                  {dossier.executiveSummary}
                 </p>
               </div>
 
@@ -180,15 +191,15 @@ Peak Consulting`;
               }}>
                 <div>
                   <div style={{ fontSize: '11px', color: '#94a3b8' }}>ESTIMATED REVENUE</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>$15M – $25M ARR</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>{dossier.company.revenue || '$10M – $25M'}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '11px', color: '#94a3b8' }}>BUYING INTENT</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#e11d48', marginTop: '2px' }}>🔥 Very High (94%)</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#e11d48', marginTop: '2px' }}>🔥 {dossier.company.opportunityLevel || 'High'} ({dossier.company.opportunityScore || 88}%)</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '11px', color: '#94a3b8' }}>AVG CONTRACT FIT</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#059669', marginTop: '2px' }}>$25,000 – $40,000</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#059669', marginTop: '2px' }}>$25,000 – $50,000</div>
                 </div>
               </div>
 
@@ -197,9 +208,9 @@ Peak Consulting`;
                   Identified Pain Points
                 </h4>
                 <ul style={{ fontSize: '13px', color: '#475569', paddingLeft: '20px', lineHeight: 1.6, margin: 0 }}>
-                  <li>Rapid headcount scaling causing team fragmentation and management bottlenecks.</li>
-                  <li>Need for structured performance frameworks across distributed regional offices.</li>
-                  <li>C-Suite transition requiring executive alignment and leadership coaching.</li>
+                  {dossier.painPoints.map((pt, idx) => (
+                    <li key={idx}>{pt}</li>
+                  ))}
                 </ul>
               </div>
             </div>
@@ -238,11 +249,7 @@ Peak Consulting`;
 
           {activeTab === 'people' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {[
-                { name: 'Jane Smith', role: 'Head of People & Culture', confidence: '94%', reason: 'Primary buyer for organizational scaling and leadership coaching.' },
-                { name: 'Emeka Okafor', role: 'Chief Operating Officer (COO)', confidence: '88%', reason: 'Overseeing company-wide regional expansion and infrastructure.' },
-                { name: 'Tunde Adeleke', role: 'Chief Executive Officer (CEO)', confidence: '82%', reason: 'Final signer on strategic executive consulting engagements.' },
-              ].map((p) => (
+              {dossier.decisionMakers.map((p) => (
                 <div key={p.name} style={{
                   padding: '12px 14px',
                   borderRadius: '10px',
@@ -254,7 +261,7 @@ Peak Consulting`;
                   <div>
                     <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a' }}>{p.name}</div>
                     <div style={{ fontSize: '11.5px', color: '#4f46e5', fontWeight: 600 }}>{p.role}</div>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{p.reason}</div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{p.department || 'Executive Leadership'}</div>
                   </div>
                   <span style={{
                     fontSize: '11px',
@@ -264,7 +271,7 @@ Peak Consulting`;
                     padding: '3px 8px',
                     borderRadius: '6px'
                   }}>
-                    {p.confidence} Match
+                    {p.confidence}% Match
                   </span>
                 </div>
               ))}
@@ -275,7 +282,7 @@ Peak Consulting`;
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
-                  Personalized Email • Targeted to Jane Smith (Head of People)
+                  Personalized Email • Targeted to {primaryContact.name} ({primaryContact.role})
                 </span>
                 <button
                   onClick={() => handleCopy(sampleEmail)}

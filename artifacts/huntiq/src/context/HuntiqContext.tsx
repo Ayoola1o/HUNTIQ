@@ -8,8 +8,7 @@ import {
   prospectorEngine, 
   signalEngine, 
   researchEngine, 
-  scoringEngine, 
-  copilotEngine 
+  scoringEngine 
 } from '../engine';
 import {
   checkApiHealth,
@@ -20,7 +19,7 @@ import {
   updatePipelineDeal
 } from '../api';
 import { saveCompany } from '../api/companies';
-import { executeCopilotPrompt } from '../api/copilot';
+import { executeCopilotPrompt, type CopilotResponse } from '../api/copilot';
 import { currencyService, type CurrencyCode } from '../services/currencyService';
 import { getStoredUser, fetchUserActivityLogs, fetchUserOnboarding, saveUserOnboarding, type UserAccount } from '../api/auth';
 import type { ProspectPitchPayload } from '../types/outreach';
@@ -87,7 +86,7 @@ interface HuntiqContextType {
   addDealToPipeline: (deal: Partial<PipelineDealItem>) => Promise<PipelineDealItem | void>;
   updateDealStage: (dealId: string, stage: PipelineStage) => Promise<void>;
   toggleSaveCompany: (companyId: string) => Promise<void>;
-  executeCopilotCommand: (prompt: string) => Promise<CopilotExecutionResult>;
+  executeCopilotCommand: (prompt: string, model?: string) => Promise<CopilotResponse>;
   captureGeoBusinesses: (businesses: any[]) => void;
 
   // Multi-Currency Engine
@@ -551,8 +550,8 @@ export const HuntiqProvider: React.FC<{ children: React.ReactNode; initialView?:
     }
   }, []);
 
-  const executeCopilotCommand = useCallback(async (prompt: string): Promise<CopilotExecutionResult> => {
-    return await executeCopilotPrompt(prompt);
+  const executeCopilotCommand = useCallback(async (prompt: string, model?: string): Promise<CopilotResponse> => {
+    return await executeCopilotPrompt(prompt, model);
   }, []);
 
   const captureGeoBusinesses = useCallback((scrapedList: any[]) => {
