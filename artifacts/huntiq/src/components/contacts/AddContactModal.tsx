@@ -6,19 +6,21 @@ interface AddContactModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (contact: Partial<ContactItem>) => void;
+  defaultCompanyName?: string;
 }
 
 export const AddContactModal: React.FC<AddContactModalProps> = ({
   isOpen,
   onClose,
-  onAdd
+  onAdd,
+  defaultCompanyName = ''
 }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('');
-  const [companyName, setCompanyName] = useState('Acme Technologies');
+  const [companyName, setCompanyName] = useState(defaultCompanyName);
   const [decisionRole, setDecisionRole] = useState<'Decision Maker' | 'Influencer'>('Decision Maker');
 
   if (!isOpen) return null;
@@ -209,7 +211,7 @@ export const AddContactModal: React.FC<AddContactModalProps> = ({
               type="text"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Acme Technologies"
+              placeholder="e.g. Target Enterprise"
               style={{
                 width: '100%',
                 height: '36px',
@@ -230,7 +232,7 @@ export const AddContactModal: React.FC<AddContactModalProps> = ({
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+234 801 234 5678"
+              placeholder="e.g. +1 (555) 019-2834"
               style={{
                 width: '100%',
                 height: '36px',

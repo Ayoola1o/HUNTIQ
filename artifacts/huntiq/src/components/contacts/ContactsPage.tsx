@@ -190,39 +190,27 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
   };
 
   // Import Contacts via API
-  const handleImportContacts = async (_count: number) => {
-    try {
-      const sampleImports: Partial<ContactItem>[] = [
-        {
-          name: 'Chinedu Eze',
-          email: 'chinedu.eze@kuda.com',
-          companyName: 'Kuda Bank',
-          role: 'Chief Technology Officer',
-          decisionRole: 'Decision Maker',
-          influenceScore: 95,
-          location: 'Lagos, Nigeria'
-        },
-        {
-          name: 'Amina Bello',
-          email: 'amina.bello@moniepoint.com',
-          companyName: 'Moniepoint',
-          role: 'Head of Compliance',
-          decisionRole: 'Decision Maker',
-          influenceScore: 91,
-          location: 'Lagos, Nigeria'
-        }
-      ];
+  const handleImportContacts = async (importedList: Partial<ContactItem>[]) => {
+    if (!importedList || importedList.length === 0) {
+      showToast('No valid contacts to import');
+      return;
+    }
 
-      const res = await apiImportContacts(sampleImports);
+    try {
+      const res = await apiImportContacts(importedList);
       if (res.contacts && res.contacts.length > 0) {
         setContacts(prev => [...res.contacts, ...prev]);
-        showToast(`Imported ${res.contacts.length} verified contacts`);
+        setSelectedContactId(res.contacts[0].id);
+        showToast(`Successfully imported ${res.contacts.length} contact${res.contacts.length > 1 ? 's' : ''}`);
+      } else {
+        showToast('Import completed: 0 new contacts');
       }
     } catch (err: any) {
       console.warn('Import API error:', err);
       showToast(err?.message || 'Failed to import contacts');
     }
   };
+
 
   return (
     <div style={{
@@ -643,7 +631,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       <ImportContactsModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        onImportComplete={handleImportContacts}
+        onImport={handleImportContacts}
       />
 
       {/* Opportunity Filters Modal */}
