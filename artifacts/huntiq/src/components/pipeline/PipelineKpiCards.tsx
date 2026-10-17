@@ -33,7 +33,7 @@ export const PipelineKpiCards: React.FC<PipelineKpiCardsProps> = ({
       iconBg: '#eff6ff',
       sparklineColor: '#6366f1',
       sparkPath: 'M0,18 Q20,8 40,16 T80,10 T110,14 T140,6',
-      badge: '5 Stages Active',
+      badge: summary.activeDeals > 0 ? `${summary.activeDeals} Active` : 'No active deals',
       badgeColor: '#4338ca',
       badgeBg: '#eef2ff'
     },
@@ -46,7 +46,7 @@ export const PipelineKpiCards: React.FC<PipelineKpiCardsProps> = ({
       iconBg: '#ecfdf5',
       sparklineColor: '#10b981',
       sparkPath: 'M0,16 Q25,6 50,14 T90,6 T120,16 T140,4',
-      badge: 'Active pipeline',
+      badge: summary.pipelineValue > 0 ? 'Active pipeline' : 'Empty pipeline',
       badgeColor: '#047857',
       badgeBg: '#d1fae5'
     },
@@ -59,7 +59,7 @@ export const PipelineKpiCards: React.FC<PipelineKpiCardsProps> = ({
       iconBg: '#f5f3ff',
       sparklineColor: '#8b5cf6',
       sparkPath: 'M0,20 Q20,12 45,18 T85,4 T115,12 T140,2',
-      badge: 'Weighted conversion',
+      badge: 'Weighted forecast',
       badgeColor: '#6d28d9',
       badgeBg: '#ede9fe'
     },
@@ -72,7 +72,7 @@ export const PipelineKpiCards: React.FC<PipelineKpiCardsProps> = ({
       iconBg: '#fff7ed',
       sparklineColor: '#f97316',
       sparkPath: 'M0,18 Q15,4 30,12 T60,6 T90,16 T120,4 T140,8',
-      badge: '+3.2% vs Q1',
+      badge: summary.winRate > 0 ? `${summary.winRate}% Closed Won` : 'Closed conversion',
       badgeColor: '#c2410c',
       badgeBg: '#ffedd5'
     },
@@ -80,12 +80,12 @@ export const PipelineKpiCards: React.FC<PipelineKpiCardsProps> = ({
       id: 'avg_deal_size',
       title: 'Avg Deal Size',
       value: formatCurrency(summary.avgDealSize),
-      subtext: '31 days average sales cycle',
+      subtext: summary.avgSalesCycle > 0 ? `${summary.avgSalesCycle} days average cycle` : 'Based on active deals',
       icon: <Briefcase size={16} color="#2563eb" />,
       iconBg: '#eff6ff',
       sparklineColor: '#3b82f6',
       sparkPath: 'M0,14 Q20,18 40,8 T80,16 T110,6 T140,12',
-      badge: 'Mid-Market Fit',
+      badge: summary.avgDealSize > 0 ? 'Deal Velocity' : 'No Deals',
       badgeColor: '#1d4ed8',
       badgeBg: '#dbeafe'
     }

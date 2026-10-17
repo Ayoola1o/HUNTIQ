@@ -10,51 +10,7 @@ export class InMemoryPipelineRepository implements PipelineRepository {
   private static deals: StoredDeal[] = [];
 
   constructor() {
-    // Seed default demo deals once if empty
-    if (InMemoryPipelineRepository.deals.length === 0) {
-      InMemoryPipelineRepository.deals = [
-        {
-          id: 'deal-seed-001',
-          userId: 'user-default-001',
-          workspaceId: 'ws-default-001',
-          company: 'PayApex Global',
-          title: 'Enterprise Talent Scaling & Mgmt',
-          dealValue: 65000,
-          stage: 'Proposal',
-          probability: 75,
-          contactName: 'Chidi Okafor',
-          contactRole: 'VP of Technology',
-          contactEmail: 'c.okafor@payapex.io',
-          expectedCloseDate: 'In 18 days',
-          lastActivity: 'Product demo delivered to CTO & VP Eng',
-          lastActivityType: 'email',
-          nextAction: 'Send revised multi-entity proposal',
-          nextActionDueDate: 'Tomorrow, 2 PM',
-          priority: 'High',
-          activities: []
-        },
-        {
-          id: 'deal-seed-002',
-          userId: 'user-default-001',
-          workspaceId: 'ws-default-001',
-          company: 'KoraHealth Labs',
-          title: 'Regional Expansion Advisory',
-          dealValue: 42000,
-          stage: 'Negotiation',
-          probability: 85,
-          contactName: 'Dr. Amina Bello',
-          contactRole: 'Chief Operating Officer',
-          contactEmail: 'a.bello@korahealth.co',
-          expectedCloseDate: 'In 9 days',
-          lastActivity: 'MSA & SLA under legal review',
-          lastActivityType: 'call',
-          nextAction: 'Final terms confirmation',
-          nextActionDueDate: 'Friday, 11 AM',
-          priority: 'High',
-          activities: []
-        }
-      ];
-    }
+    // Clean startup with no mock seed deals
   }
 
   public async listByUser(userId: string, workspaceId: string): Promise<PipelineDealItem[]> {

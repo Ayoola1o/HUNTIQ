@@ -24,7 +24,7 @@ export class PostgresPipelineRepository implements PipelineRepository {
       serviceName: row.title || 'Digital Modernization Suite',
       opportunityScore: 85,
       stageEnteredAt: 'Just now',
-      ownerName: 'Ayoola Ade',
+      ownerName: row.owner_name || 'Account Owner',
       contactAvatarBg: '#fee2e2',
       contactAvatarColor: '#dc2626',
       title: row.title,

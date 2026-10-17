@@ -4,6 +4,7 @@ import {
   Sparkles 
 } from 'lucide-react';
 import type { PipelineDealItem, PipelineStage } from '../../types/pipeline';
+import { useHuntiq } from '../../context/HuntiqContext';
 
 interface NewDealModalProps {
   isOpen: boolean;
@@ -18,15 +19,23 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
   onClose,
   onCreateDeal
 }) => {
+  const { currentUser } = useHuntiq();
+
+  const getDefaultCloseDate = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   const [companyName, setCompanyName] = useState('');
   const [dealTitle, setDealTitle] = useState('');
-  const [serviceName] = useState('HR Consulting & Workforce Scaling');
-  const [dealValue, setDealValue] = useState('15000');
-  const [probability, setProbability] = useState('60');
+  const [serviceName, setServiceName] = useState('Enterprise Strategic Engagement');
+  const [dealValue, setDealValue] = useState('25000');
+  const [probability, setProbability] = useState('50');
   const [stage, setStage] = useState<PipelineStage>(initialStage);
   const [contactName, setContactName] = useState('');
-  const [contactRole] = useState('Head of Operations');
-  const [closeDate] = useState('June 30, 2025');
+  const [contactRole, setContactRole] = useState('Executive Decision Maker');
+  const [closeDate, setCloseDate] = useState(getDefaultCloseDate);
 
   if (!isOpen) return null;
 
@@ -34,29 +43,29 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
     e.preventDefault();
     if (!companyName.trim() || !dealTitle.trim()) return;
 
-    const val = parseInt(dealValue) || 15000;
-    const prob = parseInt(probability) || 60;
+    const val = parseInt(dealValue) || 25000;
+    const prob = parseInt(probability) || 50;
 
     const newDeal: PipelineDealItem = {
       id: `deal-${Date.now()}`,
-      companyName,
-      domain: `${companyName.toLowerCase().replace(/\s+/g, '')}.com`,
-      dealTitle,
-      serviceName,
+      companyName: companyName.trim(),
+      domain: `${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
+      dealTitle: dealTitle.trim(),
+      serviceName: serviceName.trim() || 'Enterprise Strategic Engagement',
       dealValue: val,
       probability: prob,
-      opportunityScore: 90,
+      opportunityScore: 88,
       stage,
       stageEnteredAt: 'Just now',
       expectedCloseDate: closeDate,
-      ownerName: 'Ayoola Ade',
-      contactName: contactName || 'Jane Doe',
-      contactRole: contactRole || 'Director',
+      ownerName: currentUser?.fullName || 'Account Owner',
+      contactName: contactName.trim() || 'Key Decision Maker',
+      contactRole: contactRole.trim() || 'Executive Lead',
       contactAvatarBg: '#dbeafe',
       contactAvatarColor: '#1e40af',
-      lastActivity: 'Deal created',
-      nextAction: 'Introductory discovery call',
-      nextActionDueDate: 'Tomorrow',
+      lastActivity: 'Deal created in Pipeline',
+      nextAction: 'Initiate executive outreach',
+      nextActionDueDate: 'Tomorrow, 10:00 AM',
       priority: 'High',
       activities: [
         {
@@ -90,6 +99,7 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
         borderRadius: '16px',
         width: '580px',
         maxWidth: '100%',
+        maxHeight: '90vh',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
         display: 'flex',
         flexDirection: 'column',
@@ -128,6 +138,7 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
 
           <button
             onClick={onClose}
+            aria-label="Close modal"
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px' }}
           >
             <X size={18} color="#ffffff" />
@@ -135,14 +146,14 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <form onSubmit={handleSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
           <div>
             <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
               Company Name *
             </label>
             <input
               type="text"
-              placeholder="e.g. Acme Technologies, Flutterwave, Moniepoint"
+              placeholder="e.g. Acme Corp, PayApex, Moniepoint"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               required
@@ -165,7 +176,7 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
             </label>
             <input
               type="text"
-              placeholder="e.g. Workforce Scaling Engagement, Leadership Development Program"
+              placeholder="e.g. Strategic Modernization & Enablement"
               value={dealTitle}
               onChange={(e) => setDealTitle(e.target.value)}
               required
@@ -182,6 +193,52 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
             />
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
+                Service / Offering
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Leadership Strategy, Cloud Advisory"
+                value={serviceName}
+                onChange={(e) => setServiceName(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
+                Expected Close Date
+              </label>
+              <input
+                type="text"
+                value={closeDate}
+                onChange={(e) => setCloseDate(e.target.value)}
+                placeholder="e.g. In 30 days"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
               <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
@@ -189,7 +246,7 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
               </label>
               <input
                 type="number"
-                placeholder="15000"
+                placeholder="25000"
                 value={dealValue}
                 onChange={(e) => setDealValue(e.target.value)}
                 style={{
@@ -275,6 +332,28 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
                 }}
               />
             </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
+              Key Contact Role
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Head of Operations, CTO"
+              value={contactRole}
+              onChange={(e) => setContactRole(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontFamily: 'inherit',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
           </div>
 
           {/* Footer Buttons */}

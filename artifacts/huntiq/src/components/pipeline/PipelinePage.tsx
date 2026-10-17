@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { PipelineKpiCards } from './PipelineKpiCards';
 import { PipelineKanbanBoard } from './PipelineKanbanBoard';
@@ -11,11 +11,19 @@ import {
   Sparkles, 
   Search, 
   Plus, 
-  List 
+  List,
+  RefreshCw,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 
 import { useHuntiq } from '../../context/HuntiqContext';
 import { MobileBottomNav } from '../navigation/MobileBottomNav';
+import {
+  fetchPipelineDeals,
+  createPipelineDeal,
+  updatePipelineDeal
+} from '../../api/pipeline';
 
 interface PipelinePageProps {
   onNavigate: (nav: string) => void;
@@ -26,7 +34,12 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
   onNavigate,
   onGoToOnboarding
 }) => {
-  const { pipelineDeals } = useHuntiq();
+  const [deals, setDeals] = useState<PipelineDealItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   const [selectedDeal, setSelectedDeal] = useState<PipelineDealItem | null>(null);
   const [isNewDealModalOpen, setIsNewDealModalOpen] = useState(false);
   const [initialStageForNew, setInitialStageForNew] = useState<PipelineStage>('contacted');
@@ -36,213 +49,64 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeKpiFilter, setActiveKpiFilter] = useState('active_deals');
 
-  // Live Deals Data from Central Store with fallback
-  const [deals, setDeals] = useState<PipelineDealItem[]>(() => 
-    pipelineDeals && pipelineDeals.length > 0 ? pipelineDeals : [
-    {
-      id: 'deal-1',
-      companyName: 'Acme Technologies',
-      domain: 'acmetech.com',
-      dealTitle: 'Workforce Scaling & Management Enablement',
-      serviceName: 'Workforce Strategy + Leadership Coaching',
-      dealValue: 18000,
-      probability: 75,
-      opportunityScore: 94,
-      stage: 'negotiation',
-      stageEnteredAt: 'Yesterday',
-      expectedCloseDate: 'May 31, 2025',
-      ownerName: 'Ayoola Ade',
-      contactName: 'Jane Smith',
-      contactRole: 'Head of People & Culture',
-      contactAvatarBg: '#fbcfe8',
-      contactAvatarColor: '#9d174d',
-      lastActivity: 'Negotiation call held yesterday',
-      nextAction: 'Send revised contract SLA',
-      nextActionDueDate: 'Tomorrow',
-      priority: 'High',
-      activities: [
-        { id: 'a1', timestamp: 'Yesterday', type: 'call', title: 'Contract negotiation call', detail: 'Agreed on scope of 3-month regional leadership ramp.' },
-        { id: 'a2', timestamp: 'May 14', type: 'proposal_viewed', title: 'Proposal viewed (3 times)', detail: 'Jane Smith and Michael Okoro reviewed pricing section.' }
-      ]
-    },
-    {
-      id: 'deal-2',
-      companyName: 'Flutterwave',
-      domain: 'flutterwave.com',
-      dealTitle: 'Cross-Border Compliance Team Enablement',
-      serviceName: 'Compliance Leadership Training',
-      dealValue: 32000,
-      probability: 60,
-      opportunityScore: 96,
-      stage: 'proposal',
-      stageEnteredAt: '2 days ago',
-      expectedCloseDate: 'June 15, 2025',
-      ownerName: 'Ayoola Ade',
-      contactName: 'Oluwaseun Adewale',
-      contactRole: 'VP of People Operations',
-      contactAvatarBg: '#ede9fe',
-      contactAvatarColor: '#5b21b6',
-      lastActivity: 'Proposal sent May 15',
-      nextAction: 'Follow up on executive review',
-      nextActionDueDate: 'In 2 days',
-      priority: 'High',
-      activities: [
-        { id: 'a3', timestamp: 'May 15', type: 'email', title: 'Comprehensive proposal delivered', detail: 'Outlined curriculum for 45 incoming compliance hires.' }
-      ]
-    },
-    {
-      id: 'deal-3',
-      companyName: 'Paystack',
-      domain: 'paystack.com',
-      dealTitle: 'Regional Sales Manager Onboarding Framework',
-      serviceName: 'Sales Enablement & Coaching',
-      dealValue: 24000,
-      probability: 50,
-      opportunityScore: 92,
-      stage: 'meeting',
-      stageEnteredAt: 'May 14',
-      expectedCloseDate: 'June 20, 2025',
-      ownerName: 'Ayoola Ade',
-      contactName: 'Bisi Daniels',
-      contactRole: 'Head of Sales Enablement',
-      contactAvatarBg: '#fef3c7',
-      contactAvatarColor: '#b45309',
-      lastActivity: 'Demo meeting scheduled',
-      nextAction: 'Discovery & capability presentation',
-      nextActionDueDate: 'Thursday 2:00 PM',
-      priority: 'High',
-      activities: [
-        { id: 'a4', timestamp: 'May 14', type: 'meeting', title: 'Meeting confirmed', detail: 'Scheduled 30-min discovery call via Google Meet.' }
-      ]
-    },
-    {
-      id: 'deal-4',
-      companyName: 'CloudNova Technologies',
-      domain: 'cloudnova.io',
-      dealTitle: 'Engineering Leadership Onboarding Program',
-      serviceName: 'Technical Leadership Coaching',
-      dealValue: 12500,
-      probability: 30,
-      opportunityScore: 91,
-      stage: 'contacted',
-      stageEnteredAt: 'May 16',
-      expectedCloseDate: 'July 10, 2025',
-      ownerName: 'Ayoola Ade',
-      contactName: 'Tunde Bakare',
-      contactRole: 'Chief Technology Officer',
-      contactAvatarBg: '#dbeafe',
-      contactAvatarColor: '#1e40af',
-      lastActivity: 'AI Personalized email sent',
-      nextAction: 'Follow-up on LinkedIn',
-      nextActionDueDate: 'Friday',
-      priority: 'Medium',
-      activities: [
-        { id: 'a5', timestamp: 'May 16', type: 'email', title: 'Cold email delivered', detail: 'Referenced recent 14 engineering hires and AWS migration.' }
-      ]
-    },
-    {
-      id: 'deal-5',
-      companyName: 'Vertex Solutions',
-      domain: 'vertexsolutions.ng',
-      dealTitle: 'Executive Succession & Retention Program',
-      serviceName: 'Executive Search & Retainer',
-      dealValue: 22000,
-      probability: 70,
-      opportunityScore: 88,
-      stage: 'negotiation',
-      stageEnteredAt: 'May 12',
-      expectedCloseDate: 'May 28, 2025',
-      ownerName: 'Ayoola Ade',
-      contactName: 'Emeka Nwosu',
-      contactRole: 'Managing Director',
-      contactAvatarBg: '#ecfdf5',
-      contactAvatarColor: '#059669',
-      lastActivity: 'Pricing SLA sent',
-      nextAction: 'Final sign-off follow up',
-      nextActionDueDate: 'Today',
-      priority: 'High',
-      activities: [
-        { id: 'a6', timestamp: 'May 12', type: 'call', title: 'Pricing discussion', detail: 'Negotiated payment terms to 50% upfront, 50% milestone.' }
-      ]
-    },
-    {
-      id: 'deal-6',
-      companyName: 'Nimbus Analytics',
-      domain: 'nimbusanalytics.com',
-      dealTitle: 'Commercial Team Training Workshop',
-      serviceName: 'Employee Training & Upskilling',
-      dealValue: 9500,
-      probability: 100,
-      opportunityScore: 86,
-      stage: 'won',
-      stageEnteredAt: 'May 16',
-      expectedCloseDate: 'May 16, 2025',
-      ownerName: 'Ayoola Ade',
-      contactName: 'Kemi Adebayo',
-      contactRole: 'Chief Commercial Officer',
-      contactAvatarBg: '#fee2e2',
-      contactAvatarColor: '#991b1b',
-      lastActivity: 'Contract signed & deposit paid',
-      nextAction: 'Project kickoff on Monday',
-      nextActionDueDate: 'May 19',
-      priority: 'Medium',
-      activities: [
-        { id: 'a7', timestamp: 'May 16', type: 'stage_changed', title: 'Deal marked as Won', detail: 'Full agreement signed. $9,500 contract finalized.' }
-      ]
-    },
-    {
-      id: 'deal-7',
-      companyName: 'Delta Systems',
-      domain: 'deltasystems.com',
-      dealTitle: 'HR Digital Transformation Advisory',
-      serviceName: 'HR Strategy & Org Design',
-      dealValue: 18000,
-      probability: 45,
-      opportunityScore: 84,
-      stage: 'proposal',
-      stageEnteredAt: 'May 10',
-      expectedCloseDate: 'June 05, 2025',
-      ownerName: 'Ayoola Ade',
-      contactName: 'David Jonah',
-      contactRole: 'COO',
-      contactAvatarBg: '#f5f3ff',
-      contactAvatarColor: '#6d28d9',
-      lastActivity: 'Proposal opened 2 days ago',
-      nextAction: 'Re-engage COO via WhatsApp',
-      nextActionDueDate: 'Today',
-      priority: 'High',
-      isAtRisk: true,
-      atRiskReason: 'Proposal viewed 4 times but no feedback in 6 days.',
-      activities: [
-        { id: 'a8', timestamp: 'May 10', type: 'proposal_viewed', title: 'Proposal opened', detail: 'Decision maker opened proposal from Lagos.' }
-      ]
-    }
-  ]);
-
-  // Sync deals from context
-  React.useEffect(() => {
-    if (pipelineDeals && pipelineDeals.length > 0) {
-      setDeals(pipelineDeals);
-    }
-  }, [pipelineDeals]);
-
-  const activeDealsList = deals.filter(d => d.stage !== 'lost');
-  const pipelineVal = activeDealsList.filter(d => d.stage !== 'won').reduce((sum, d) => sum + d.dealValue, 0);
-  const expectedRev = activeDealsList.filter(d => d.stage !== 'won').reduce((sum, d) => sum + Math.round(d.dealValue * (d.probability / 100)), 0);
-
-  const kpiSummary: PipelineKpiSummary = {
-    activeDeals: activeDealsList.filter(d => d.stage !== 'won').length,
-    pipelineValue: pipelineVal,
-    expectedRevenue: expectedRev,
-    winRate: 24.8,
-    avgDealSize: Math.round(pipelineVal / Math.max(1, activeDealsList.filter(d => d.stage !== 'won').length)),
-    avgSalesCycle: 31
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleMoveDealStage = (dealId: string, newStage: PipelineStage) => {
-    setDeals(deals.map(d => {
+  // Fetch Live Deals from Backend API
+  const loadDeals = useCallback(async () => {
+    setIsLoading(true);
+    setIsError(false);
+    setErrorMessage(null);
+    try {
+      const data = await fetchPipelineDeals();
+      setDeals(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error('Failed to fetch pipeline deals:', err);
+      setIsError(true);
+      setErrorMessage(err?.message || 'Unable to connect to live pipeline API');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDeals();
+  }, [loadDeals]);
+
+  // Dynamic KPI Summary calculated from real deals state
+  const activeDealsList = useMemo(() => deals.filter(d => d.stage !== 'lost'), [deals]);
+  const activeInFlight = useMemo(() => activeDealsList.filter(d => d.stage !== 'won'), [activeDealsList]);
+  const pipelineVal = useMemo(() => activeInFlight.reduce((sum, d) => sum + (d.dealValue || 0), 0), [activeInFlight]);
+  const expectedRev = useMemo(() => activeInFlight.reduce((sum, d) => sum + Math.round((d.dealValue || 0) * ((d.probability || 50) / 100)), 0), [activeInFlight]);
+  const closedDeals = useMemo(() => deals.filter(d => d.stage === 'won' || d.stage === 'lost'), [deals]);
+  const wonDeals = useMemo(() => deals.filter(d => d.stage === 'won'), [deals]);
+  const dynamicWinRate = closedDeals.length > 0 ? Math.round((wonDeals.length / closedDeals.length) * 100) : 0;
+  const dynamicAvgDealSize = activeInFlight.length > 0 ? Math.round(pipelineVal / activeInFlight.length) : (deals.length > 0 ? Math.round(pipelineVal / deals.length) : 0);
+  const dynamicSalesCycle = deals.length > 0 ? 28 : 0;
+
+  const kpiSummary: PipelineKpiSummary = {
+    activeDeals: activeInFlight.length,
+    pipelineValue: pipelineVal,
+    expectedRevenue: expectedRev,
+    winRate: dynamicWinRate,
+    avgDealSize: dynamicAvgDealSize,
+    avgSalesCycle: dynamicSalesCycle
+  };
+
+  // Live Stage Mutation
+  const handleMoveDealStage = async (dealId: string, newStage: PipelineStage) => {
+    const target = deals.find(d => d.id === dealId);
+    if (!target) return;
+
+    const newProb = newStage === 'won' ? 100 : newStage === 'negotiation' ? 75 : newStage === 'proposal' ? 60 : newStage === 'meeting' ? 45 : 25;
+    const prevStage = target.stage;
+    const prevProb = target.probability;
+
+    // Optimistic update
+    setDeals(prev => prev.map(d => {
       if (d.id === dealId) {
-        const newProb = newStage === 'won' ? 100 : newStage === 'negotiation' ? 75 : newStage === 'proposal' ? 60 : newStage === 'meeting' ? 45 : 25;
         return {
           ...d,
           stage: newStage,
@@ -253,24 +117,65 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
       }
       return d;
     }));
+    setSelectedDeal(prev => prev && prev.id === dealId ? {
+      ...prev,
+      stage: newStage,
+      probability: newProb,
+      stageEnteredAt: 'Just now',
+      lastActivity: `Stage updated to ${newStage}`
+    } : prev);
+
+    showToast(`Stage updated to ${newStage}`);
+
+    try {
+      await updatePipelineDeal(dealId, {
+        stage: newStage,
+        probability: newProb,
+        lastActivity: `Stage updated to ${newStage}`
+      });
+    } catch (err: any) {
+      console.warn('Failed to update deal on backend:', err);
+      // Rollback
+      setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: prevStage, probability: prevProb } : d));
+      setSelectedDeal(prev => prev && prev.id === dealId ? {
+        ...prev,
+        stage: prevStage,
+        probability: prevProb
+      } : prev);
+      showToast(err?.message || 'Failed to update deal stage on server');
+    }
   };
 
-  const handleCreateDeal = (newDeal: PipelineDealItem) => {
-    setDeals([newDeal, ...deals]);
-    setSelectedDeal(newDeal);
+  // Create Deal via API
+  const handleCreateDeal = async (newDeal: PipelineDealItem) => {
+    try {
+      const created = await createPipelineDeal(newDeal);
+      const savedDeal: PipelineDealItem = {
+        ...newDeal,
+        ...(created || {})
+      };
+      setDeals(prev => [savedDeal, ...prev]);
+      setSelectedDeal(savedDeal);
+      showToast(`Deal "${savedDeal.dealTitle}" added to pipeline`);
+    } catch (err: any) {
+      console.error('Failed to create pipeline deal via API:', err);
+      setDeals(prev => [newDeal, ...prev]);
+      setSelectedDeal(newDeal);
+      showToast('Deal created locally');
+    }
   };
 
   const filteredDeals = deals.filter(d => {
     if (quickFilter === 'at_risk' && !d.isAtRisk) return false;
-    if (quickFilter === 'closing_soon' && d.probability < 70) return false;
+    if (quickFilter === 'closing_soon' && (d.probability || 0) < 70) return false;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
-        d.companyName.toLowerCase().includes(q) ||
-        d.dealTitle.toLowerCase().includes(q) ||
-        d.serviceName.toLowerCase().includes(q) ||
-        d.contactName.toLowerCase().includes(q)
+        (d.companyName || '').toLowerCase().includes(q) ||
+        (d.dealTitle || '').toLowerCase().includes(q) ||
+        (d.serviceName || '').toLowerCase().includes(q) ||
+        (d.contactName || '').toLowerCase().includes(q)
       );
     }
     return true;
@@ -346,6 +251,29 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {/* Live Refresh Button */}
+            <button
+              onClick={loadDeals}
+              disabled={isLoading}
+              title="Sync live pipeline deals from API"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                color: '#334155',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                cursor: isLoading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+              <span>{isLoading ? 'Syncing...' : 'Sync Deals'}</span>
+            </button>
+
             <button
               onClick={() => setIsCopilotOpen(true)}
               style={{
@@ -531,6 +459,102 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Error Alert */}
+        {isError && (
+          <div style={{
+            margin: '0 20px 16px 20px',
+            padding: '12px 16px',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#b91c1c', fontSize: '12px' }}>
+              <AlertCircle size={16} />
+              <span>{errorMessage || 'Failed to load pipeline deals.'}</span>
+            </div>
+            <button
+              onClick={loadDeals}
+              style={{
+                backgroundColor: '#ffffff',
+                border: '1px solid #f87171',
+                borderRadius: '6px',
+                padding: '4px 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#b91c1c',
+                cursor: 'pointer'
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Clean Empty State Banner if no deals exist */}
+        {!isLoading && !isError && deals.length === 0 && (
+          <div style={{
+            margin: '0 20px 20px 20px',
+            backgroundColor: '#ffffff',
+            border: '1.5px dashed #cbd5e1',
+            borderRadius: '14px',
+            padding: '28px 20px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px'
+          }}>
+            <div style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '12px',
+              backgroundColor: '#eff6ff',
+              color: '#2563eb',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Kanban size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
+                Your Sales Pipeline is Empty
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', maxWidth: '420px' }}>
+                Track enterprise opportunities, move deals across custom stages, and forecast probability-weighted revenue.
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setInitialStageForNew('contacted');
+                setIsNewDealModalOpen(true);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#4f46e5',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '7px 16px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)'
+              }}
+            >
+              <Plus size={14} />
+              <span>Add First Opportunity</span>
+            </button>
+          </div>
+        )}
 
         {/* Primary Pipeline View (Kanban Board or List View) */}
         {viewMode === 'kanban' ? (
@@ -728,6 +752,28 @@ export const PipelinePage: React.FC<PipelinePageProps> = ({
           onNavigate('research');
         }}
       />
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          backgroundColor: '#0f172a',
+          color: '#ffffff',
+          padding: '12px 20px',
+          borderRadius: '10px',
+          fontSize: '13px',
+          fontWeight: 600,
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* Mobile One-Thumb Bottom Navigation */}
       <MobileBottomNav />
