@@ -12,14 +12,22 @@ import {
 
 interface CopilotWelcomeProps {
   onSelectPrompt: (promptText: string) => void;
+  targetMarket?: string;
+  topCompanyName?: string;
 }
 
-export const CopilotWelcome: React.FC<CopilotWelcomeProps> = ({ onSelectPrompt }) => {
+export const CopilotWelcome: React.FC<CopilotWelcomeProps> = ({
+  onSelectPrompt,
+  targetMarket,
+  topCompanyName
+}) => {
   const promptCards = [
     {
       category: 'Find Prospects',
-      prompt: 'Find 25 technology companies in Lagos that are hiring.',
-      desc: 'Autonomous search filtered by size, location, and open job roles.',
+      prompt: targetMarket
+        ? `Find 25 technology companies in ${targetMarket} that are hiring.`
+        : 'Find 25 technology companies with active hiring signals.',
+      desc: 'Autonomous search filtered by size, location, and verified trigger events.',
       icon: <Search size={18} color="#6366f1" />,
       iconBg: '#eef2ff'
     },
@@ -39,8 +47,8 @@ export const CopilotWelcome: React.FC<CopilotWelcomeProps> = ({ onSelectPrompt }
     },
     {
       category: 'Company Research',
-      prompt: 'Research top target account.',
-      desc: 'Deep 360° dossier with org charts, tech stack, and pain points.',
+      prompt: topCompanyName ? `Research ${topCompanyName}.` : 'Research top target account.',
+      desc: 'Deep 360° dossier with org charts, tech stack, and growth triggers.',
       icon: <Compass size={18} color="#7c3aed" />,
       iconBg: '#f3e8ff'
     },
@@ -53,7 +61,9 @@ export const CopilotWelcome: React.FC<CopilotWelcomeProps> = ({ onSelectPrompt }
     },
     {
       category: 'Draft Outreach',
-      prompt: 'Draft an email for my five hottest prospects.',
+      prompt: topCompanyName
+        ? `Draft an outreach email for ${topCompanyName}.`
+        : 'Draft a personalized outreach email for my top opportunity.',
       desc: 'Contextual, bespoke pitch matching recent trigger events.',
       icon: <Mail size={18} color="#059669" />,
       iconBg: '#dcfce7'

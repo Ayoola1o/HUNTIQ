@@ -12,17 +12,20 @@ export interface OpportunityCardData {
   id: string;
   rank: number;
   name: string;
-  score: number;
+  /** null means score not yet calculated for this company */
+  score: number | null;
   badge: 'HOT' | 'HIGH' | 'MEDIUM';
   industry: string;
   location: string;
   size: string;
-  whyNow: string;
+  /** null means no verified trigger signal is known */
+  whyNow: string | null;
   evidence: string[];
-  bestContact: {
+  /** Absent when no real contact data is available */
+  bestContact?: {
     name: string;
     role: string;
-    confidence: string;
+    confidence?: string;
   };
 }
 
@@ -79,8 +82,8 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
               <span style={{
                 fontSize: '10.5px',
                 fontWeight: 800,
-                backgroundColor: opp.badge === 'HOT' ? '#ffe4e6' : '#fef3c7',
-                color: opp.badge === 'HOT' ? '#e11d48' : '#d97706',
+                backgroundColor: opp.badge === 'HOT' ? '#ffe4e6' : opp.badge === 'HIGH' ? '#fef3c7' : '#f1f5f9',
+                color: opp.badge === 'HOT' ? '#e11d48' : opp.badge === 'HIGH' ? '#d97706' : '#64748b',
                 padding: '2px 6px',
                 borderRadius: '4px',
                 display: 'flex',
@@ -88,7 +91,7 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
                 gap: '3px'
               }}>
                 {opp.badge === 'HOT' ? <Flame size={11} /> : <Zap size={11} />}
-                {opp.score}/100 — {opp.badge}
+                {opp.score !== null ? `${opp.score}/100` : 'Unscored'} — {opp.badge}
               </span>
             </div>
             <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px' }}>
@@ -117,20 +120,22 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
       </div>
 
       {/* Why Now Timing Trigger */}
-      <div style={{
-        backgroundColor: '#faf5ff',
-        borderRadius: '8px',
-        border: '1px solid #f3e8ff',
-        padding: '10px 12px',
-        fontSize: '12px'
-      }}>
-        <div style={{ color: '#7c3aed', fontWeight: 700, marginBottom: '2px' }}>
-          ⚡ Why Now?
+      {opp.whyNow && (
+        <div style={{
+          backgroundColor: '#faf5ff',
+          borderRadius: '8px',
+          border: '1px solid #f3e8ff',
+          padding: '10px 12px',
+          fontSize: '12px'
+        }}>
+          <div style={{ color: '#7c3aed', fontWeight: 700, marginBottom: '2px' }}>
+            ⚡ Why Now?
+          </div>
+          <div style={{ color: '#4c1d95', lineHeight: 1.35 }}>
+            {opp.whyNow}
+          </div>
         </div>
-        <div style={{ color: '#4c1d95', lineHeight: 1.35 }}>
-          {opp.whyNow}
-        </div>
-      </div>
+      )}
 
       {/* Evidence & Best Contact Row */}
       <div style={{
@@ -142,25 +147,27 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
         paddingTop: '6px',
         borderTop: '1px solid #f8fafc'
       }}>
-        {/* Decision Maker */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{
-            width: '24px',
-            height: '24px',
-            borderRadius: '6px',
-            backgroundColor: '#dcfce7',
-            color: '#16a34a',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <UserCheck size={13} />
+        {/* Decision Maker — only render when real contact data exists */}
+        {opp.bestContact && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '6px',
+              backgroundColor: '#dcfce7',
+              color: '#16a34a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <UserCheck size={13} />
+            </div>
+            <div style={{ fontSize: '11.5px' }}>
+              <span style={{ color: '#64748b' }}>Target: </span>
+              <strong style={{ color: '#0f172a' }}>{opp.bestContact.name}</strong> ({opp.bestContact.role})
+            </div>
           </div>
-          <div style={{ fontSize: '11.5px' }}>
-            <span style={{ color: '#64748b' }}>Target: </span>
-            <strong style={{ color: '#0f172a' }}>{opp.bestContact.name}</strong> ({opp.bestContact.role})
-          </div>
-        </div>
+        )}
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '6px' }}>

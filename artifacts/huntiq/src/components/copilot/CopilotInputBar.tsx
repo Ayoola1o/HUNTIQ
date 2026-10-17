@@ -14,7 +14,7 @@ export const CopilotInputBar: React.FC<CopilotInputBarProps> = ({ onSend, isLoad
   const [text, setText] = useState('');
 
   const quickPills = [
-    { label: '🔍 Find Prospects', prompt: 'Find 25 technology companies in Lagos that are hiring.' },
+    { label: '🔍 Find Prospects', prompt: 'Find technology companies with active hiring signals.' },
     { label: '⚡ Analyze Signals', prompt: 'What industries are showing the strongest buying signals this week?' },
     { label: '🎯 Today’s Leads', prompt: 'Which prospects should I contact today?' },
     { label: '✉️ Draft Outreach', prompt: 'Draft a personalized outreach email for my top opportunity.' },

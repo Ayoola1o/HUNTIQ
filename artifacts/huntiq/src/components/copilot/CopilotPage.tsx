@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { CopilotSidebar } from './CopilotSidebar';
+import type { ChatSession } from './CopilotSidebar';
 import { CopilotWelcome } from './CopilotWelcome';
 import { CopilotInputBar } from './CopilotInputBar';
 import { ActionCard } from './ActionCard';
@@ -19,7 +20,9 @@ import {
   Microscope, 
   CheckCircle, 
   Copy,
-  RotateCcw
+  RotateCcw,
+  Sparkles,
+  Send
 } from 'lucide-react';
 import { geminiService } from '../../services/geminiService';
 import { executeCopilotPrompt } from '../../api/copilot';
@@ -38,6 +41,7 @@ interface Message {
   failedPrompt?: string;
   actionCard?: ActionCardData;
   opportunities?: OpportunityCardData[];
+  suggestedFollowUps?: string[];
   crmConfirmation?: {
     company: string;
     stage: string;
@@ -45,16 +49,51 @@ interface Message {
     isConfirmed: boolean;
   };
   outreachDraft?: {
-    target: string;
+    /** null when no real contact target is available */
+    target: string | null;
     company: string;
     subject: string;
     body: string;
   };
 }
 
+interface StoredSession extends ChatSession {
+  messages: Message[];
+}
+
+const loadStoredSessions = (storageKey: string): StoredSession[] => {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveStoredSessions = (storageKey: string, sessions: StoredSession[]) => {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(sessions));
+  } catch {
+    // ignore quota/storage limits
+  }
+};
+
 export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnboarding }) => {
-  const { currentUser, onboardingData, companies } = useHuntiq();
-  const [currentChatId, setCurrentChatId] = useState('chat-1');
+  const { currentUser, onboardingData, companies, signals } = useHuntiq();
+  const storageKey = `huntiq_copilot_sessions_${currentUser?.workspaceId || 'default'}`;
+
+  const [sessions, setSessions] = useState<StoredSession[]>(() => loadStoredSessions(storageKey));
+  const [currentChatId, setCurrentChatId] = useState<string>(() => {
+    const loaded = loadStoredSessions(storageKey);
+    return loaded[0]?.id || `chat-${Date.now()}`;
+  });
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const loaded = loadStoredSessions(storageKey);
+    return loaded[0]?.messages || [];
+  });
+
   const [isHistoryOpen, setIsHistoryOpen] = useState(true);
   const [selectedModel, setSelectedModel] = useState<'fast' | 'reasoning' | 'research'>('reasoning');
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
@@ -65,8 +104,84 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
   const [researchedCompany, setResearchedCompany] = useState<string | null>(null);
   const [copiedDraftId, setCopiedDraftId] = useState<string | null>(null);
 
-  // Messages list state - initialized empty so production welcomes user without fake records
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Sync session state to storage whenever sessions change
+  useEffect(() => {
+    saveStoredSessions(storageKey, sessions);
+  }, [sessions, storageKey]);
+
+  const updateSessionWithMessages = (chatId: string, newMessages: Message[], initialPrompt?: string) => {
+    setSessions((prev) => {
+      const existingIdx = prev.findIndex((s) => s.id === chatId);
+      const lastMsg = newMessages[newMessages.length - 1];
+      const previewText = lastMsg ? (lastMsg.text.replace(/\*\*/g, '').slice(0, 48) + (lastMsg.text.length > 48 ? '...' : '')) : '';
+      const promptTitle = initialPrompt ? (initialPrompt.slice(0, 32) + (initialPrompt.length > 32 ? '...' : '')) : undefined;
+
+      let updated: StoredSession[];
+      if (existingIdx >= 0) {
+        const current = prev[existingIdx];
+        const updatedSession: StoredSession = {
+          ...current,
+          title: current.title === 'New Conversation' && promptTitle ? promptTitle : current.title,
+          updatedAt: Date.now(),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          preview: previewText || current.preview,
+          messages: newMessages
+        };
+        updated = [updatedSession, ...prev.filter((_, idx) => idx !== existingIdx)];
+      } else {
+        const newSession: StoredSession = {
+          id: chatId,
+          title: promptTitle || 'New Conversation',
+          updatedAt: Date.now(),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          preview: previewText,
+          messages: newMessages
+        };
+        updated = [newSession, ...prev];
+      }
+
+      saveStoredSessions(storageKey, updated);
+      return updated;
+    });
+  };
+
+  const handleSelectChat = (chatId: string) => {
+    setCurrentChatId(chatId);
+    const target = sessions.find((s) => s.id === chatId);
+    setMessages(target?.messages || []);
+  };
+
+  const handleNewChat = () => {
+    const newId = `chat-${Date.now()}`;
+    setCurrentChatId(newId);
+    setMessages([]);
+  };
+
+  const handleDeleteChat = (chatId: string) => {
+    const updated = sessions.filter((s) => s.id !== chatId);
+    setSessions(updated);
+    saveStoredSessions(storageKey, updated);
+
+    if (currentChatId === chatId) {
+      if (updated.length > 0) {
+        setCurrentChatId(updated[0].id);
+        setMessages(updated[0].messages);
+      } else {
+        const newId = `chat-${Date.now()}`;
+        setCurrentChatId(newId);
+        setMessages([]);
+      }
+    }
+  };
+
+  const handleClearCurrentChat = () => {
+    setMessages([]);
+    setSessions((prev) => {
+      const updated = prev.filter((s) => s.id !== currentChatId);
+      saveStoredSessions(storageKey, updated);
+      return updated;
+    });
+  };
 
   const handleSendMessage = async (inputText: string) => {
     const trimmedInput = inputText.trim();
@@ -79,7 +194,9 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
       text: trimmedInput
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const nextMessagesWithUser = [...messages, userMsg];
+    setMessages(nextMessagesWithUser);
+    updateSessionWithMessages(currentChatId, nextMessagesWithUser, trimmedInput);
     setIsLoading(true);
 
     try {
@@ -103,9 +220,13 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
       }
 
       let botMsg: Message;
-      const companies = result.results?.companies || result.companies || [];
+      const matchedCompanies = result.results?.companies || result.companies || [];
       const researchData = result.results?.researchData || result.researchData;
       const outreachData = result.results?.outreachData || result.outreachData;
+      const detectedSignals = result.results?.signals || result.signals || [];
+      const followUps = result.suggestedFollowUps && result.suggestedFollowUps.length > 0 
+        ? result.suggestedFollowUps 
+        : undefined;
 
       if (result.intent === 'SEARCH') {
         botMsg = {
@@ -113,37 +234,34 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           text: responseText,
-          actionCard: companies.length > 0 ? {
+          suggestedFollowUps: followUps,
+          actionCard: matchedCompanies.length > 0 ? {
             id: `act-${Date.now()}`,
             type: 'search',
             status: 'completed',
-            title: result.actionTaken || `Prospect Search: ${companies.length} Matched Accounts`,
+            title: result.actionTaken || `Prospect Search: ${matchedCompanies.length} Matched Accounts`,
+            targetView: 'opportunities',
             parameters: {
-              industry: companies[0]?.industry,
-              location: companies[0]?.location
+              industry: matchedCompanies[0]?.industry,
+              location: matchedCompanies[0]?.location
             },
             results: {
-              totalFound: companies.length,
-              highIntent: companies.filter((c) => (c.opportunityScore || 0) >= 80).length,
-              hotOpportunities: companies.filter((c) => (c.opportunityScore || 0) >= 85).length
+              totalFound: matchedCompanies.length,
+              highIntent: matchedCompanies.filter((c) => (c.opportunityScore || 0) >= 80).length,
+              hotOpportunities: matchedCompanies.filter((c) => (c.opportunityScore || 0) >= 85).length
             }
           } : undefined,
-          opportunities: companies.map((c, idx) => ({
+          opportunities: matchedCompanies.map((c, idx) => ({
             id: c.id,
             rank: idx + 1,
             name: c.name,
-            score: c.opportunityScore || 85,
-            badge: (c.opportunityScore || 85) >= 90 ? 'HOT' : 'HIGH',
-            industry: c.industry || 'Enterprise',
+            score: c.opportunityScore ?? null,
+            badge: (c.opportunityScore ?? 0) >= 90 ? 'HOT' : (c.opportunityScore ?? 0) >= 70 ? 'HIGH' : 'MEDIUM',
+            industry: c.industry || 'Unknown Industry',
             location: c.location || 'Unknown',
-            size: typeof c.employees === 'number' ? `${c.employees} employees` : (c.employees || '50-200 employees'),
-            whyNow: c.activeSignals?.[0]?.title || 'Opportunity signal detected.',
-            evidence: c.activeSignals?.map((s: any) => s.title) || ['Market momentum recorded'],
-            bestContact: {
-              name: 'Executive Contact',
-              role: 'Decision Maker',
-              confidence: `${c.opportunityScore || 90}%`
-            }
+            size: typeof c.employees === 'number' ? `${c.employees} employees` : (c.employees || 'Unknown size'),
+            whyNow: c.activeSignals?.[0]?.title || null,
+            evidence: c.activeSignals?.map((s: any) => s.title) || [],
           }))
         };
       } else if (result.intent === 'RESEARCH' && researchData) {
@@ -153,6 +271,18 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           text: responseText,
+          suggestedFollowUps: followUps,
+          actionCard: {
+            id: `act-res-${Date.now()}`,
+            type: 'research',
+            status: 'completed',
+            title: `360° Intelligence Dossier: ${d.company.name}`,
+            targetView: 'research',
+            targetLabel: 'Open Research Workspace →',
+            results: {
+              summary: `${d.painPoints?.length || 0} Pain Points • ${d.growthDrivers?.length || 0} Growth Triggers Identified`
+            }
+          },
           opportunities: [
             {
               id: d.company.id,
@@ -179,47 +309,120 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           text: responseText,
+          suggestedFollowUps: followUps,
+          actionCard: {
+            id: `act-out-${Date.now()}`,
+            type: 'outreach',
+            status: 'completed',
+            title: `Executive Outreach Package Ready`,
+            targetView: 'outreach',
+            targetLabel: 'Launch Outreach Campaign →',
+            results: {
+              summary: 'Personalized Email, LinkedIn InMail & Phone Script'
+            }
+          },
           outreachDraft: {
-            target: 'Executive Leadership',
-            company: result.actionTaken?.replace(/^Drafted.*?for\s+/i, '') || companies[0]?.name || 'Target Account',
+            target: researchData?.decisionMakers?.[0]?.name || null,
+            company: result.actionTaken?.replace(/^Drafted.*?for\s+/i, '') || matchedCompanies[0]?.name || 'Target Account',
             subject: outreachData.email.subject,
             body: outreachData.email.body
           }
         };
-      } else if (result.intent === 'PRIORITIZE' && companies.length > 0) {
+      } else if (result.intent === 'PRIORITIZE') {
         botMsg = {
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           text: responseText,
-          opportunities: companies.map((c, idx) => ({
+          suggestedFollowUps: followUps,
+          actionCard: matchedCompanies.length > 0 ? {
+            id: `act-pri-${Date.now()}`,
+            type: 'search',
+            status: 'completed',
+            title: `Priority Pipeline Ranking: ${matchedCompanies.length} Accounts`,
+            targetView: 'opportunities',
+            targetLabel: 'View Ranked Opportunities →',
+            results: {
+              totalFound: matchedCompanies.length,
+              highIntent: matchedCompanies.filter((c) => (c.opportunityScore || 0) >= 80).length,
+              hotOpportunities: matchedCompanies.filter((c) => (c.opportunityScore || 0) >= 85).length
+            }
+          } : undefined,
+          opportunities: matchedCompanies.map((c, idx) => ({
             id: c.id,
             rank: idx + 1,
             name: c.name,
-            score: c.opportunityScore || 85,
-            badge: (c.opportunityScore || 85) >= 90 ? 'HOT' : 'HIGH',
-            industry: c.industry || 'Enterprise',
+            score: c.opportunityScore ?? null,
+            badge: (c.opportunityScore ?? 0) >= 90 ? 'HOT' : (c.opportunityScore ?? 0) >= 70 ? 'HIGH' : 'MEDIUM',
+            industry: c.industry || 'Unknown Industry',
             location: c.location || 'Unknown',
-            size: typeof c.employees === 'number' ? `${c.employees} employees` : (c.employees || '50-200 employees'),
-            whyNow: c.activeSignals?.[0]?.title || 'Recent high-intent trigger detected.',
-            evidence: c.activeSignals?.map((s: any) => s.title) || ['Market momentum recorded'],
-            bestContact: {
-              name: 'Executive Contact',
-              role: 'Head of Department',
-              confidence: `${c.opportunityScore || 90}%`
-            }
+            size: typeof c.employees === 'number' ? `${c.employees} employees` : (c.employees || 'Unknown size'),
+            whyNow: c.activeSignals?.[0]?.title || null,
+            evidence: c.activeSignals?.map((s: any) => s.title) || [],
           }))
+        };
+      } else if (result.intent === 'NAVIGATE' || result.targetView) {
+        const destView = result.targetView || 'dashboard';
+        botMsg = {
+          id: `m-bot-${Date.now()}`,
+          sender: 'bot',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: responseText,
+          suggestedFollowUps: followUps,
+          actionCard: {
+            id: `act-nav-${Date.now()}`,
+            type: 'navigate',
+            status: 'completed',
+            title: `Destination: ${destView.toUpperCase().replace('-', ' ')}`,
+            targetView: destView,
+            targetLabel: `Open ${destView.charAt(0).toUpperCase() + destView.slice(1).replace('-', ' ')} →`
+          }
+        };
+      } else if (result.intent === 'MARKET_INTEL') {
+        botMsg = {
+          id: `m-bot-${Date.now()}`,
+          sender: 'bot',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: responseText,
+          suggestedFollowUps: followUps,
+          actionCard: {
+            id: `act-sig-${Date.now()}`,
+            type: 'signals',
+            status: 'completed',
+            title: `Market Signals Radar: ${detectedSignals.length} Verified Signals`,
+            targetView: 'signals',
+            targetLabel: 'Open Signals Feed →'
+          }
+        };
+      } else if (result.intent === 'REPORT') {
+        botMsg = {
+          id: `m-bot-${Date.now()}`,
+          sender: 'bot',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: responseText,
+          suggestedFollowUps: followUps,
+          actionCard: {
+            id: `act-rep-${Date.now()}`,
+            type: 'report',
+            status: 'completed',
+            title: 'Workspace Executive Summary',
+            targetView: 'reports',
+            targetLabel: 'Open Executive Reports →'
+          }
         };
       } else {
         botMsg = {
           id: `m-bot-${Date.now()}`,
           sender: 'bot',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: responseText
+          text: responseText,
+          suggestedFollowUps: followUps
         };
       }
 
-      setMessages((prev) => [...prev, botMsg]);
+      const nextMessagesWithBot = [...nextMessagesWithUser, botMsg];
+      setMessages(nextMessagesWithBot);
+      updateSessionWithMessages(currentChatId, nextMessagesWithBot);
     } catch (err: any) {
       console.error('[HUNTIQ-COPILOT] Execution error:', err);
       const errorMsg = err?.message || 'Server connection error or backend execution failure.';
@@ -232,7 +435,9 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
         failedPrompt: trimmedInput
       };
 
-      setMessages((prev) => [...prev, errorBotMsg]);
+      const nextMessagesWithError = [...nextMessagesWithUser, errorBotMsg];
+      setMessages(nextMessagesWithError);
+      updateSessionWithMessages(currentChatId, nextMessagesWithError);
     } finally {
       setIsLoading(false);
     }
@@ -243,11 +448,26 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
     handleSendMessage(promptToRetry);
   };
 
-  const handleExecuteAction = (_actionId: string) => {
-    // Honest handling: do NOT simulate proposed -> running -> completed with a timer.
-    // If fixing background autonomous action execution requires a separate endpoint, leave it for the next prompt.
-    // Route directly to the relevant view if supported.
-    onNavigate('opportunities');
+  const handleViewResults = (targetViewOrId: string) => {
+    const knownViews = [
+      'dashboard', 'copilot', 'opportunities', 'signals', 'find-prospects', 
+      'companies', 'contacts', 'market-intel', 'research', 'saved-searches', 
+      'pipeline', 'campaigns', 'outreach', 'tasks', 'meetings', 'reports', 
+      'integrations', 'settings', 'profile'
+    ];
+    if (knownViews.includes(targetViewOrId)) {
+      onNavigate(targetViewOrId);
+    } else {
+      onNavigate('opportunities');
+    }
+  };
+
+  const handleExecuteAction = (_actionId: string, targetView?: string) => {
+    if (targetView) {
+      handleViewResults(targetView);
+    } else {
+      onNavigate('opportunities');
+    }
   };
 
   const handleConfirmCrm = (msgId: string) => {
@@ -293,11 +513,11 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
       {isHistoryOpen && (
         <CopilotSidebar
           currentChatId={currentChatId}
-          onSelectChat={(id) => setCurrentChatId(id)}
-          onNewChat={() => {
-            setMessages([]);
-            setCurrentChatId(`chat-${Date.now()}`);
-          }}
+          sessions={sessions}
+          onSelectChat={handleSelectChat}
+          onNewChat={handleNewChat}
+          onDeleteChat={handleDeleteChat}
+          monitoredAccountsCount={companies.length}
         />
       )}
 
@@ -358,10 +578,10 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
               </div>
               <span style={{ fontSize: '11px', color: '#64748b' }}>
                 Context: {onboardingData?.workspaceName
-                  ? `${onboardingData.workspaceName} (${onboardingData.geographicMarkets?.[0] || 'All Markets'} • ${companies.length} Accounts)`
+                  ? `${onboardingData.workspaceName} (${onboardingData.geographicMarkets?.[0] || 'All Markets'} • ${companies.length} Accounts • ${signals.length} Signals)`
                   : currentUser?.companyName
-                    ? `${currentUser.companyName} (${companies.length} Accounts Monitored)`
-                    : 'Live Workspace Intelligence (Active Pipeline & Verified Signals)'}
+                    ? `${currentUser.companyName} (${companies.length} Accounts • ${signals.length} Signals)`
+                    : `Live Workspace Intelligence (${companies.length} Accounts Monitored)`}
               </span>
             </div>
           </div>
@@ -441,7 +661,7 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
             </div>
 
             <button
-              onClick={() => setMessages([])}
+              onClick={handleClearCurrentChat}
               title="Clear conversation"
               style={{
                 background: 'none',
@@ -468,7 +688,11 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
           gap: '18px'
         }}>
           {messages.length === 0 ? (
-            <CopilotWelcome onSelectPrompt={handleSendMessage} />
+            <CopilotWelcome 
+              onSelectPrompt={handleSendMessage}
+              targetMarket={onboardingData?.geographicMarkets?.[0]}
+              topCompanyName={companies[0]?.name}
+            />
           ) : (
             messages.map((msg) => (
               <div
@@ -548,8 +772,8 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
                     {msg.actionCard && (
                       <ActionCard
                         action={msg.actionCard}
-                        onExecute={handleExecuteAction}
-                        onViewResults={() => onNavigate('opportunities')}
+                        onExecute={(actId) => handleExecuteAction(actId, msg.actionCard?.targetView)}
+                        onViewResults={(dest) => handleViewResults(dest)}
                       />
                     )}
 
@@ -582,27 +806,50 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
-                            To: {msg.outreachDraft.target}
+                            {msg.outreachDraft.target
+                              ? `To: ${msg.outreachDraft.target}`
+                              : `For: ${msg.outreachDraft.company}`}
                           </span>
-                          <button
-                            onClick={() => handleCopyDraft(msg.id, msg.outreachDraft!.body)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              backgroundColor: '#ffffff',
-                              border: '1px solid #cbd5e1',
-                              borderRadius: '6px',
-                              padding: '4px 10px',
-                              fontSize: '11.5px',
-                              fontWeight: 600,
-                              color: '#334155',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <Copy size={12} />
-                            <span>{copiedDraftId === msg.id ? 'Copied!' : 'Copy'}</span>
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <button
+                              onClick={() => onNavigate('outreach')}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                backgroundColor: '#4f46e5',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '4px 10px',
+                                fontSize: '11.5px',
+                                fontWeight: 600,
+                                color: '#ffffff',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Send size={12} />
+                              <span>Open in Outreach</span>
+                            </button>
+                            <button
+                              onClick={() => handleCopyDraft(msg.id, msg.outreachDraft!.body)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                padding: '4px 10px',
+                                fontSize: '11.5px',
+                                fontWeight: 600,
+                                color: '#334155',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Copy size={12} />
+                              <span>{copiedDraftId === msg.id ? 'Copied!' : 'Copy'}</span>
+                            </button>
+                          </div>
                         </div>
                         <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a' }}>
                           {msg.outreachDraft.subject}
@@ -674,6 +921,56 @@ export const CopilotPage: React.FC<CopilotPageProps> = ({ onNavigate, onGoToOnbo
                             Confirm Update
                           </button>
                         )}
+                      </div>
+                    )}
+
+                    {/* Interactive Suggested Follow-Up Prompt Chips */}
+                    {msg.suggestedFollowUps && msg.suggestedFollowUps.length > 0 && (
+                      <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '6px',
+                        marginTop: '12px',
+                        paddingTop: '8px',
+                        borderTop: '1px solid #f1f5f9'
+                      }}>
+                        {msg.suggestedFollowUps.map((prompt, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleSendMessage(prompt)}
+                            disabled={isLoading}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              backgroundColor: '#ffffff',
+                              border: '1px solid #c7d2fe',
+                              borderRadius: '16px',
+                              padding: '4px 10px',
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              color: '#4338ca',
+                              cursor: isLoading ? 'default' : 'pointer',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isLoading) {
+                                e.currentTarget.style.backgroundColor = '#eef2ff';
+                                e.currentTarget.style.borderColor = '#818cf8';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isLoading) {
+                                e.currentTarget.style.backgroundColor = '#ffffff';
+                                e.currentTarget.style.borderColor = '#c7d2fe';
+                              }
+                            }}
+                          >
+                            <Sparkles size={11} color="#6366f1" />
+                            <span>{prompt}</span>
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>

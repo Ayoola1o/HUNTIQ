@@ -1,7 +1,5 @@
 import type { CopilotIntentType, CopilotExecutionResult } from './types';
-import { prospectorEngine } from './prospectorEngine';
 import { researchEngine } from './researchEngine';
-import { signalEngine } from './signalEngine';
 import { outreachEngine } from './outreachEngine';
 
 export interface CopilotExecutionContext {
@@ -10,6 +8,8 @@ export interface CopilotExecutionContext {
   signals?: any[];
   workspaceId?: string;
   userId?: string;
+  /** Authenticated user's full name — used to sign generated outreach. */
+  senderName?: string;
 }
 
 export class CopilotEngine {
@@ -57,16 +57,21 @@ export class CopilotEngine {
     const intent = this.classifyIntent(prompt);
     const q = prompt.toLowerCase();
 
-    const companies = context?.companies ?? prospectorEngine.getAllCompanies();
-    const signals = context?.signals ?? signalEngine.getAllSignals();
+    // Use workspace-scoped data from the route context.
+    // Never fall back to hardcoded engine demo data: an empty workspace should show 0 results.
+    const companies = context?.companies ?? [];
+    const signals = context?.signals ?? [];
     const deals = context?.deals ?? [];
 
     switch (intent) {
       case 'SEARCH': {
-        const queryTerms = q.replace(/find|search|look for|discover|show companies/g, '').trim().split(/\s+/).filter(Boolean);
+        const stopWords = new Set(['find', 'search', 'look', 'for', 'discover', 'show', 'companies', 'in', 'that', 'are', 'with', 'the', 'a', 'an', 'and', 'or', 'to', 'of', 'at', 'by', 'from', 'my', 'me', 'our', 'all']);
+        const rawTerms = q.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 1 && !stopWords.has(w));
+        const queryTerms = rawTerms.filter(t => !/^\d+$/.test(t));
         const results = companies.filter((c: any) => {
           if (queryTerms.length === 0) return true;
-          const text = `${c.name} ${c.industry || ''} ${c.location || ''} ${c.description || ''}`.toLowerCase();
+          const signalsText = (c.activeSignals || []).map((s: any) => `${s.type || ''} ${s.title || ''} ${s.description || ''}`).join(' ');
+          const text = `${c.name} ${c.industry || ''} ${c.location || ''} ${c.description || ''} ${signalsText}`.toLowerCase();
           return queryTerms.some(term => text.includes(term));
         });
 
@@ -90,7 +95,11 @@ export class CopilotEngine {
       }
 
       case 'RESEARCH': {
-        const found = companies.find((c: any) => q.includes(c.name.toLowerCase()));
+        let found = companies.find((c: any) => c.name && q.includes(c.name.toLowerCase()));
+        if (!found && (q.includes('top') || q.includes('target account') || q.includes('opportunity') || q.includes('lead') || q.includes('first')) && companies.length > 0) {
+          found = [...companies].sort((a: any, b: any) => (b.opportunityScore || 0) - (a.opportunityScore || 0))[0];
+        }
+
         if (!found) {
           return {
             intent: 'RESEARCH',
@@ -104,7 +113,7 @@ export class CopilotEngine {
           };
         }
 
-        const dossier = researchEngine.generateDossier(found.name);
+        const dossier = researchEngine.generateDossier(found);
 
         return {
           intent: 'RESEARCH',
@@ -120,18 +129,26 @@ export class CopilotEngine {
       }
 
       case 'PRIORITIZE': {
-        const topOpps = companies.filter((c: any) => (c.opportunityScore || 0) >= 80);
+        let topOpps = companies.filter((c: any) => (c.opportunityScore || 0) >= 80);
+        if (topOpps.length === 0 && companies.length > 0) {
+          topOpps = [...companies].sort((a: any, b: any) => (b.opportunityScore || 0) - (a.opportunityScore || 0)).slice(0, 5);
+        }
+
         return {
           intent: 'PRIORITIZE',
           message: topOpps.length > 0
-            ? `You have ${topOpps.length} high-priority opportunities scoring above 80/100 in your workspace based on verified signals.`
-            : `You currently have 0 accounts scoring above 80/100 in your workspace. You can scan new prospects or refresh signals.`,
+            ? `You have ${topOpps.length} priority opportunities in your workspace ranked by Opportunity Score and verified signals.`
+            : `You currently have 0 accounts in your workspace. You can scan new prospects via Geo Radar or add target companies.`,
           actionTaken: 'Calculated Opportunity Score rankings',
           companies: topOpps,
-          suggestedFollowUps: [
+          suggestedFollowUps: topOpps.length > 0 ? [
+            `Draft outreach for ${topOpps[0]?.name || 'top prospect'}`,
             'View active buying signals',
-            'Promote top prospects to Pipeline',
-            'Discover new leads'
+            'Promote top prospects to Pipeline'
+          ] : [
+            'Scan new companies via Geo Radar',
+            'View Signals Feed',
+            'Import prospect list'
           ]
         };
       }
@@ -151,7 +168,9 @@ export class CopilotEngine {
           found.name,
           'Decision Maker',
           'Executive Leadership',
-          'Expansion & Operational Efficiency'
+          'Expansion & Operational Efficiency',
+          'Executive & Direct',
+          context?.senderName || 'Your Team'
         );
 
         return {
@@ -223,7 +242,7 @@ export class CopilotEngine {
         let view = 'dashboard';
         if (q.includes('pipeline') || q.includes('deal')) view = 'pipeline';
         else if (q.includes('opp') || q.includes('opportunity')) view = 'opportunities';
-        else if (q.includes('signal')) view = 'signals';
+        else if (q.includes('signal') || q.includes('alert')) view = 'signals';
         else if (q.includes('prospect') || q.includes('hunter')) view = 'find-prospects';
         else if (q.includes('company') || q.includes('companies')) view = 'companies';
         else if (q.includes('contact')) view = 'contacts';
@@ -231,12 +250,22 @@ export class CopilotEngine {
         else if (q.includes('report')) view = 'reports';
         else if (q.includes('setting')) view = 'settings';
         else if (q.includes('integration')) view = 'integrations';
+        else if (q.includes('outreach') || q.includes('inbox') || q.includes('email')) view = 'outreach';
+        else if (q.includes('campaign')) view = 'campaigns';
+        else if (q.includes('task')) view = 'tasks';
+        else if (q.includes('meeting')) view = 'meetings';
+        else if (q.includes('saved')) view = 'saved-searches';
 
         return {
           intent: 'NAVIGATE',
-          message: `Navigating you to **${view.toUpperCase()}**...`,
+          message: `Ready to navigate to **${view.toUpperCase().replace('-', ' ')}**. Click below to proceed.`,
           actionTaken: `Navigating to ${view}`,
-          targetView: view
+          targetView: view,
+          suggestedFollowUps: [
+            `Open ${view.replace('-', ' ')}`,
+            'Which prospects should I contact today?',
+            'Show my pipeline metrics'
+          ]
         };
       }
 

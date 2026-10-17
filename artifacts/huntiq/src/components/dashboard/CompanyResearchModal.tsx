@@ -16,13 +16,27 @@ export const CompanyResearchModal: React.FC<CompanyResearchModalProps> = ({
   companyName,
   onClose
 }) => {
-  const { currentUser, onboardingData } = useHuntiq();
+  const { currentUser, onboardingData, companies } = useHuntiq();
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'brief' | 'signals' | 'people' | 'outreach'>('brief');
 
   const dossier = useMemo(() => {
-    return companyName ? researchEngine.generateDossier(companyName) : null;
-  }, [companyName]);
+    if (!companyName) return null;
+    const existingCompany = companies.find(
+      (c) => c.name.toLowerCase() === companyName.toLowerCase()
+    );
+    const generated = researchEngine.generateDossier(companyName);
+    if (existingCompany) {
+      return {
+        ...generated,
+        company: existingCompany,
+        executiveSummary: existingCompany.description 
+          ? `${existingCompany.name} is an active account in ${existingCompany.industry || 'Enterprise Technology'}. ${existingCompany.description}`
+          : generated.executiveSummary
+      };
+    }
+    return generated;
+  }, [companyName, companies]);
 
   if (!companyName || !dossier) return null;
 

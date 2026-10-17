@@ -45,28 +45,47 @@ copilotRouter.post(['/copilot/execute', '/copilot/chat'], async (req: Authentica
     let companies: any[] = [];
     let deals: any[] = [];
     let signals: any[] = [];
+    const dataWarnings: string[] = [];
 
     if (workspaceId) {
-      try {
-        const [fetchedCompanies, fetchedDeals, fetchedSignals] = await Promise.all([
-          companyRepo.list({}, workspaceId).catch(() => []),
-          userId ? pipelineRepo.listByUser(userId, workspaceId).catch(() => []) : [],
-          signalRepo.list(50, 0, workspaceId).catch(() => [])
-        ]);
-        companies = fetchedCompanies;
-        deals = fetchedDeals;
-        signals = fetchedSignals;
-      } catch (err) {
-        console.warn('[HUNTIQ-COPILOT] Error loading workspace context for copilot:', err);
+      const [companyResult, dealResult, signalResult] = await Promise.allSettled([
+        companyRepo.list({}, workspaceId),
+        userId ? pipelineRepo.listByUser(userId, workspaceId) : Promise.resolve([]),
+        signalRepo.list(50, 0, workspaceId)
+      ]);
+
+      if (companyResult.status === 'fulfilled') {
+        companies = companyResult.value;
+      } else {
+        console.error('[HUNTIQ-COPILOT] companyRepo.list failed:', companyResult.reason);
+        dataWarnings.push('Company data could not be loaded (repository error).');
+      }
+
+      if (dealResult.status === 'fulfilled') {
+        deals = dealResult.value;
+      } else {
+        console.error('[HUNTIQ-COPILOT] pipelineRepo.listByUser failed:', dealResult.reason);
+        dataWarnings.push('Pipeline data could not be loaded (repository error).');
+      }
+
+      if (signalResult.status === 'fulfilled') {
+        signals = signalResult.value;
+      } else {
+        console.error('[HUNTIQ-COPILOT] signalRepo.list failed:', signalResult.reason);
+        dataWarnings.push('Signal data could not be loaded (repository error).');
       }
     }
+
+    // Pass senderName so outreach is signed with the authenticated user's name.
+    const senderName = (req.user as any)?.fullName || (req.user as any)?.name || undefined;
 
     const result = copilotEngine.executePrompt(prompt, {
       companies,
       deals,
       signals,
       workspaceId,
-      userId
+      userId,
+      senderName
     });
 
     const response: ApiResponse = {
@@ -76,7 +95,8 @@ copilotRouter.post(['/copilot/execute', '/copilot/chat'], async (req: Authentica
         reply: result.message
       },
       meta: {
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        ...(dataWarnings.length > 0 ? { dataWarnings } : {})
       }
     };
 

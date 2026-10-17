@@ -9,7 +9,8 @@ export class OutreachEngine {
     recipientName: string = 'Decision Maker',
     recipientRole: string = 'Head of Operations',
     topSignalTitle?: string,
-    tone: 'Executive & Direct' | 'Consultative' | 'Warm' = 'Executive & Direct'
+    tone: 'Executive & Direct' | 'Consultative' | 'Warm' = 'Executive & Direct',
+    senderName: string = 'Your Team'
   ): GeneratedOutreach {
     const signalReference = topSignalTitle 
       ? `Saw the announcement regarding "${topSignalTitle}"`
@@ -33,8 +34,7 @@ We’ve helped similar enterprise leaders unlock 30%+ efficiency improvements wi
 Do you have 10 minutes this Thursday or Friday for a brief conversation on how we can support ${companyName}?
 
 Best regards,
-Ayoola Ade
-HUNTIQ Growth Team`;
+${senderName}`;
 
     const followUpBody = `Hi ${recipientName.split(' ')[0]},
 
@@ -43,7 +43,7 @@ Following up on my previous note. Thought you might find this relevant given ${c
 Would you be open to a quick 5-minute sanity check later this week?
 
 Best,
-Ayoola`;
+${senderName.split(' ')[0]}`;
 
     const connectionNote = `Hi ${recipientName.split(' ')[0]}, ${signalReference.toLowerCase()}. Would love to connect and follow ${companyName}'s journey!`;
 
@@ -54,10 +54,10 @@ I noticed your work leading ${recipientRole} at ${companyName}. Given your recen
 Open to a brief exchange?
 
 Best,
-Ayoola`;
+${senderName.split(' ')[0]}`;
 
     const callScript = {
-      opening: `“Hi ${recipientName.split(' ')[0]}, this is Ayoola from HUNTIQ. I know I’m catching you in the middle of a busy week — do you have 60 seconds?”`,
+      opening: `“Hi ${recipientName.split(' ')[0]}, this is \${senderName.split(' ')[0]} from HUNTIQ. I know I’m catching you in the middle of a busy week — do you have 60 seconds?”`,
       elevatorPitch: `“I’m reaching out because we saw ${companyName}’s recent expansion. We work specifically with fast-scaling teams to solve operational bottlenecks and accelerate revenue execution.”`,
       qualifyingQuestions: [
         `“As you scale headcount this quarter, what’s your primary challenge in keeping execution velocity high?”`,

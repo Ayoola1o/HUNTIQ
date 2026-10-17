@@ -13,10 +13,12 @@ import {
 
 export interface ActionCardData {
   id: string;
-  type: 'search' | 'research' | 'crm_update' | 'outreach';
+  type: 'search' | 'research' | 'crm_update' | 'outreach' | 'navigate' | 'report' | 'signals';
   status: 'proposed' | 'running' | 'completed';
   title: string;
-  parameters: {
+  targetView?: string;
+  targetLabel?: string;
+  parameters?: {
     industry?: string;
     location?: string;
     size?: string;
@@ -26,16 +28,17 @@ export interface ActionCardData {
     dealValue?: string;
   };
   results?: {
-    totalFound: number;
-    highIntent: number;
-    hotOpportunities: number;
+    totalFound?: number;
+    highIntent?: number;
+    hotOpportunities?: number;
+    summary?: string;
   };
 }
 
 interface ActionCardProps {
   action: ActionCardData;
   onExecute: (id: string) => void;
-  onViewResults?: (id: string) => void;
+  onViewResults?: (targetViewOrId: string) => void;
 }
 
 export const ActionCard: React.FC<ActionCardProps> = ({ action, onExecute, onViewResults }) => {
@@ -90,44 +93,53 @@ export const ActionCard: React.FC<ActionCardProps> = ({ action, onExecute, onVie
       </div>
 
       {/* Parameter Details */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-        gap: '8px',
-        backgroundColor: '#f8fafc',
-        padding: '10px 12px',
-        borderRadius: '8px',
-        border: '1px solid #e2e8f0',
-        fontSize: '12px'
-      }}>
-        {action.parameters.industry && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
-            <Building size={14} color="#6366f1" />
-            <span>{action.parameters.industry}</span>
-          </div>
-        )}
+      {action.parameters && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+          gap: '8px',
+          backgroundColor: '#f8fafc',
+          padding: '10px 12px',
+          borderRadius: '8px',
+          border: '1px solid #e2e8f0',
+          fontSize: '12px'
+        }}>
+          {action.parameters.industry && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
+              <Building size={14} color="#6366f1" />
+              <span>{action.parameters.industry}</span>
+            </div>
+          )}
 
-        {action.parameters.location && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
-            <MapPin size={14} color="#0284c7" />
-            <span>{action.parameters.location}</span>
-          </div>
-        )}
+          {action.parameters.location && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
+              <MapPin size={14} color="#0284c7" />
+              <span>{action.parameters.location}</span>
+            </div>
+          )}
 
-        {action.parameters.size && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
-            <Users size={14} color="#2563eb" />
-            <span>{action.parameters.size}</span>
-          </div>
-        )}
+          {action.parameters.size && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
+              <Users size={14} color="#2563eb" />
+              <span>{action.parameters.size}</span>
+            </div>
+          )}
 
-        {action.parameters.signals && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
-            <Zap size={14} color="#d97706" />
-            <span>{action.parameters.signals.join(' + ')}</span>
-          </div>
-        )}
-      </div>
+          {action.parameters.signals && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
+              <Zap size={14} color="#d97706" />
+              <span>{action.parameters.signals.join(' + ')}</span>
+            </div>
+          )}
+
+          {action.parameters.company && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
+              <Building size={14} color="#7c3aed" />
+              <span>{action.parameters.company}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Execution Results if completed */}
       {action.status === 'completed' && action.results && (
@@ -138,13 +150,27 @@ export const ActionCard: React.FC<ActionCardProps> = ({ action, onExecute, onVie
           border: '1px solid #bbf7d0',
           padding: '10px 14px',
           borderRadius: '8px',
-          fontSize: '12px'
+          fontSize: '12px',
+          flexWrap: 'wrap'
         }}>
-          <div><strong>{action.results.totalFound}</strong> prospects found</div>
-          <div>•</div>
-          <div><strong style={{ color: '#0284c7' }}>{action.results.highIntent}</strong> high-intent</div>
-          <div>•</div>
-          <div><strong style={{ color: '#e11d48' }}>{action.results.hotOpportunities}</strong> hot opportunities (Score &gt; 85)</div>
+          {action.results.totalFound !== undefined && (
+            <div><strong>{action.results.totalFound}</strong> prospects found</div>
+          )}
+          {action.results.highIntent !== undefined && (
+            <>
+              <div>•</div>
+              <div><strong style={{ color: '#0284c7' }}>{action.results.highIntent}</strong> high-intent</div>
+            </>
+          )}
+          {action.results.hotOpportunities !== undefined && (
+            <>
+              <div>•</div>
+              <div><strong style={{ color: '#e11d48' }}>{action.results.hotOpportunities}</strong> hot opportunities (Score &gt; 85)</div>
+            </>
+          )}
+          {action.results.summary && (
+            <div>{action.results.summary}</div>
+          )}
         </div>
       )}
 
@@ -169,7 +195,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({ action, onExecute, onVie
             }}
           >
             <Play size={14} fill="#ffffff" />
-            <span>Execute Search</span>
+            <span>Execute Action</span>
           </button>
         )}
 
@@ -183,13 +209,13 @@ export const ActionCard: React.FC<ActionCardProps> = ({ action, onExecute, onVie
             fontWeight: 600
           }}>
             <Loader2 size={16} className="animate-spin" />
-            <span>Querying HUNTIQ Signal Radar...</span>
+            <span>Executing request...</span>
           </div>
         )}
 
         {action.status === 'completed' && (
           <button
-            onClick={() => onViewResults?.(action.id)}
+            onClick={() => onViewResults?.(action.targetView || action.id)}
             style={{
               backgroundColor: '#059669',
               color: '#ffffff',
@@ -204,7 +230,13 @@ export const ActionCard: React.FC<ActionCardProps> = ({ action, onExecute, onVie
               gap: '6px'
             }}
           >
-            <span>View {action.results?.totalFound !== undefined ? `${action.results.totalFound} ` : ''}Results</span>
+            <span>
+              {action.targetLabel || (
+                action.targetView
+                  ? `Open ${action.targetView.charAt(0).toUpperCase() + action.targetView.slice(1).replace('-', ' ')}`
+                  : `View ${action.results?.totalFound !== undefined ? `${action.results.totalFound} ` : ''}Results`
+              )}
+            </span>
             <ArrowRight size={14} />
           </button>
         )}

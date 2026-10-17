@@ -58,11 +58,32 @@ export class ResearchService {
     const uId = userId || DEFAULT_USER_ID;
     const wId = workspaceId || DEFAULT_WORKSPACE_ID;
 
-    // Generate AI Dossier
-    const dossier = researchEngine.generateDossier(companyName);
+    // Build a minimal CompanyItem from available parameters.
+    // researchEngine.generateDossier() now requires a real CompanyItem \u2014 no synthetic padding.
+    const companyForDossier = {
+      id: `comp-${Date.now()}`,
+      name: companyName,
+      domain: domain?.trim() || `${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
+      industry: industry || '',
+      employees: '',
+      revenue: '',
+      location: '',
+      opportunityScore: 0,
+      opportunityLevel: 'Medium' as const,
+      scoreColor: '#6366f1',
+      scoreTrend: [],
+      signalsCount: 0,
+      activeSignals: [],
+      lastActivity: '',
+      description: '',
+      founded: '',
+      headquarters: '',
+      socials: {}
+    };
+    const dossier = researchEngine.generateDossier(companyForDossier);
     const id = `res-${Date.now()}`;
     const cleanDomain = domain && domain.trim().length > 0 ? domain.trim() : null;
-    const cleanIndustry = industry || (dossier as any).industry || 'Technology & SaaS';
+    const cleanIndustry = industry || 'Technology & SaaS';
 
     const newReport: CompanyResearchReport = {
       id,
