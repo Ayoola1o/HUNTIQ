@@ -1,3 +1,4 @@
+import { useHuntiq } from '../../context/HuntiqContext';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DashboardSidebar } from '../dashboard/DashboardSidebar';
 import { ResearchKpiCards } from './ResearchKpiCards';
@@ -46,6 +47,7 @@ export const ResearchPage: React.FC<ResearchPageProps> = ({
   const [isNewResearchModalOpen, setIsNewResearchModalOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeKpiFilter, setActiveKpiFilter] = useState('all');
+  const { startPitchForProspect } = useHuntiq();
   const [searchQuery, setSearchQuery] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -104,17 +106,22 @@ export const ResearchPage: React.FC<ResearchPageProps> = ({
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
-    // Check if report exists
-    const match = reports.find(r => 
-      r.companyName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      (r.domain ? r.domain.toLowerCase().includes(searchQuery.toLowerCase()) : false)
-    );
-
+    const query = searchQuery.trim().toLowerCase();
+    const domain = query.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    const isDomain = /^[^\s.]+(?:\.[^\s.]+)+$/.test(domain);
+    const matches = reports.filter(r => isDomain
+      ? r.domain?.toLowerCase().replace(/^www\./, '') === domain
+      : r.companyName.toLowerCase().includes(query));
+    if (matches.length > 1) {
+      showToast('Multiple reports match. Select a company from the results below.');
+      return;
+    }
+    const [match] = matches;
     if (match) {
       setSelectedReport(match);
       showToast(`Viewing existing report for ${match.companyName}`);
     } else {
-      const detectedDomain = searchQuery.includes('.') ? searchQuery.toLowerCase().trim() : '';
+      const detectedDomain = isDomain ? domain : '';
       handleCompleteNewResearch(searchQuery, detectedDomain);
     }
   };
@@ -182,7 +189,13 @@ export const ResearchPage: React.FC<ResearchPageProps> = ({
             onBack={() => setSelectedReport(null)}
             onRefresh={handleRefreshReport}
             onNavigateToContacts={() => onNavigate('contacts')}
-            onNavigateToOutreach={() => onNavigate('campaigns')}
+            onNavigateToOutreach={() => startPitchForProspect({
+              companyName: selectedReport.companyName,
+              domain: selectedReport.domain,
+              suggestedSubject: selectedReport.outreachScripts.email.subject,
+              suggestedBody: selectedReport.outreachScripts.email.body,
+              fromCopilot: true
+            })}
           />
         ) : (
           /* Research Dashboard & Listing View */

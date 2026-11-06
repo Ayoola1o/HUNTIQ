@@ -130,7 +130,7 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
       setTimeout(() => setActionToast(null), 3500);
 
       // Auto-push deal to pipeline if pitched from prospect intelligence
-      if (activePitchDraft) {
+      if (activePitchDraft && !activePitchDraft.fromCopilot) {
         addDealToPipeline({
           companyName: newItemPayload.companyName || activePitchDraft.companyName,
           domain: newItemPayload.domain || activePitchDraft.domain || '',

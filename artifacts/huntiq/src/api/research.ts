@@ -78,66 +78,7 @@ export async function createResearchReport(payload: {
   domain?: string;
   industry?: string;
 }): Promise<CompanyResearchReport> {
-  try {
-    const created = await apiClient.post<CompanyResearchReport>('/api/research/reports', payload);
-    localReports.unshift(created);
-    return created;
-  } catch (_err) {
-    const dossier = researchEngine.generateDossier(payload.companyName);
-    const cleanDomain = payload.domain || `${payload.companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
-    const newReport: CompanyResearchReport = {
-      id: `res-${Date.now()}`,
-      companyId: `comp-${Date.now()}`,
-      companyName: payload.companyName,
-      domain: cleanDomain,
-      industry: payload.industry || dossier.company?.industry || 'Technology & SaaS',
-      location: 'Lagos, Nigeria',
-      logoBg: '#4f46e5',
-      logoColor: '#ffffff',
-      logoInitial: payload.companyName.charAt(0).toUpperCase(),
-      employees: '100 – 500',
-      revenue: '$10M – $25M',
-      founded: '2019',
-      status: 'complete',
-      lastUpdated: 'Just now',
-      opportunityScore: 92,
-      opportunityLevel: 'Very High',
-      buyingIntent: 'Very High',
-      relationship: 'New Prospect',
-      executiveSummary: dossier.executiveSummary || `${payload.companyName} is expanding across West Africa with strong operational momentum.`,
-      companyOverview: `${payload.companyName} provides high-reliability enterprise solutions.`,
-      businessModel: {
-        whatTheySell: 'Enterprise digital software solutions.',
-        howTheyMakeMoney: 'Subscription access plans and custom deployments.',
-        targetCustomers: 'Commercial enterprises and financial institutions.',
-        revenueModel: 'B2B Subscriptions & Services'
-      },
-      currentSituation: ['Active hiring surge detected across key units', 'Expanding regional hubs'],
-      growth: { employeeGrowth: '+22% YoY', hiringCount: '15+ open roles', expansionLocations: 'Lagos, Regional', fundingStage: 'Growth Stage', revenueTrend: '+35%' },
-      technologies: [{ name: 'Cloud Infrastructure (AWS)', category: 'Cloud Infrastructure', confidence: 'Verified', lastDetected: 'Just now' }],
-      competitors: [{ id: 'c-1', name: 'Regional Providers', marketPosition: 'Mid-Market', productOverlap: 'Enterprise Solutions', relationship: 'Direct Competitor' }],
-      potentialProblems: [{ title: 'Leadership Ramp Friction', description: 'Fast scaling requires structured onboarding.', severity: 'High' }],
-      potentialOpportunities: [{ serviceName: 'Workforce Scaling Strategy', relevance: 'High', reason: 'High alignment with growth phase.' }],
-      whyNow: {
-        headline: 'Active hiring and business momentum detected',
-        signalCount: 2,
-        signals: ['15+ open roles across key units', 'Regional expansion push'],
-        aiConclusion: 'Ideal moment to initiate executive dialogue.'
-      },
-      signalsTimeline: [{ id: `st-${Date.now()}`, date: 'Just now', type: 'hiring', title: 'Hiring Surge Verified', detail: 'Active openings indexed.', iconBg: '#eff6ff', iconColor: '#2563eb' }],
-      decisionMakers: [{ id: `dm-${Date.now()}`, name: 'Head of People', role: 'VP People / HR Lead', avatarBg: '#eff6ff', avatarColor: '#2563eb', influence: 'High', relevance: 95, isBestContact: true, reasonForContact: 'Direct authority over HR initiatives.' }],
-      recommendedApproach: { headline: 'Lead with workforce scaling and onboarding enablement.', openingAngle: 'Headcount expansion enablement', relevantServices: 'Workforce Strategy', targetPerson: 'Head of People', timingReason: 'Active growth phase' },
-      outreachScripts: {
-        email: { subject: `Supporting ${payload.companyName}'s scaling initiatives`, body: `Hi,\n\nNoticed ${payload.companyName}'s recent hiring surge. Would love to share how we help scaling teams cut onboarding ramp time by 40%.\n\nBest,\nAyoola Ade` },
-        linkedIn: { text: `Hi, congratulations on ${payload.companyName}'s growth! Would love to share insights on scaling leadership frameworks.` },
-        callScript: { intro: `Hello, calling regarding ${payload.companyName}'s recent hiring announcements.`, valueHook: `We help fast-scaling teams build agile management frameworks.`, close: `Could we connect for 10 minutes next week?` },
-        whatsApp: { text: `Hello! Ayoola here. Congrats on ${payload.companyName}'s milestones!` }
-      },
-      sources: [{ id: `src-${Date.now()}`, sourceType: 'website', title: `${payload.companyName} Portal`, sourceUrl: `https://${cleanDomain}`, publishedAt: 'Recently', retrievedAt: 'Just now', claimReference: 'Company Profile Verified', confidence: 95 }]
-    };
-    localReports.unshift(newReport);
-    return newReport;
-  }
+  return apiClient.post<CompanyResearchReport>('/api/research/reports', payload);
 }
 
 /**

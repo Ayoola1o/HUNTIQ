@@ -43,9 +43,13 @@ export const ResearchReportView: React.FC<ResearchReportViewProps> = ({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleCopy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
+  const handleCopy = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+    } catch {
+      setCopiedKey(`failed:${key}`);
+    }
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
@@ -909,7 +913,7 @@ export const ResearchReportView: React.FC<ResearchReportViewProps> = ({
                     }}
                   >
                     {copiedKey === 'email' ? <Check size={11} color="#059669" /> : <Copy size={11} />}
-                    <span>{copiedKey === 'email' ? 'Copied' : 'Copy'}</span>
+                    <span>{copiedKey === 'email' ? 'Copied' : copiedKey === 'failed:email' ? 'Copy failed' : 'Copy'}</span>
                   </button>
                 </div>
 
@@ -959,7 +963,7 @@ export const ResearchReportView: React.FC<ResearchReportViewProps> = ({
                         cursor: 'pointer'
                       }}
                     >
-                      {copiedKey === 'linkedin' ? 'Copied!' : 'Copy'}
+                      {copiedKey === 'linkedin' ? 'Copied!' : copiedKey === 'failed:linkedin' ? 'Copy failed' : 'Copy'}
                     </button>
                   </div>
                   <p style={{ fontSize: '11px', color: '#475569', margin: 0, lineHeight: 1.4 }}>
@@ -994,7 +998,7 @@ export const ResearchReportView: React.FC<ResearchReportViewProps> = ({
                         cursor: 'pointer'
                       }}
                     >
-                      {copiedKey === 'call' ? 'Copied!' : 'Copy'}
+                      {copiedKey === 'call' ? 'Copied!' : copiedKey === 'failed:call' ? 'Copy failed' : 'Copy'}
                     </button>
                   </div>
                   <p style={{ fontSize: '11px', color: '#475569', margin: 0, lineHeight: 1.4 }}>

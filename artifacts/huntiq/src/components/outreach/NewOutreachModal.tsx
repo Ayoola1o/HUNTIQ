@@ -65,8 +65,8 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
     if (isOpen) {
       if (initialPayload) {
         const cName = initialPayload.companyName || '';
-        const ctName = initialPayload.contactName || 'Managing Director / Business Owner';
-        const ctRole = initialPayload.contactRole || 'Managing Director / Owner';
+        const ctName = initialPayload.contactName || (initialPayload.fromCopilot ? '' : 'Managing Director / Business Owner');
+        const ctRole = initialPayload.contactRole || (initialPayload.fromCopilot ? '' : 'Managing Director / Owner');
         const dName = initialPayload.domain && !initialPayload.domain.includes('company.com') ? initialPayload.domain : '';
         const eMail = initialPayload.email && !initialPayload.email.includes('company.com') ? initialPayload.email : '';
         const pNum = initialPayload.phone || '';
@@ -80,7 +80,7 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
 
         const synthesized = synthesizePitch(initialPayload, currentUser?.fullName || 'Ayoola Ade');
         const templates = {
-          email: { subject: synthesized.subject, body: synthesized.emailBody },
+          email: { subject: initialPayload.suggestedSubject ?? synthesized.subject, body: initialPayload.suggestedBody ?? synthesized.emailBody },
           linkedin: { subject: `${cName} x HUNTIQ: Commercial Search Benchmark`, body: synthesized.linkedInBody },
           phone: { subject: 'Cold Call Battlecard & Discovery Opener', body: synthesized.callScript }
         };

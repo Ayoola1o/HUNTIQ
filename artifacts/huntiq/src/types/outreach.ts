@@ -42,6 +42,7 @@ export interface OutreachKpiSummary {
 
 export interface ProspectPitchPayload {
   companyName: string;
+  fromCopilot?: boolean;
   domain?: string | null;
   phone?: string | null;
   address?: string | null;
