@@ -157,7 +157,7 @@ export const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({
                     </div>
 
                     <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
-                      {step.delayDays === 0 ? 'Sent Immediately' : `Wait ${step.delayDays} days`}
+                      {step.delayDays === 0 ? 'No delay after queueing' : `Wait ${step.delayDays} days`}
                     </span>
                   </div>
 
@@ -195,7 +195,8 @@ export const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({
                 >
                   <div>
                     <strong style={{ fontSize: '13px', color: '#0f172a' }}>{p.contactName}</strong>
-                    <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>• {p.contactRole} at {p.companyName}</span>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>{p.email}</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>{[p.contactRole, p.companyName].filter(Boolean).join(' · ')}</div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

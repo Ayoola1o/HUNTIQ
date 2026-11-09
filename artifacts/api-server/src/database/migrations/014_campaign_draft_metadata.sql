@@ -1,0 +1,4 @@
+ALTER TABLE campaigns
+  ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS target_audience_name TEXT,
+  ADD COLUMN IF NOT EXISTS delivery_queued_at TIMESTAMPTZ;

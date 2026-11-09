@@ -1,5 +1,6 @@
 import { GmailReplySyncService, type WatchRenewalSummary } from './gmailReplySyncService';
 import { CampaignExecutionService } from './campaignExecutionService';
+import { postgresPool } from '../database/connection';
 
 export interface SchedulerStatus {
   isRunning: boolean;
@@ -141,7 +142,19 @@ export class SchedulerService {
     if (workspaceId) {
       return CampaignExecutionService.processDueCampaignSteps(workspaceId);
     }
-    return { executed: true };
+    if (!postgresPool) return { workspacesProcessed: 0, errors: ['DATABASE_UNAVAILABLE'] };
+    const { rows } = await postgresPool.query<{ workspace_id: string }>(
+      "SELECT DISTINCT workspace_id FROM campaigns WHERE status = 'active' AND delivery_queued_at IS NOT NULL"
+    );
+    const results = [];
+    for (const row of rows) {
+      results.push(await CampaignExecutionService.processDueCampaignSteps(row.workspace_id, true));
+    }
+    return {
+      workspacesProcessed: results.length,
+      executedCount: results.reduce((count, result) => count + result.executedCount, 0),
+      errors: results.flatMap(result => result.errors)
+    };
   }
 
   /**

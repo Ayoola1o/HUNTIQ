@@ -31,6 +31,7 @@ export interface SendEmailOptions {
   campaignId?: string;
   prospectId?: string;
   idempotencyKey?: string;
+  requireLiveDelivery?: boolean;
 }
 
 export interface SendEmailResult {
@@ -48,6 +49,15 @@ export interface SendEmailResult {
 export class EmailDispatchService {
   private static workspaceConfigs = new Map<string, EmailIntegrationConfig>();
   private static testDispatchHandler: ((options: SendEmailOptions, workspaceId: string) => Promise<SendEmailResult | null>) | null = null;
+
+  public static async hasLiveProvider(workspaceId: string): Promise<boolean> {
+    const google = await GoogleAuthService.getIntegration(workspaceId);
+    if (google?.isActive && google.status === 'active' && google.syncStatus !== 'reauth_required' && google.accessToken) return true;
+    const config = this.getConfig(workspaceId);
+    if (config.provider === 'resend') return Boolean(config.resendApiKey);
+    return (config.provider === 'smtp' || config.provider === 'gmail')
+      && Boolean(config.smtpHost && config.smtpUser && config.smtpPass);
+  }
 
   public static setTestDispatchHandler(handler: ((options: SendEmailOptions, workspaceId: string) => Promise<SendEmailResult | null>) | null): void {
     this.testDispatchHandler = handler;
@@ -183,6 +193,7 @@ export class EmailDispatchService {
           return {
             success: true,
             messageId: gmailResult.messageId,
+            threadId: gmailResult.threadId,
             provider: 'gmail',
             status: 'sent',
             to: cleanTo,
@@ -307,6 +318,17 @@ export class EmailDispatchService {
     }
 
     // Provider 3: Simulation Mode (Dev / Demo when credentials are not configured)
+    if (options.requireLiveDelivery) {
+      return {
+        success: false,
+        messageId: '',
+        provider: 'simulation',
+        status: 'failed',
+        to: cleanTo,
+        deliveredAt: new Date().toISOString(),
+        error: 'No live email provider is connected.'
+      };
+    }
     const simMessageId = `sim-${randomUUID()}`;
     console.log(`[EMAIL_DISPATCH] Simulated email delivery to ${cleanTo}: "${subject}" (Message ID: ${simMessageId})`);
 

@@ -360,6 +360,9 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                   <td style={{ padding: '14px 20px', textAlign: 'right' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
                       <button
+                        disabled={camp.status === 'completed'}
+                        aria-label={camp.status === 'active' ? 'Pause campaign' : 'Queue email delivery'}
+                        title={camp.status === 'active' ? 'Pause campaign' : 'Queue email delivery'}
                         onClick={(e) => {
                           e.stopPropagation();
                           onToggleStatus(camp.id);

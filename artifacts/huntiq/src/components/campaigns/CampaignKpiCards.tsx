@@ -24,53 +24,33 @@ export const CampaignKpiCards: React.FC<CampaignKpiCardsProps> = ({
       id: 'active_campaigns',
       title: 'Active Campaigns',
       value: summary.activeCampaigns.toString(),
-      subtext: 'Automated multi-channel sequences',
+      subtext: 'Queued or active email campaigns',
       icon: <Send size={16} color="#4f46e5" />,
       iconBg: '#eff6ff',
-      sparklineColor: '#6366f1',
-      sparkPath: 'M0,18 Q20,8 40,16 T80,10 T110,14 T140,6',
-      badge: 'Live Sending',
-      badgeColor: '#4338ca',
-      badgeBg: '#eef2ff'
     },
     {
       id: 'prospects',
       title: 'Prospects Targeted',
       value: summary.totalAudience.toLocaleString(),
-      subtext: 'Qualified Decision Makers',
+      subtext: 'Recipients across campaigns',
       icon: <Users size={16} color="#059669" />,
       iconBg: '#ecfdf5',
-      sparklineColor: '#10b981',
-      sparkPath: 'M0,16 Q25,6 50,14 T90,6 T120,16 T140,4',
-      badge: 'Verified Contacts',
-      badgeColor: '#047857',
-      badgeBg: '#d1fae5'
     },
     {
       id: 'replies',
       title: 'Replies Received',
       value: summary.totalReplies.toString(),
-      subtext: '6.9% Average reply rate',
+      subtext: 'Recorded replies',
       icon: <MessageSquare size={16} color="#7c3aed" />,
       iconBg: '#f5f3ff',
-      sparklineColor: '#8b5cf6',
-      sparkPath: 'M0,20 Q20,12 45,18 T85,4 T115,12 T140,2',
-      badge: 'High Intent',
-      badgeColor: '#6d28d9',
-      badgeBg: '#ede9fe'
     },
     {
       id: 'opportunities',
       title: 'Opportunities Created',
       value: summary.opportunitiesCreated.toString(),
-      subtext: 'Turned into active sales pipeline',
+      subtext: 'Recorded conversions',
       icon: <Target size={16} color="#ea580c" />,
       iconBg: '#fff7ed',
-      sparklineColor: '#f97316',
-      sparkPath: 'M0,18 Q15,4 30,12 T60,6 T90,16 T120,4 T140,8',
-      badge: '28% Conv. Rate',
-      badgeColor: '#c2410c',
-      badgeBg: '#ffedd5'
     },
     {
       id: 'pipeline_generated',
@@ -79,11 +59,6 @@ export const CampaignKpiCards: React.FC<CampaignKpiCardsProps> = ({
       subtext: 'Attributed directly to campaigns',
       icon: <DollarSign size={16} color="#2563eb" />,
       iconBg: '#eff6ff',
-      sparklineColor: '#3b82f6',
-      sparkPath: 'M0,14 Q20,18 40,8 T80,16 T110,6 T140,12',
-      badge: 'High ROI',
-      badgeColor: '#1d4ed8',
-      badgeBg: '#dbeafe'
     }
   ];
 
@@ -151,39 +126,7 @@ export const CampaignKpiCards: React.FC<CampaignKpiCardsProps> = ({
               {card.value}
             </div>
 
-            {/* Badge & Subtext */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginTop: '4px',
-              marginBottom: '4px'
-            }}>
-              <span style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                color: card.badgeColor,
-                backgroundColor: card.badgeBg,
-                padding: '2px 6px',
-                borderRadius: '4px'
-              }}>
-                {card.badge}
-              </span>
-              <span style={{ color: '#94a3b8', fontSize: '10.5px' }}>{card.subtext}</span>
-            </div>
-
-            {/* Sparkline */}
-            <div style={{ width: '100%', height: '20px', marginTop: '2px' }}>
-              <svg width="100%" height="20" viewBox="0 0 140 20" fill="none" preserveAspectRatio="none">
-                <path
-                  d={card.sparkPath}
-                  stroke={card.sparklineColor}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  fill="none"
-                />
-              </svg>
-            </div>
+            <span style={{ color: '#64748b', fontSize: '10.5px' }}>{card.subtext}</span>
           </div>
         );
       })}

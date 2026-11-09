@@ -5,11 +5,11 @@ import { CampaignsTable } from './CampaignsTable';
 import { CampaignDetailModal } from './CampaignDetailModal';
 import { CreateCampaignModal } from './CreateCampaignModal';
 import { AiCopilotModal } from '../dashboard/AiCopilotModal';
-import type { CampaignItem, CampaignKpiSummary } from '../../types/campaign';
+import type { CampaignItem, CampaignKpiSummary, CreateCampaignDraft } from '../../types/campaign';
 import { 
   fetchCampaigns, 
   createCampaign as apiCreateCampaign, 
-  toggleCampaignStatus as apiToggleCampaignStatus 
+  setCampaignStatus
 } from '../../api/campaigns';
 import { 
   Send, 
@@ -74,8 +74,12 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({
   }, [loadCampaigns]);
 
   const handleToggleStatus = async (campId: string) => {
+    const campaign = campaigns.find(item => item.id === campId);
+    if (!campaign || campaign.status === 'completed') return;
+    const nextStatus = campaign.status === 'active' ? 'paused' : 'active';
+    if (nextStatus === 'active' && !window.confirm(`Queue "${campaign.name}" for email delivery to its ${campaign.audienceCount} recipients?`)) return;
     try {
-      const updated = await apiToggleCampaignStatus(campId);
+      const updated = await setCampaignStatus(campId, nextStatus);
       setCampaigns(prev => prev.map(c => c.id === campId ? updated : c));
       
       // Update selected campaign if currently inspecting
@@ -83,7 +87,7 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({
         setSelectedCampaign(updated);
       }
 
-      setActionToast(`Campaign status updated to ${updated.status.toUpperCase()}`);
+      setActionToast(updated.status === 'active' ? 'Campaign queued for email delivery.' : 'Campaign paused.');
       setTimeout(() => setActionToast(null), 3500);
 
       // Re-calculate KPI metrics
@@ -91,23 +95,24 @@ export const CampaignsPage: React.FC<CampaignsPageProps> = ({
       setKpiSummary(prev => ({ ...prev, activeCampaigns: activeCount }));
     } catch (err: any) {
       console.error('Failed to toggle campaign status:', err);
-      setActionToast('Failed to update campaign status');
+      setActionToast(err?.message || 'Failed to update campaign status');
       setTimeout(() => setActionToast(null), 3000);
     }
   };
 
-  const handleCreateCampaign = async (newCampPayload: Partial<CampaignItem>) => {
+  const handleCreateCampaign = async (newCampPayload: CreateCampaignDraft) => {
     try {
       const created = await apiCreateCampaign(newCampPayload);
       setCampaigns(prev => [created, ...prev]);
       setSelectedCampaign(created);
-      setActionToast(`Campaign "${created.name}" launched with ${created.sequence.length}-step sequence!`);
+      setActionToast(`Campaign "${created.name}" saved as a draft.`);
       setTimeout(() => setActionToast(null), 4000);
       await loadCampaigns(true);
     } catch (err: any) {
       console.error('Failed to create campaign via API:', err);
       setActionToast('Failed to create campaign');
       setTimeout(() => setActionToast(null), 3000);
+      throw err;
     }
   };
 

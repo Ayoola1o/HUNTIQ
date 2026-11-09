@@ -1,38 +1,8 @@
-import type { CampaignItem } from '../../../src/types/campaign';
+import type { CampaignItem, CampaignStatus } from '../../../src/types/campaign';
 import type { CampaignRepository, CampaignFilterOptions } from './campaign-repository';
 
 export class InMemoryCampaignRepository implements CampaignRepository {
   private static campaignsByWorkspace = new Map<string, CampaignItem[]>();
-
-  constructor() {
-    // Seed default workspace if empty
-    const defaultWs = 'ws-default-001';
-    if (!InMemoryCampaignRepository.campaignsByWorkspace.has(defaultWs)) {
-      InMemoryCampaignRepository.campaignsByWorkspace.set(defaultWs, [
-        {
-          id: 'camp-1',
-          name: 'Lagos Tech Scaleup Sequence',
-          description: 'Multi-touch outbound acquisition sequence targeting rapidly growing technology scaleups across Lagos.',
-          channel: 'multichannel',
-          status: 'active',
-          targetAudienceName: 'Heads of People, VPs of Talent & Founders',
-          audienceCount: 24,
-          sentCount: 18,
-          openRate: 66.7,
-          replyRate: 16.7,
-          opportunitiesCreated: 4,
-          expectedValue: 145000,
-          createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-          lastActivity: '3 hours ago',
-          sequence: [
-            { id: 'step-1', stepNumber: 1, channel: 'email', title: 'Initial Executive Outreach', delayDays: 0, contentSnippet: 'HUNTIQ growth & headcount advisory' },
-            { id: 'step-2', stepNumber: 2, channel: 'linkedin', title: 'LinkedIn Connect Hook', delayDays: 2, contentSnippet: 'Reference recent engineering expansion' }
-          ],
-          prospects: []
-        }
-      ]);
-    }
-  }
 
   public async list(workspaceId: string, filter?: CampaignFilterOptions): Promise<CampaignItem[]> {
     const list = InMemoryCampaignRepository.campaignsByWorkspace.get(workspaceId) || [];
@@ -88,10 +58,10 @@ export class InMemoryCampaignRepository implements CampaignRepository {
     return newItem;
   }
 
-  public async update(id: string, partial: Partial<CampaignItem>, workspaceId: string): Promise<CampaignItem | undefined> {
+  public async update(id: string, partial: Partial<CampaignItem>, workspaceId: string, expectedStatus?: CampaignStatus): Promise<CampaignItem | undefined> {
     const list = InMemoryCampaignRepository.campaignsByWorkspace.get(workspaceId) || [];
     const index = list.findIndex(c => c.id === id);
-    if (index === -1) return undefined;
+    if (index === -1 || (expectedStatus && list[index].status !== expectedStatus)) return undefined;
 
     const updated = {
       ...list[index],

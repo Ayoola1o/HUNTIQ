@@ -1,6 +1,13 @@
 export type CampaignStatus = 'active' | 'draft' | 'paused' | 'completed';
 export type CampaignChannel = 'email' | 'linkedin' | 'multichannel';
 
+export interface CreateCampaignDraft {
+  name: string;
+  contactIds: string[];
+  subject: string;
+  body: string;
+}
+
 export interface CampaignSequenceStep {
   id: string;
   stepNumber: number;
@@ -18,7 +25,7 @@ export interface TargetProspectItem {
   domain?: string | null;
   email?: string | null;
   emailStatus?: 'verified' | 'unverified' | 'not_found';
-  status: 'pending' | 'delivered' | 'opened' | 'replied' | 'converted';
+  status: 'pending' | 'delivered' | 'opened' | 'replied' | 'converted' | 'completed' | 'sending' | 'failed' | 'needs_review';
   opportunityScore: number;
   lastTouch: string;
 }

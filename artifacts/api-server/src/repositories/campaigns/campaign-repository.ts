@@ -10,6 +10,6 @@ export interface CampaignRepository {
   list(workspaceId: string, filter?: CampaignFilterOptions): Promise<CampaignItem[]>;
   getById(id: string, workspaceId: string): Promise<CampaignItem | undefined>;
   create(campaign: Partial<CampaignItem>, workspaceId: string, userId?: string): Promise<CampaignItem>;
-  update(id: string, partial: Partial<CampaignItem>, workspaceId: string): Promise<CampaignItem | undefined>;
+  update(id: string, partial: Partial<CampaignItem>, workspaceId: string, expectedStatus?: CampaignStatus): Promise<CampaignItem | undefined>;
   delete(id: string, workspaceId: string): Promise<boolean>;
 }

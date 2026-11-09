@@ -1,228 +1,89 @@
 import type { Pool } from 'pg';
-import type { CampaignItem } from '../../../src/types/campaign';
+import type { CampaignItem, CampaignStatus } from '../../types/campaign';
 import type { CampaignRepository, CampaignFilterOptions } from './campaign-repository';
-import { InMemoryCampaignRepository } from './in-memory-campaign.repository';
-import { config } from '../../config/env';
 
 export class PostgresCampaignRepository implements CampaignRepository {
-  private fallback = new InMemoryCampaignRepository();
+  constructor(private readonly pool: Pool) {}
 
-  constructor(private readonly pool: Pool, private readonly forceProduction?: boolean) {}
-
-  private isProduction(): boolean {
-    if (this.forceProduction !== undefined) {
-      return this.forceProduction;
-    }
-    return config.nodeEnv === 'production' || process.env.VERCEL === '1';
+  private mapRow(row: any): CampaignItem {
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description || '',
+      channel: row.channel,
+      status: row.status,
+      targetAudienceName: row.target_audience_name || 'Campaign recipients',
+      audienceCount: row.target_count,
+      sentCount: row.sent_count,
+      openRate: row.sent_count > 0 ? row.opened_count / row.sent_count * 100 : 0,
+      replyRate: row.sent_count > 0 ? row.replied_count / row.sent_count * 100 : 0,
+      opportunitiesCount: row.converted_count,
+      opportunitiesCreated: row.converted_count,
+      expectedValue: 0,
+      createdAt: new Date(row.created_at).toISOString(),
+      lastActivity: new Date(row.updated_at).toISOString(),
+      sequence: row.sequence_steps,
+      prospects: row.target_prospects
+    };
   }
 
   public async list(workspaceId: string, filter?: CampaignFilterOptions): Promise<CampaignItem[]> {
-    try {
-      const params: any[] = [workspaceId];
-      const conditions = ['workspace_id = $1'];
-
-      if (filter?.status && filter.status !== 'all') {
-        params.push(filter.status);
-        conditions.push(`status = $${params.length}`);
-      }
-      if (filter?.channel && filter.channel !== 'all') {
-        params.push(filter.channel);
-        conditions.push(`channel = $${params.length}`);
-      }
-      if (filter?.query?.trim()) {
-        params.push(`%${filter.query.trim().toLowerCase()}%`);
-        conditions.push(`(LOWER(name) LIKE $${params.length})`);
-      }
-
-      const query = `
-        SELECT * FROM campaigns
-        WHERE ${conditions.join(' AND ')}
-        ORDER BY created_at DESC
-      `;
-      const result = await this.pool.query(query, params);
-      if (result.rows.length === 0) {
-        return this.isProduction() ? [] : this.fallback.list(workspaceId, filter);
-      }
-
-      return result.rows.map(r => ({
-        id: r.id,
-        name: r.name,
-        description: r.description || '',
-        channel: r.channel || 'multichannel',
-        status: r.status || 'draft',
-        targetAudienceName: r.target_audience_name || 'Target Audience',
-        audienceCount: r.target_count || 0,
-        sentCount: r.sent_count || 0,
-        openRate: r.sent_count > 0 ? (r.opened_count / r.sent_count) * 100 : 0,
-        replyRate: r.sent_count > 0 ? (r.replied_count / r.sent_count) * 100 : 0,
-        opportunitiesCreated: r.converted_count || 0,
-        expectedValue: Number(r.expected_value || 0),
-        createdAt: new Date(r.created_at).toISOString(),
-        lastActivity: 'Active',
-        sequence: r.sequence_steps || [],
-        prospects: r.target_prospects || []
-      }));
-    } catch (err: any) {
-      if (this.isProduction()) {
-        const error = new Error(`Database error listing campaigns: ${err.message}`);
-        (error as any).statusCode = 503;
-        (error as any).code = 'DATABASE_UNAVAILABLE';
-        throw error;
-      }
-      return this.fallback.list(workspaceId, filter);
+    const params = [workspaceId];
+    const conditions = ['workspace_id = $1'];
+    if (filter?.status && filter.status !== 'all') {
+      params.push(filter.status);
+      conditions.push(`status = $${params.length}`);
     }
+    if (filter?.channel && filter.channel !== 'all') {
+      params.push(filter.channel);
+      conditions.push(`channel = $${params.length}`);
+    }
+    if (filter?.query?.trim()) {
+      params.push(`%${filter.query.trim()}%`);
+      conditions.push(`name ILIKE $${params.length}`);
+    }
+    const result = await this.pool.query(
+      `SELECT * FROM campaigns WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC`, params
+    );
+    return result.rows.map(row => this.mapRow(row));
   }
 
   public async getById(id: string, workspaceId: string): Promise<CampaignItem | undefined> {
-    try {
-      const query = `
-        SELECT * FROM campaigns
-        WHERE id = $1 AND workspace_id = $2
-        LIMIT 1
-      `;
-      const result = await this.pool.query(query, [id, workspaceId]);
-      if (!result.rows[0]) {
-        return this.isProduction() ? undefined : this.fallback.getById(id, workspaceId);
-      }
-      const r = result.rows[0];
-      return {
-        id: r.id,
-        name: r.name,
-        description: r.description || '',
-        channel: r.channel || 'multichannel',
-        status: r.status || 'draft',
-        targetAudienceName: r.target_audience_name || 'Target Audience',
-        audienceCount: r.target_count || 0,
-        sentCount: r.sent_count || 0,
-        openRate: r.sent_count > 0 ? (r.opened_count / r.sent_count) * 100 : 0,
-        replyRate: r.sent_count > 0 ? (r.replied_count / r.sent_count) * 100 : 0,
-        opportunitiesCreated: r.converted_count || 0,
-        expectedValue: Number(r.expected_value || 0),
-        createdAt: new Date(r.created_at).toISOString(),
-        lastActivity: 'Active',
-        sequence: r.sequence_steps || [],
-        prospects: r.target_prospects || []
-      };
-    } catch (err: any) {
-      if (this.isProduction()) {
-        const error = new Error(`Database error retrieving campaign: ${err.message}`);
-        (error as any).statusCode = 503;
-        (error as any).code = 'DATABASE_UNAVAILABLE';
-        throw error;
-      }
-      return this.fallback.getById(id, workspaceId);
-    }
+    const result = await this.pool.query('SELECT * FROM campaigns WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
+    return result.rows[0] && this.mapRow(result.rows[0]);
   }
 
   public async create(campaign: Partial<CampaignItem>, workspaceId: string, userId?: string): Promise<CampaignItem> {
-    try {
-      const query = `
-        INSERT INTO campaigns (
-          workspace_id, user_id, name, channel, status, target_count, sent_count,
-          opened_count, replied_count, converted_count, sequence_steps, target_prospects
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        RETURNING *
-      `;
-      const result = await this.pool.query(query, [
-        workspaceId,
-        userId || null,
-        campaign.name || 'Untitled Campaign',
-        campaign.channel || 'multichannel',
-        campaign.status || 'draft',
-        campaign.audienceCount || 0,
-        campaign.sentCount || 0,
-        0,
-        0,
-        campaign.opportunitiesCreated || 0,
-        JSON.stringify(campaign.sequence || []),
-        JSON.stringify(campaign.prospects || [])
-      ]);
-      const r = result.rows[0];
-      return {
-        id: r.id,
-        name: r.name,
-        description: campaign.description || '',
-        channel: r.channel,
-        status: r.status,
-        targetAudienceName: campaign.targetAudienceName || 'Target Audience',
-        audienceCount: r.target_count,
-        sentCount: r.sent_count,
-        openRate: 0,
-        replyRate: 0,
-        opportunitiesCreated: r.converted_count,
-        expectedValue: campaign.expectedValue || 0,
-        createdAt: new Date(r.created_at).toISOString(),
-        lastActivity: 'Just created',
-        sequence: r.sequence_steps || [],
-        prospects: r.target_prospects || []
-      };
-    } catch (err: any) {
-      if (this.isProduction()) {
-        const error = new Error(`Database error creating campaign: ${err.message}`);
-        (error as any).statusCode = 503;
-        (error as any).code = 'DATABASE_UNAVAILABLE';
-        throw error;
-      }
-      return this.fallback.create(campaign, workspaceId, userId);
-    }
+    const result = await this.pool.query(`
+      INSERT INTO campaigns (workspace_id, user_id, name, description, channel, status,
+        target_audience_name, target_count, sequence_steps, target_prospects)
+      VALUES ($1, $2, $3, $4, $5, 'draft', $6, $7, $8, $9) RETURNING *
+    `, [
+      workspaceId, userId || null, campaign.name, campaign.description || '', campaign.channel || 'email',
+      campaign.targetAudienceName || null, campaign.prospects?.length ?? 0,
+      JSON.stringify(campaign.sequence || []), JSON.stringify(campaign.prospects || [])
+    ]);
+    return this.mapRow(result.rows[0]);
   }
 
-  public async update(id: string, partial: Partial<CampaignItem>, workspaceId: string): Promise<CampaignItem | undefined> {
-    try {
-      const existing = await this.getById(id, workspaceId);
-      if (!existing) return undefined;
-
-      const query = `
-        UPDATE campaigns
-        SET name = COALESCE($1, name),
-            channel = COALESCE($2, channel),
-            status = COALESCE($3, status),
-            updated_at = now()
-        WHERE id = $4 AND workspace_id = $5
-        RETURNING *
-      `;
-      const result = await this.pool.query(query, [
-        partial.name || null,
-        partial.channel || null,
-        partial.status || null,
-        id,
-        workspaceId
-      ]);
-      if (!result.rows[0]) {
-        return this.isProduction() ? undefined : this.fallback.update(id, partial, workspaceId);
-      }
-      return {
-        ...existing,
-        ...partial
-      };
-    } catch (err: any) {
-      if (this.isProduction()) {
-        const error = new Error(`Database error updating campaign: ${err.message}`);
-        (error as any).statusCode = 503;
-        (error as any).code = 'DATABASE_UNAVAILABLE';
-        throw error;
-      }
-      return this.fallback.update(id, partial, workspaceId);
-    }
+  public async update(id: string, partial: Partial<CampaignItem>, workspaceId: string, expectedStatus?: CampaignStatus): Promise<CampaignItem | undefined> {
+    const result = await this.pool.query(`
+      UPDATE campaigns
+      SET name = COALESCE($1, name),
+          channel = COALESCE($2, channel),
+          status = COALESCE($3, status),
+          sequence_steps = COALESCE($4::jsonb, sequence_steps),
+          delivery_queued_at = CASE WHEN $3 = 'active' THEN now() ELSE delivery_queued_at END,
+          updated_at = now()
+      WHERE id = $5 AND workspace_id = $6 AND ($7::text IS NULL OR status = $7)
+      RETURNING *
+    `, [partial.name ?? null, partial.channel ?? null, partial.status ?? null,
+      partial.sequence ? JSON.stringify(partial.sequence) : null, id, workspaceId, expectedStatus ?? null]);
+    return result.rows[0] && this.mapRow(result.rows[0]);
   }
 
   public async delete(id: string, workspaceId: string): Promise<boolean> {
-    try {
-      const query = `DELETE FROM campaigns WHERE id = $1 AND workspace_id = $2`;
-      const result = await this.pool.query(query, [id, workspaceId]);
-      if ((result.rowCount ?? 0) === 0) {
-        return this.isProduction() ? false : this.fallback.delete(id, workspaceId);
-      }
-      return true;
-    } catch (err: any) {
-      if (this.isProduction()) {
-        const error = new Error(`Database error deleting campaign: ${err.message}`);
-        (error as any).statusCode = 503;
-        (error as any).code = 'DATABASE_UNAVAILABLE';
-        throw error;
-      }
-      return this.fallback.delete(id, workspaceId);
-    }
+    const result = await this.pool.query('DELETE FROM campaigns WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
+    return (result.rowCount ?? 0) > 0;
   }
 }

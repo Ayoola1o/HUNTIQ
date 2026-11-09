@@ -18,7 +18,7 @@ export interface TargetProspectItem {
   domain?: string | null;
   email?: string | null;
   emailStatus?: 'verified' | 'unverified' | 'not_found';
-  status: 'pending' | 'delivered' | 'opened' | 'replied' | 'converted' | 'sending' | 'failed' | 'needs_review';
+  status: 'pending' | 'delivered' | 'opened' | 'replied' | 'converted' | 'completed' | 'sending' | 'failed' | 'needs_review';
   currentStep?: number;
   nextStepAt?: string | null;
   claimedAt?: string | null;

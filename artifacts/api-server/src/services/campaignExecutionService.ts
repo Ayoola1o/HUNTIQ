@@ -224,6 +224,7 @@ export class CampaignExecutionService {
       currentStatus === 'replied' ||
       currentStatus === 'halted' ||
       currentStatus === 'converted' ||
+      currentStatus === 'completed' ||
       currentStatus === 'needs_review'
     ) {
       return false;
@@ -302,6 +303,7 @@ export class CampaignExecutionService {
     let nextStepIndex = 0;
     let currentStepDef: any = null;
     let sequenceSteps: any[] = [];
+    let requireLiveDelivery = false;
     const executionId = options?.forceExecutionId || randomUUID();
     let idempotencyKey = '';
 
@@ -313,7 +315,7 @@ export class CampaignExecutionService {
       await claimClient.query('BEGIN');
 
       const campaignRes = await claimClient.query(
-        `SELECT id, name, status, sequence_steps, target_prospects, sent_count 
+        `SELECT id, name, status, sequence_steps, target_prospects, sent_count, delivery_queued_at
          FROM campaigns 
          WHERE id = $1 AND workspace_id = $2 
          FOR UPDATE`,
@@ -326,6 +328,7 @@ export class CampaignExecutionService {
       }
 
       const campaign = campaignRes.rows[0];
+      requireLiveDelivery = Boolean(campaign.delivery_queued_at);
       campaignName = campaign.name || 'Campaign';
 
       if (campaign.status !== 'active') {
@@ -374,10 +377,10 @@ export class CampaignExecutionService {
       currentStepDef = sequenceSteps[nextStepIndex];
 
       if (!currentStepDef) {
-        // No further steps in sequence: mark converted
+        // No further steps in the sequence.
         prospects[prospectIdx] = {
           ...targetProspect,
-          status: 'converted',
+          status: 'completed',
           nextStepAt: null,
           claimedAt: null,
           executionId: null,
@@ -533,14 +536,17 @@ export class CampaignExecutionService {
     // =========================================================================
     let dispatchRes: any;
     try {
+      const message = currentStepDef.contentSnippet || 'Hi, checking in on our previous conversation.';
       dispatchRes = await EmailDispatchService.sendEmail({
         to: targetProspect.email,
-        toName: targetProspect.contactName,
+        toName: targetProspect.contactName?.replace(/["\\\r\n]/g, ''),
         subject: currentStepDef.title || `Follow-up from ${campaignName}`,
-        text: currentStepDef.contentSnippet || 'Hi, checking in on our previous conversation.',
+        text: message,
+        html: message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r?\n/g, '<br/>'),
         campaignId,
         prospectId: targetProspect.id,
-        idempotencyKey
+        idempotencyKey,
+        requireLiveDelivery
       }, workspaceId);
     } catch (dispatchErr: any) {
       dispatchRes = {
@@ -640,7 +646,7 @@ export class CampaignExecutionService {
             latestProspects[pIdx] = {
               ...currentProspect,
               currentStep: nextStepIndex + 1,
-              status: upcomingStepDef ? 'delivered' : 'converted',
+              status: upcomingStepDef ? 'delivered' : 'completed',
               nextStepAt: upcomingNextStepDate,
               claimedAt: null,
               executionId: null,
@@ -744,6 +750,9 @@ export class CampaignExecutionService {
       contactName: targetProspect.contactName || (targetProspect as any).name,
       companyName: targetProspect.companyName || (targetProspect as any).company,
       subject: currentStepDef.title || `Follow-up from ${campaignName}`,
+      content: currentStepDef.contentSnippet,
+      provider: dispatchRes.provider,
+      exactThreadOnly: requireLiveDelivery,
       messageId: dispatchRes.messageId,
       threadId: dispatchRes.threadId
     });
@@ -858,7 +867,7 @@ export class CampaignExecutionService {
                 prospects[i] = {
                   ...p,
                   currentStep: currentStepIdx + 1,
-                  status: upcomingStepDef ? 'delivered' : 'converted',
+                  status: upcomingStepDef ? 'delivered' : 'completed',
                   nextStepAt: nextStepDate,
                   claimedAt: null,
                   executionId: null,
@@ -989,6 +998,9 @@ export class CampaignExecutionService {
       contactName?: string;
       companyName?: string;
       subject?: string;
+      content?: string;
+      provider?: string;
+      exactThreadOnly?: boolean;
       messageId?: string;
       threadId?: string;
     }
@@ -1003,9 +1015,9 @@ export class CampaignExecutionService {
          WHERE workspace_id = $1 AND (
            (campaign_id = $2 AND prospect_id = $3) OR 
            (provider_thread_id IS NOT NULL AND provider_thread_id = $4) OR
-           (email = $5 AND status != 'replied')
+           (NOT $6::boolean AND email = $5 AND status != 'replied')
          ) LIMIT 1`,
-        [workspaceId, details.campaignId, details.prospectId, details.threadId || null, cleanEmail]
+        [workspaceId, details.campaignId, details.prospectId, details.threadId || null, cleanEmail, details.exactThreadOnly ?? false]
       );
 
       if (existingRes.rows.length > 0) {
@@ -1029,7 +1041,7 @@ export class CampaignExecutionService {
           ) VALUES (
             $1, $2, 'Prospect', $3, $4,
             $5, 'email', 'contacted', 75, $6, $7,
-            'gmail', $8, $9, $10, $11,
+            $12, $8, $9, $10, $11,
             true, now(), now()
           )`,
           [
@@ -1042,11 +1054,11 @@ export class CampaignExecutionService {
               id: `msg-${Date.now()}`,
               sender: 'me',
               senderName: 'Account Executive',
-              content: details.subject || 'Outreach email',
+              content: details.content || details.subject || 'Outreach email',
               timestamp: new Date().toISOString(),
               channel: 'email',
               status: 'delivered',
-              provider: 'gmail',
+              provider: details.provider || 'gmail',
               providerMessageId: details.messageId || null,
               providerThreadId: details.threadId || null
             }]),
@@ -1054,7 +1066,8 @@ export class CampaignExecutionService {
             details.threadId || null,
             details.messageId || null,
             details.campaignId,
-            details.prospectId
+            details.prospectId,
+            details.provider || 'gmail'
           ]
         );
       }
@@ -1067,7 +1080,7 @@ export class CampaignExecutionService {
    * Processes all due campaign sequence steps across active campaigns for a workspace.
    * Runs recovery for stale sending records first, then executes due steps.
    */
-  public static async processDueCampaignSteps(workspaceId: string): Promise<{
+  public static async processDueCampaignSteps(workspaceId: string, queuedOnly = false): Promise<{
     processedCount: number;
     executedCount: number;
     recoveredCount: number;
@@ -1090,7 +1103,7 @@ export class CampaignExecutionService {
 
       // 2. Scan active campaigns for eligible due steps
       const activeCampaigns = await activePool.query(
-        `SELECT id, target_prospects, status FROM campaigns WHERE workspace_id = $1 AND status = 'active'`,
+        `SELECT id, target_prospects, status FROM campaigns WHERE workspace_id = $1 AND status = 'active'${queuedOnly ? ' AND delivery_queued_at IS NOT NULL' : ''}`,
         [workspaceId]
       );
 

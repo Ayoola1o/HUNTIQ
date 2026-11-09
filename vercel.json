@@ -32,6 +32,10 @@
     {
       "path": "/api/cron/renew-watches",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/campaigns",
+      "schedule": "15 2 * * *"
     }
   ]
 }
