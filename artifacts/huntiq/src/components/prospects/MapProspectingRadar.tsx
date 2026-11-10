@@ -13,13 +13,14 @@ import {
   Compass
 } from 'lucide-react';
 import { 
-  GEO_LOCATION_PRESETS,
-  MOCK_GEO_BUSINESSES 
+  GEO_LOCATION_PRESETS
 } from '../../data/mockGeoBusinesses';
 import type { GeoScrapedBusiness } from '../../engine/geoScraperEngine';
 import { useHuntiq } from '../../context/HuntiqContext';
 import { geoapifyService, type ExtractedAddressReport } from '../../services/geoapifyService';
 import { MapLibreProspectingMap } from './MapLibreProspectingMap';
+import { GoogleProspectingMap } from './GoogleProspectingMap';
+import { googleMapsKey } from '../../services/googleMaps';
 import { AuditDetailDrawer } from './AuditDetailDrawer';
 import { MapPin } from 'lucide-react';
 
@@ -59,95 +60,77 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
   const [isSearching, setIsSearching] = useState(true);
   const [captureToast, setCaptureToast] = useState<string | null>(null);
 
-  // 1. Initial Discovery on mount
-  React.useEffect(() => {
-    let isMounted = true;
-    setIsSearching(true);
-    geoapifyService.discoverPlacesInBounds(null, mapCenter, radiusKm, selectedCategory, discoveryMode)
-      .then(results => {
-        if (isMounted) {
-          setBusinesses(results || []);
-        }
-      })
-      .catch(err => {
-        console.warn('[HUNTIQ-RADAR] Initial geo discovery fallback:', err);
-        if (isMounted) setBusinesses([]);
-      })
-      .finally(() => {
-        if (isMounted) setIsSearching(false);
-      });
-    return () => { isMounted = false; };
-  }, []);
+  const requestId = React.useRef(0);
+  const [searchError, setSearchError] = useState(false);
 
-  // 2. Handle Preset Zone Change
-  const handlePresetChange = async (zoneId: string) => {
-    setSelectedZoneId(zoneId);
+  const runSearch = async <T,>(load: () => Promise<T>, apply: (result: T) => void) => {
+    const id = ++requestId.current;
+    setIsSearching(true);
+    setSearchError(false);
+    setBusinesses([]);
+    setSelectedIds(new Set());
     setAddressReport(null);
-    const preset = GEO_LOCATION_PRESETS.find(p => p.id === zoneId);
-    if (preset) {
-      const newCenter = { lat: preset.lat, lng: preset.lng };
-      setMapCenter(newCenter);
-      setMapZoom(preset.zoom);
-      setIsSearching(true);
-      const results = await geoapifyService.discoverPlacesInBounds(
-        null,
-        newCenter,
-        radiusKm,
-        selectedCategory,
-        discoveryMode
-      );
-      setBusinesses(results);
-      setIsSearching(false);
+    setInspectedBusiness(null);
+    try {
+      const result = await load();
+      if (id === requestId.current) apply(result);
+    } catch {
+      if (id === requestId.current) setSearchError(true);
+    } finally {
+      if (id === requestId.current) setIsSearching(false);
     }
   };
 
-  // 3. Handle Location Search (Extract Address & Businesses at Location)
-  const handleSearchLocation = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!searchQuery.trim()) return;
+  React.useEffect(() => {
+    void handleSearchThisArea();
+    return () => { requestId.current++; };
+  }, []);
 
-    setIsSearching(true);
-    const report = await geoapifyService.extractAddressEntities({ query: searchQuery }, radiusKm);
-    const newCenter = { lat: report.location.lat, lng: report.location.lng };
-    setMapCenter(newCenter);
-    setMapZoom(14);
-    setBusinesses(report.businessesFound);
-    setAddressReport(report);
-    setIsSearching(false);
-  };
-
-  // 4. Handle Direct Map Click (Reverse Geocode Exact Coordinates & Extract Entities)
-  const handleMapClick = async (coords: { lat: number; lng: number }) => {
-    setIsSearching(true);
-    const report = await geoapifyService.extractAddressEntities({ lat: coords.lat, lng: coords.lng }, radiusKm);
-    setMapCenter({ lat: coords.lat, lng: coords.lng });
-    setBusinesses(report.businessesFound);
-    setAddressReport(report);
-    setIsSearching(false);
-  };
-
-  // 4. Search This Area (Reads Viewport Bounds)
-  const handleSearchThisArea = async () => {
-    setIsSearching(true);
-    const results = await geoapifyService.discoverPlacesInBounds(
-      currentBounds,
-      mapCenter,
-      radiusKm,
-      selectedCategory,
-      discoveryMode
+  const handlePresetChange = (zoneId: string) => {
+    const preset = GEO_LOCATION_PRESETS.find(p => p.id === zoneId);
+    if (!preset) return;
+    setSelectedZoneId(zoneId);
+    const center = { lat: preset.lat, lng: preset.lng };
+    return runSearch(
+      () => geoapifyService.discoverPlacesInBounds(null, center, radiusKm, selectedCategory, discoveryMode),
+      results => {
+        setMapCenter(center);
+        setMapZoom(preset.zoom);
+        setBusinesses(results);
+      }
     );
-    setBusinesses(results);
-    setIsSearching(false);
   };
+
+  const searchAddress = (input: { query?: string; lat?: number; lng?: number }) =>
+    runSearch(() => geoapifyService.extractAddressEntities(input, radiusKm), report => {
+      setMapCenter({ lat: report.location.lat, lng: report.location.lng });
+      if (input.query) setMapZoom(14);
+      setBusinesses(report.businessesFound);
+      setAddressReport(report);
+    });
+
+  const handleSearchLocation = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const query = searchQuery.trim();
+    if (query) void searchAddress({ query });
+  };
+
+  const handleMapClick = (coords: { lat: number; lng: number }) => searchAddress(coords);
+
+  const handleSearchThisArea = () => runSearch(
+    () => geoapifyService.discoverPlacesInBounds(currentBounds, mapCenter, radiusKm, selectedCategory, discoveryMode),
+    setBusinesses
+  );
 
   // 4. Filtering Logic
   const filteredBusinesses = businesses.filter((b) => {
+    if (googleMapsKey) return true;
     // Mode Filter
     if (discoveryMode === 'ENTERPRISE' && b.targetType !== 'ENTERPRISE') return false;
     if (discoveryMode === 'DIGITAL_GAP' && b.targetType === 'ENTERPRISE' && b.digitalAudit.gapScore < 60) return false;
 
     // Category Filter
-    if (selectedCategory !== 'All Industries' && !b.category.toLowerCase().includes(selectedCategory.toLowerCase())) return false;
+    if (!googleMapsKey && selectedCategory !== 'All Industries' && !b.category.toLowerCase().includes(selectedCategory.toLowerCase())) return false;
 
     // Gap Filter Chips
     if (gapFilter === 'NO_WEBSITE') return b.digitalAudit.digitalMaturity.website === 0;
@@ -161,6 +144,8 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
 
     return true;
   });
+
+  const selectedCount = filteredBusinesses.filter(b => selectedIds.has(b.id)).length;
 
   // 5. Selection Handlers
   const toggleSelectBusiness = (id: string, e?: React.MouseEvent) => {
@@ -184,6 +169,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
 
   // 6. Capture Actions
   const handleCaptureSelected = () => {
+    if (googleMapsKey) return;
     const selectedList = filteredBusinesses.filter(b => selectedIds.has(b.id));
     if (selectedList.length === 0) return;
 
@@ -193,7 +179,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
   };
 
   const handleCaptureViewport = () => {
-    if (filteredBusinesses.length === 0) return;
+    if (googleMapsKey || filteredBusinesses.length === 0) return;
 
     captureGeoBusinesses(filteredBusinesses);
     setCaptureToast(`Captured all ${filteredBusinesses.length} prospects in viewport to Opportunities!`);
@@ -272,7 +258,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
             <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span>LIVE GEO RADAR</span>
               <span style={{ fontSize: '10px', backgroundColor: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: '9999px', border: '1px solid #a7f3d0', fontWeight: 800 }}>
-                MapLibre GL + OpenStreetMap
+                {googleMapsKey ? 'Google Maps + Places' : 'MapLibre GL + OpenStreetMap'}
               </span>
               {geoapifyService.isLiveApiAvailable() ? (
                 <span style={{ fontSize: '10px', backgroundColor: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: '9999px', border: '1px solid #a7f3d0', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -286,7 +272,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
               )}
             </h2>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0 0' }}>
-              Real-time commercial discovery powered by Geoapify & OpenStreetMap with automated digital gap auditing.
+              {googleMapsKey ? 'Search for businesses by name or type in the map area.' : 'Business discovery from Geoapify and OpenStreetMap.'}
             </p>
           </div>
         </div>
@@ -428,7 +414,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
               onClick={handleCaptureSelected}
-              disabled={filteredBusinesses.length === 0}
+              disabled={Boolean(googleMapsKey) || filteredBusinesses.length === 0}
               style={{
                 padding: '7px 14px',
                 backgroundColor: '#1d4ed8',
@@ -441,7 +427,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
                 boxShadow: '0 2px 6px rgba(29, 78, 216, 0.3)'
               }}
             >
-              Capture All into Pipeline ({filteredBusinesses.length})
+              {googleMapsKey ? 'Google Places results are view only' : `Capture All into Pipeline (${filteredBusinesses.length})`}
             </button>
             <button
               onClick={() => setAddressReport(null)}
@@ -473,7 +459,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
         borderRadius: '10px'
       }}>
         {/* Prospecting Mode */}
-        <div style={{ display: 'flex', gap: '6px' }}>
+        {!googleMapsKey && <div style={{ display: 'flex', gap: '6px' }}>
           {[
             { id: 'ALL', label: 'All Targets' },
             { id: 'HIGH-GROWTH', label: 'High-Growth' },
@@ -497,7 +483,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
               {m.label}
             </button>
           ))}
-        </div>
+        </div>}
 
         {/* Radius Selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -525,7 +511,13 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
         {/* Industry Filter */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>Industry:</span>
-          <select
+          {googleMapsKey ? <input
+            aria-label="Business type or name"
+            placeholder="All businesses"
+            value={selectedCategory === 'All Industries' ? '' : selectedCategory}
+            onChange={e => setSelectedCategory(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') void handleSearchThisArea(); }}
+          /> : <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             style={{
@@ -543,11 +535,12 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
             <option value="Hospitality">Hotels & Spas</option>
             <option value="Automotive">Automotive & Garages</option>
             <option value="Financial Technology">FinTech</option>
-          </select>
+          </select>}
         </div>
       </div>
 
       {/* Digital Gap Filter Chips */}
+      {!googleMapsKey && (
       <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700 }}>Filter by Gap:</span>
         {[
@@ -579,6 +572,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
           </button>
         ))}
       </div>
+      )}
 
       {/* Notification Toast */}
       {captureToast && (
@@ -623,6 +617,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
       )}
 
       {/* Selection Action Bar */}
+      {!googleMapsKey && (
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -634,7 +629,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
-            Selected: <strong style={{ color: '#4f46e5' }}>{selectedIds.size}</strong> of {filteredBusinesses.length}
+            Selected: <strong style={{ color: '#4f46e5' }}>{selectedCount}</strong> of {filteredBusinesses.length}
           </span>
           <button
             onClick={handleSelectAllInView}
@@ -649,7 +644,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
           >
             Select All
           </button>
-          {selectedIds.size > 0 && (
+          {selectedCount > 0 && (
             <button
               onClick={handleClearSelection}
               style={{
@@ -669,23 +664,23 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={handleCaptureSelected}
-            disabled={selectedIds.size === 0}
+            disabled={selectedCount === 0}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: selectedIds.size > 0 ? '#4f46e5' : '#e2e8f0',
-              color: selectedIds.size > 0 ? '#ffffff' : '#94a3b8',
+              backgroundColor: selectedCount > 0 ? '#4f46e5' : '#e2e8f0',
+              color: selectedCount > 0 ? '#ffffff' : '#94a3b8',
               border: 'none',
               borderRadius: '7px',
               padding: '6px 12px',
               fontSize: '11.5px',
               fontWeight: 700,
-              cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed'
+              cursor: selectedCount > 0 ? 'pointer' : 'not-allowed'
             }}
           >
             <Zap size={13} />
-            <span>Capture Selected ({selectedIds.size})</span>
+            <span>Capture Selected ({selectedCount})</span>
           </button>
 
           <button
@@ -709,6 +704,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {/* Main 2-Column Responsive Layout: Map + Prospect Sidebar List */}
       <div style={{
@@ -719,7 +715,19 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
       }}>
         {/* Left: MapLibre Interactive Map */}
         <div style={{ borderRadius: '12px', overflow: 'hidden', minHeight: '500px' }}>
-          <MapLibreProspectingMap
+          {googleMapsKey ? <GoogleProspectingMap
+            center={mapCenter}
+            zoom={mapZoom}
+            radiusKm={radiusKm}
+            businesses={filteredBusinesses}
+            selectedBusinessId={inspectedBusiness?.id || null}
+            onSelectBusiness={(biz) => {
+              setInspectedBusiness(biz);
+              onSelectBusiness?.(biz);
+            }}
+            onBoundsChange={setCurrentBounds}
+            onMapClick={handleMapClick}
+          /> : <MapLibreProspectingMap
             center={mapCenter}
             zoom={mapZoom}
             radiusKm={radiusKm}
@@ -732,7 +740,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
             }}
             onBoundsChange={(b) => setCurrentBounds(b)}
             onMapClick={handleMapClick}
-          />
+          />}
         </div>
 
         {/* Right: Prospect Cards Sidebar */}
@@ -752,7 +760,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
               Prospects ({filteredBusinesses.length})
             </span>
             <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
-              Click to view audit
+              {googleMapsKey ? 'Google Places · View only' : 'Click to view audit'}
             </span>
           </div>
 
@@ -774,6 +782,8 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
                   Scanning radar for businesses in {radiusKm}km radius...
                 </span>
               </div>
+            ) : searchError ? (
+              <div role="alert">Live discovery failed. Try searching this area again.</div>
             ) : filteredBusinesses.length === 0 ? (
               <div style={{
                 padding: '36px 16px',
@@ -827,6 +837,18 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
               </div>
             ) : (
               filteredBusinesses.map((biz) => {
+                if (googleMapsKey) return (
+                  <button type="button" key={biz.id} onClick={() => {
+                    setInspectedBusiness(biz);
+                    setMapCenter({ lat: biz.lat, lng: biz.lng });
+                  }} style={{ padding: 12, border: '1px solid #cbd5e1', borderRadius: 10, background: '#fff', textAlign: 'left' }}>
+                    <strong>{biz.name}</strong>
+                    <div>{biz.category}</div>
+                    <div>{biz.address}</div>
+                    {biz.rating > 0 && <div>{biz.rating} stars ({biz.reviewCount} ratings)</div>}
+                    {biz.phone && <div>{biz.phone}</div>}
+                  </button>
+                );
                 const isChecked = selectedIds.has(biz.id);
                 const isInspected = inspectedBusiness?.id === biz.id;
                 const visuals = getPinVisuals(biz);
@@ -917,7 +939,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
       </div>
 
       {/* Slide-out Audit Detail Drawer */}
-      <AuditDetailDrawer
+      {!googleMapsKey && <AuditDetailDrawer
         business={inspectedBusiness}
         onClose={() => setInspectedBusiness(null)}
         onCaptureOpportunity={(b) => {
@@ -926,7 +948,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
           setTimeout(() => setCaptureToast(null), 4000);
         }}
         onPushToPipeline={handlePushDeal}
-      />
+      />}
     </div>
   );
 };

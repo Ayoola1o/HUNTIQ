@@ -1,6 +1,7 @@
-import { GEO_LOCATION_PRESETS, MOCK_GEO_BUSINESSES } from '../data/mockGeoBusinesses';
+import { GEO_LOCATION_PRESETS } from '../data/mockGeoBusinesses';
 import { DigitalAuditEngine } from '../engine/digitalAuditEngine';
 import type { GeoScrapedBusiness } from '../engine/geoScraperEngine';
+import { googleMapsKey, loadGoogleMaps } from './googleMaps';
 
 export interface GeocodedLocation {
   name: string;
@@ -167,9 +168,20 @@ export class GeoapifyService {
     let location: GeocodedLocation;
 
     if (input.lat !== undefined && input.lng !== undefined) {
-      location = await this.reverseGeocode(input.lat, input.lng);
+      location = googleMapsKey
+        ? { name: 'Selected location', lat: input.lat, lng: input.lng, zoom: 14 }
+        : await this.reverseGeocode(input.lat, input.lng);
     } else if (input.query) {
-      location = await this.geocodeLocation(input.query);
+      if (googleMapsKey) {
+        const maps = await loadGoogleMaps();
+        const { Place } = await maps.importLibrary('places');
+        const { places } = await Place.searchByText({ textQuery: input.query, fields: ['displayName', 'formattedAddress', 'location'], maxResultCount: 1 });
+        const place = places?.[0];
+        if (!place?.location) throw new Error('Google Places could not find that location.');
+        location = { name: place.displayName || input.query, formattedAddress: place.formattedAddress, lat: place.location.lat(), lng: place.location.lng(), zoom: 14 };
+      } else {
+        location = await this.geocodeLocation(input.query);
+      }
     } else {
       location = {
         name: 'Lagos Commercial Core',
@@ -203,6 +215,44 @@ export class GeoapifyService {
     category: string = 'All Industries',
     mode: 'ALL' | 'ENTERPRISE' | 'DIGITAL_GAP' = 'ALL'
   ): Promise<GeoScrapedBusiness[]> {
+    if (googleMapsKey) {
+      const maps = await loadGoogleMaps();
+      const { Place } = await maps.importLibrary('places');
+      const keyword = category.trim();
+      const all = !keyword || keyword === 'All Industries';
+      const { places } = await Place.searchByText({
+        textQuery: all ? 'local businesses' : keyword,
+        fields: ['id', 'displayName', 'location', 'formattedAddress', 'primaryTypeDisplayName', 'websiteURI', 'nationalPhoneNumber', 'rating', 'userRatingCount'],
+        ...(bounds && bounds.west < bounds.east && bounds.south < bounds.north
+          ? { locationRestriction: bounds }
+          : { locationBias: { center, radius: Math.min(radiusKm * 1000, 50000) } }),
+        maxResultCount: 20
+      });
+      return (places || []).flatMap((place: any): GeoScrapedBusiness[] => {
+        if (!place.id || !place.location || !place.displayName) return [];
+        const lat = place.location.lat();
+        const lng = place.location.lng();
+        if (!bounds && calculateDistanceKm(center.lat, center.lng, lat, lng) > radiusKm) return [];
+        const name = place.displayName;
+        const placeCategory = all ? place.primaryTypeDisplayName || 'Business' : keyword;
+        const address = place.formattedAddress || '';
+        const website = place.websiteURI || '';
+        const phone = place.nationalPhoneNumber || '';
+        const rating = place.rating ?? 0;
+        const reviewCount = place.userRatingCount ?? 0;
+        const id = `google-${place.id}`;
+        const audit = DigitalAuditEngine.audit({ id: '', name: '', category: '', address: '', district: '' });
+        const checkedAt = new Date().toISOString();
+        return [{
+          id, placeId: place.id, name, category: placeCategory, lat, lng, address, district: '', phone, website,
+          domain: website && URL.canParse(website) ? new URL(website).hostname : '',
+          rating, reviewCount, isVerified: false,
+          targetType: 'LOCAL_COMMERCIAL',
+          opportunityScore: 0, digitalAudit: audit, decisionMakers: [],
+          detectedSignals: [], techStack: [], headcountEstimate: '', scrapedAt: checkedAt
+        }];
+      });
+    }
     const apiKey = this.getApiKey();
 
     if (apiKey) {
@@ -323,48 +373,16 @@ export class GeoapifyService {
               filtered = filtered.filter(b => b.digitalAudit.gapScore >= 50 || b.targetType === 'LOCAL_COMMERCIAL');
             }
 
-            if (filtered.length > 0) {
-              return filtered;
-            }
+            return filtered;
           }
+          if (Array.isArray(data.features)) return [];
         }
       } catch (err) {
-        console.warn('Geoapify Live Places API failed, falling back to proximity dataset:', err);
+        console.warn('Geoapify Live Places API failed:', err);
       }
     }
 
-    // Proximity fallback from dataset: find businesses closest to current center
-    const nearby = MOCK_GEO_BUSINESSES.map(b => ({
-      biz: b,
-      distanceKm: calculateDistanceKm(center.lat, center.lng, b.lat, b.lng)
-    })).sort((a, b) => a.distanceKm - b.distanceKm);
-
-    let results: GeoScrapedBusiness[] = nearby.filter(item => item.distanceKm < 250).map(item => item.biz);
-    if (results.length === 0) {
-      results = MOCK_GEO_BUSINESSES.slice(0, 12).map((b, i) => {
-        const offsetLat = (Math.sin(i * 1.3) * radiusKm * 0.4) / 111;
-        const offsetLng = (Math.cos(i * 1.3) * radiusKm * 0.4) / (111 * Math.cos((center.lat * Math.PI) / 180));
-        return {
-          ...b,
-          id: `biz-proj-${i}`,
-          lat: center.lat + offsetLat,
-          lng: center.lng + offsetLng
-        };
-      });
-    }
-
-    if (category && category !== 'All Industries') {
-      const filtered = results.filter(b => b.category.toLowerCase().includes(category.toLowerCase()));
-      if (filtered.length > 0) results = filtered;
-    }
-
-    if (mode === 'ENTERPRISE') {
-      results = results.filter(b => b.targetType === 'ENTERPRISE');
-    } else if (mode === 'DIGITAL_GAP') {
-      results = results.filter(b => b.digitalAudit.gapScore >= 50 || b.targetType === 'LOCAL_COMMERCIAL');
-    }
-
-    return results;
+    throw new Error('Live business discovery is unavailable.');
   }
 }
 

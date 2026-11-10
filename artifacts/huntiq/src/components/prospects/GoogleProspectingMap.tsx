@@ -1,8 +1,12 @@
+import { loadGoogleMaps } from '../../services/googleMaps';
 import React, { useEffect, useRef, useState } from 'react';
 import type { GeoScrapedBusiness } from '../../engine/geoScraperEngine';
 
 interface GoogleProspectingMapProps {
   apiKey?: string;
+  zoom?: number;
+  onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
+  onMapClick?: (point: { lat: number; lng: number }) => void;
   center: { lat: number; lng: number };
   radiusKm: number;
   businesses: GeoScrapedBusiness[];
@@ -98,7 +102,10 @@ export const GoogleProspectingMap: React.FC<GoogleProspectingMapProps> = ({
   radiusKm,
   businesses,
   selectedBusinessId,
-  onSelectBusiness
+  onSelectBusiness,
+  zoom,
+  onBoundsChange,
+  onMapClick
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -114,34 +121,14 @@ export const GoogleProspectingMap: React.FC<GoogleProspectingMapProps> = ({
 
   // 1. Dynamic Google Maps Script Loader
   useEffect(() => {
-    if (!activeApiKey) {
-      return;
-    }
-
-    if ((window as any).google?.maps) {
-      return;
-    }
-
-    const existingScript = document.getElementById('google-maps-script');
-    if (existingScript) {
-      existingScript.onload = () => setIsLoaded(true);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.id = 'google-maps-script';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${activeApiKey}&libraries=places,marker&v=weekly`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      setIsLoaded(true);
-      setLoadError(null);
-    };
-    script.onerror = () => {
-      setLoadError('Failed to load Google Maps Platform API. Please verify the API key.');
-    };
-
-    document.head.appendChild(script);
+    if (!activeApiKey) return;
+    let mounted = true;
+    loadGoogleMaps(activeApiKey).then(() => {
+      if (mounted) { setIsLoaded(true); setLoadError(null); }
+    }).catch(err => {
+      if (mounted) setLoadError(err.message);
+    });
+    return () => { mounted = false; };
   }, [activeApiKey]);
 
   // 2. Initialize Map Instance
@@ -152,14 +139,13 @@ export const GoogleProspectingMap: React.FC<GoogleProspectingMapProps> = ({
       const google = (window as any).google;
       const map = new google.maps.Map(mapContainerRef.current, {
         center,
-        zoom: radiusKm <= 10 ? 13 : radiusKm <= 25 ? 12 : 11,
+        zoom: zoom ?? (radiusKm <= 10 ? 13 : radiusKm <= 25 ? 12 : 11),
         styles: DARK_MAP_STYLES,
         disableDefaultUI: false,
         zoomControl: true,
         mapTypeControl: false,
         streetViewControl: false,
-        fullscreenControl: true,
-        mapId: 'HUNTIQ_RADAR_MAP_ID'
+        fullscreenControl: true
       });
 
       mapInstanceRef.current = map;
@@ -179,7 +165,20 @@ export const GoogleProspectingMap: React.FC<GoogleProspectingMapProps> = ({
     } catch (err) {
       console.error('Error initializing Google Map:', err);
     }
-  }, [isLoaded, center, radiusKm]);
+  }, [isLoaded, center, radiusKm, zoom]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const idle = map.addListener('idle', () => {
+      const bounds = map.getBounds();
+      if (bounds) onBoundsChange?.(bounds.toJSON());
+    });
+    const click = map.addListener('click', (event: any) => {
+      if (event.latLng) onMapClick?.(event.latLng.toJSON());
+    });
+    return () => { idle.remove(); click.remove(); };
+  }, [isLoaded, center, radiusKm, zoom, onBoundsChange, onMapClick]);
 
   // 3. Update Radius Circle
   useEffect(() => {
@@ -206,84 +205,14 @@ export const GoogleProspectingMap: React.FC<GoogleProspectingMapProps> = ({
     markersRef.current = [];
 
     businesses.forEach((biz) => {
-      const isSelected = biz.id === selectedBusinessId;
-      const gap = biz.digitalAudit?.gapScore || 50;
-
-      // Determine Pin Color
-      let pinColor = '#8b5cf6'; // Violet: Enterprise
-      if (biz.targetType === 'LOCAL_COMMERCIAL') {
-        if (gap >= 81) pinColor = '#e11d48'; // Red: Critical
-        else if (gap >= 61) pinColor = '#ea580c'; // Orange: High
-        else if (gap >= 41) pinColor = '#eab308'; // Yellow: Moderate
-        else pinColor = '#10b981'; // Green: Optimized
-      }
-
-      // Create Custom HTML Marker Element
-      const pinContainer = document.createElement('div');
-      pinContainer.style.cursor = 'pointer';
-      pinContainer.style.display = 'flex';
-      pinContainer.style.flexDirection = 'column';
-      pinContainer.style.alignItems = 'center';
-      pinContainer.style.transition = 'all 0.2s ease';
-      pinContainer.style.transform = isSelected ? 'scale(1.2)' : 'scale(1)';
-      pinContainer.style.zIndex = isSelected ? '999' : '10';
-
-      const badge = document.createElement('div');
-      badge.style.width = isSelected ? '38px' : '28px';
-      badge.style.height = isSelected ? '38px' : '28px';
-      badge.style.borderRadius = '50%';
-      badge.style.backgroundColor = isSelected ? pinColor : '#0f172a';
-      badge.style.border = `2px solid ${pinColor}`;
-      badge.style.display = 'flex';
-      badge.style.alignItems = 'center';
-      badge.style.justifyContent = 'center';
-      badge.style.color = '#ffffff';
-      badge.style.fontSize = '10.5px';
-      badge.style.fontWeight = '900';
-      badge.style.boxShadow = isSelected ? `0 0 16px ${pinColor}` : '0 2px 6px rgba(0,0,0,0.6)';
-      badge.innerText = `${biz.opportunityScore}`;
-
-      const label = document.createElement('div');
-      label.style.marginTop = '3px';
-      label.style.backgroundColor = 'rgba(9, 13, 22, 0.9)';
-      label.style.color = '#ffffff';
-      label.style.fontSize = '9.5px';
-      label.style.fontWeight = '700';
-      label.style.padding = '2px 5px';
-      label.style.borderRadius = '4px';
-      label.style.border = '1px solid rgba(255, 255, 255, 0.15)';
-      label.style.whiteSpace = 'nowrap';
-      label.innerText = biz.name.split(' ')[0] || biz.name;
-
-      pinContainer.appendChild(badge);
-      pinContainer.appendChild(label);
-
-      pinContainer.addEventListener('click', () => {
-        onSelectBusiness(biz);
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.panTo({ lat: biz.lat, lng: biz.lng });
-        }
+      const marker = new google.maps.Marker({
+        map: mapInstanceRef.current,
+        position: { lat: biz.lat, lng: biz.lng },
+        title: biz.name,
+        zIndex: biz.id === selectedBusinessId ? 2 : 1
       });
-
-      // Use AdvancedMarkerElement if available, else classic Marker
-      if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
-        const marker = new google.maps.marker.AdvancedMarkerElement({
-          map: mapInstanceRef.current,
-          position: { lat: biz.lat, lng: biz.lng },
-          title: biz.name,
-          content: pinContainer
-        });
-        markersRef.current.push(marker);
-      } else {
-        // Fallback classic Marker
-        const marker = new google.maps.Marker({
-          map: mapInstanceRef.current,
-          position: { lat: biz.lat, lng: biz.lng },
-          title: biz.name
-        });
-        marker.addListener('click', () => onSelectBusiness(biz));
-        markersRef.current.push(marker);
-      }
+      marker.addListener('click', () => onSelectBusiness(biz));
+      markersRef.current.push(marker);
     });
   }, [isLoaded, businesses, selectedBusinessId, onSelectBusiness]);
 
