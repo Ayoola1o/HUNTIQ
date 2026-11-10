@@ -67,8 +67,8 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
         const cName = initialPayload.companyName || '';
         const ctName = initialPayload.contactName || (initialPayload.fromCopilot ? '' : 'Managing Director / Business Owner');
         const ctRole = initialPayload.contactRole || (initialPayload.fromCopilot ? '' : 'Managing Director / Owner');
-        const dName = initialPayload.domain && !initialPayload.domain.includes('company.com') ? initialPayload.domain : '';
-        const eMail = initialPayload.email && !initialPayload.email.includes('company.com') ? initialPayload.email : '';
+        const dName = initialPayload.domain || '';
+        const eMail = initialPayload.email || '';
         const pNum = initialPayload.phone || '';
 
         setCompanyName(cName);
@@ -157,8 +157,8 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
         contactName: contactName.trim(),
         contactRole: contactRole.trim(),
         companyName: companyName.trim(),
-        domain: domain.trim() || `${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
-        email: email.trim() || `contact@${domain || companyName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com'}`,
+        domain: domain.trim() || undefined,
+        email: email.trim() || undefined,
         phone: phone.trim() || undefined,
         subject: subject.trim() || 'Commercial Opportunity & Search Growth Brief',
         lastMessageSnippet: content.trim(),

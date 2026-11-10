@@ -199,6 +199,12 @@ APIFY_API_TOKEN=your_apify_api_token
 VITE_GEOAPIFY_API_KEY=your_geoapify_key
 ```
 
+### Find Prospects: Web Discovery and 360 Research
+
+Set `TAVILY_API_KEY` and `GEMINI_API_KEY` as server environment variables. Tavily uses Basic Search with automatic depth changes disabled to keep the search credit cost predictable. Optional `GEMINI_SEARCH_MODEL` overrides the default `gemini-flash-latest`. Set `PAGESPEED_API_KEY` to include a measured mobile Lighthouse score. Keep the keys out of the frontend build and source control.
+
+Web research can be previewed without saving. Set `DISCOVERY_EVIDENCE_STORAGE_ENABLED=true` only after confirming your search plan permits storing its results and using them for AI inference. With PostgreSQL configured, this enables saved research and the lead handoff. Google Maps and the manual Google Search link stay separate from the CRM evidence store.
+
 ### 4. Run Database Migrations
 Migrations run automatically on server boot, or you can run them manually:
 ```bash

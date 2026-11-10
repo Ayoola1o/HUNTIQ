@@ -20,6 +20,7 @@ import { useHuntiq } from '../../context/HuntiqContext';
 import { geoapifyService, type ExtractedAddressReport } from '../../services/geoapifyService';
 import { MapLibreProspectingMap } from './MapLibreProspectingMap';
 import { GoogleProspectingMap } from './GoogleProspectingMap';
+import { LiveDiscoveryPanel, type DiscoveryMode } from './LiveDiscoveryPanel';
 import { googleMapsKey } from '../../services/googleMaps';
 import { AuditDetailDrawer } from './AuditDetailDrawer';
 import { MapPin } from 'lucide-react';
@@ -36,6 +37,9 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
   onNavigateToOpportunities
 }) => {
   const { captureGeoBusinesses, addDealToPipeline } = useHuntiq();
+  const [liveMode, setLiveMode] = useState<DiscoveryMode>('map');
+  const [researchSelection, setResearchSelection] = useState<{ id: string; name: string } | null>(null);
+  const researchPanel = React.useRef<HTMLDivElement>(null);
 
   // Location State
   const [selectedZoneId, setSelectedZoneId] = useState('lagos');
@@ -117,10 +121,11 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
 
   const handleMapClick = (coords: { lat: number; lng: number }) => searchAddress(coords);
 
-  const handleSearchThisArea = () => runSearch(
-    () => geoapifyService.discoverPlacesInBounds(currentBounds, mapCenter, radiusKm, selectedCategory, discoveryMode),
+  const searchArea = (category: string) => runSearch(
+    () => geoapifyService.discoverPlacesInBounds(currentBounds, mapCenter, radiusKm, category, discoveryMode),
     setBusinesses
   );
+  const handleSearchThisArea = () => searchArea(selectedCategory);
 
   // 4. Filtering Logic
   const filteredBusinesses = businesses.filter((b) => {
@@ -230,6 +235,13 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
       padding: '20px',
       boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)'
     }}>
+      <div ref={researchPanel}><LiveDiscoveryPanel mode={liveMode} onModeChange={setLiveMode} mapSelection={researchSelection}
+        onMapSearch={query => {
+          const category = query || 'All Industries';
+          setSelectedCategory(category);
+          void searchArea(category);
+        }} /></div>
+      {liveMode !== 'web' && <>
       {/* Header & Title */}
       <div style={{
         display: 'flex',
@@ -763,6 +775,10 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
               {googleMapsKey ? 'Google Places · View only' : 'Click to view audit'}
             </span>
           </div>
+          {inspectedBusiness && <button type="button" onClick={() => {
+            setResearchSelection({ id: inspectedBusiness.id, name: inspectedBusiness.name });
+            researchPanel.current?.scrollIntoView({ block: 'start' });
+          }}>Research this business</button>}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {isSearching ? (
@@ -949,6 +965,7 @@ export const MapProspectingRadar: React.FC<MapProspectingRadarProps> = ({
         }}
         onPushToPipeline={handlePushDeal}
       />}
+      </>}
     </div>
   );
 };

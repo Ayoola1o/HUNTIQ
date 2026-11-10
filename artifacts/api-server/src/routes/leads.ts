@@ -6,6 +6,7 @@ import { createCompanyRepository } from '../repositories/companies';
 import { serverScoringEngine } from '../engine/scoringEngine';
 import { AutomaticLeadEngine } from '../engine/leads/automaticLeadEngine';
 import { leadService } from '../services/leadService';
+import { postgresPool } from '../database/connection';
 import type { AuthenticatedRequest } from '../middleware/auth';
 
 export const leadsRouter = Router();
@@ -26,16 +27,32 @@ leadsRouter.get('/leads', async (req: AuthenticatedRequest, res: Response) => {
   }
   const { status } = req.query as { status?: string };
 
-  const list = await leadService.listLeads(workspaceId, status);
-
-  res.status(200).json({
-    success: true,
-    data: list,
-    meta: {
-      total: list.length,
-      timestamp: new Date().toISOString()
-    }
-  });
+  try {
+    const list = await leadService.listLeads(workspaceId, status);
+    // Discovery leads are persisted directly so the evidence and lead can be saved in one transaction.
+    const persisted = postgresPool ? await postgresPool.query<typeof list[number]>(`
+      SELECT l.id, l.workspace_id AS "workspaceId", l.company_id AS "companyId",
+             l.contact_id AS "contactId", l.signal_id AS "signalId", l.score,
+             'Tier 3' AS tier, l.status, 'RESEARCH_360' AS source, l.reason, l.summary,
+             l.created_at AS "createdAt", l.updated_at AS "updatedAt"
+      FROM leads l
+      WHERE l.workspace_id = $1 AND ($2::text IS NULL OR l.status = $2)
+        AND EXISTS (
+          SELECT 1 FROM research_reports r
+          WHERE r.workspace_id = l.workspace_id AND r.dossier_data->>'kind' = 'grounded-360'
+            AND r.dossier_data->>'leadId' = l.id::text
+        )
+      ORDER BY l.created_at DESC
+    `, [workspaceId, status && status !== 'ALL' ? status : null]) : null;
+    const combined = new Map([...list, ...(persisted?.rows || [])].map(lead => [lead.id, lead]));
+    return res.status(200).json({
+      success: true,
+      data: [...combined.values()].sort((a, b) => b.score - a.score),
+      meta: { total: combined.size, timestamp: new Date().toISOString() }
+    });
+  } catch {
+    return res.status(503).json({ success: false, error: { code: 'LEADS_UNAVAILABLE', message: 'Could not load leads.' } });
+  }
 });
 
 /**
