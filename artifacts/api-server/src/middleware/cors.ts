@@ -3,12 +3,13 @@ import { config } from '../config/env';
 
 export const corsMiddleware = cors({
   origin: (origin, callback) => {
-    // Allow non-browser agents, matching allowed origins, localhost, or vercel.app deployments
+    // Allow non-browser agents, matching allowed origins, localhost, or supported deployment previews
     if (
       !origin || 
       config.corsOrigins.includes(origin) || 
       origin.startsWith('http://localhost:') || 
       origin.startsWith('http://127.0.0.1:') || 
+      origin.endsWith('.netlify.app') ||
       origin.endsWith('.vercel.app') ||
       origin.endsWith('.replit.dev') ||
       origin.endsWith('.replit.app')
