@@ -22,6 +22,7 @@ import {
   Loader2 
 } from 'lucide-react';
 import { useHuntiq } from '../../context/HuntiqContext';
+import { emailBodyText } from './emailBodyText';
 
 interface OutreachPageProps {
   onNavigate: (nav: string) => void;
@@ -373,25 +374,40 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
           </div>
         )}
 
-        {unmatchedEmails.length > 0 && <section style={{ margin: '14px 32px 0', padding: 16, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10 }}>
-          <strong style={{ fontSize: 13 }}>Unmatched inbox · {unmatchedEmails.length}</strong>
-          <p style={{ fontSize: 12, color: '#7c2d12' }}>These replies could not be matched confidently. Review the full message and choose a conversation only when the sender matches.</p>
+        {unmatchedEmails.length > 0 && <details style={{ margin: '14px 32px 0', background: '#fffaf3', border: '1px solid #fed7aa', borderRadius: 12, overflow: 'hidden' }}>
+          <summary style={{ padding: '14px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#7c2d12', fontWeight: 700, fontSize: 13 }}>
+            <span>Unmatched inbox <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 999, background: '#ffedd5', color: '#9a3412' }}>{unmatchedEmails.length}</span></span>
+            <span style={{ fontWeight: 500, color: '#9a3412', fontSize: 12 }}>Review messages before linking</span>
+          </summary>
+          <div style={{ padding: '0 14px 14px', display: 'grid', gap: 12 }}>
           {unmatchedEmails.map(message => {
             const senderMatches = conversations.filter(item => item.channel === 'email' && item.email?.toLowerCase() === message.sender_email?.toLowerCase());
             const selectedThreadId = unmatchedTargets[message.id] || (senderMatches.length === 1 ? senderMatches[0].id : '');
-            return <article key={message.id} style={{ padding: 12, marginTop: 8, background: '#fff', borderRadius: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 700 }}>{message.sender_name || message.sender_email} · {message.sender_email} · {message.subject}</div>
-            <pre style={{ whiteSpace: 'pre-wrap', font: 'inherit', fontSize: 12 }}>{message.body_text}</pre>
-            <select value={selectedThreadId} onChange={e => setUnmatchedTargets(current => ({ ...current, [message.id]: e.target.value }))} style={{ maxWidth: '100%', padding: 6, marginRight: 8 }}>
-              <option value="">{senderMatches.length ? 'Choose conversation to link' : 'No conversation for this sender'}</option>
-              {senderMatches.map(item => <option key={item.id} value={item.id}>{item.contactName} · {item.companyName}</option>)}
-              {senderMatches.length === 0 && conversations.filter(item => item.channel === 'email').map(item => <option key={item.id} value={item.id}>{item.contactName} · {item.email} · {item.companyName}</option>)}
-            </select>
-            <button disabled={!selectedThreadId} onClick={async () => {
-              try { await linkUnmatchedEmail(message.id, selectedThreadId); setUnmatchedEmails(await fetchUnmatchedEmails()); await loadOutreach(true); }
-              catch (error: any) { setErrorMessage(error?.message || 'Could not link reply.'); }
-            }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1', cursor: selectedThreadId ? 'pointer' : 'not-allowed' }}>Link reviewed message</button>
-          </article>;})}
+            return <article key={message.id} style={{ padding: 16, background: '#fff', border: '1px solid #e7e5e4', borderRadius: 10, boxShadow: '0 1px 2px rgba(15,23,42,.04)', minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, lineHeight: 1.4, fontWeight: 700, color: '#172033', overflowWrap: 'anywhere' }}>{message.subject || '(No subject)'}</div>
+                  <div style={{ marginTop: 5, color: '#475569', fontSize: 12.5, overflowWrap: 'anywhere' }}><strong>{message.sender_name || message.sender_email}</strong>{message.sender_name && message.sender_email ? ` · ${message.sender_email}` : ''}</div>
+                </div>
+                <time style={{ color: '#64748b', fontSize: 12, whiteSpace: 'nowrap' }}>{message.message_date ? new Date(message.message_date).toLocaleString() : 'Date unavailable'}</time>
+              </div>
+              <div style={{ marginTop: 14, padding: '14px 16px', maxHeight: 260, overflow: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, color: '#1e293b', fontSize: 14, lineHeight: 1.65, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                {emailBodyText(message.body_text) || 'This message has no readable text body.'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+                <label htmlFor={`unmatched-target-${message.id}`} style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>Link to conversation</label>
+                <select id={`unmatched-target-${message.id}`} value={selectedThreadId} onChange={e => setUnmatchedTargets(current => ({ ...current, [message.id]: e.target.value }))} style={{ flex: '1 1 260px', maxWidth: 520, minWidth: 180, padding: '9px 11px', border: '1px solid #cbd5e1', borderRadius: 7, background: '#fff', color: '#0f172a', fontSize: 13 }}>
+                  <option value="">{senderMatches.length ? 'Choose a matching conversation…' : 'Choose conversation after checking sender…'}</option>
+                  {senderMatches.map(item => <option key={item.id} value={item.id}>{item.contactName} · {item.companyName}</option>)}
+                  {senderMatches.length === 0 && conversations.filter(item => item.channel === 'email').map(item => <option key={item.id} value={item.id}>{item.contactName} · {item.email} · {item.companyName}</option>)}
+                </select>
+                <button disabled={!selectedThreadId} onClick={async () => {
+                  try { await linkUnmatchedEmail(message.id, selectedThreadId); setUnmatchedEmails(await fetchUnmatchedEmails()); await loadOutreach(true); }
+                  catch (error: any) { setErrorMessage(error?.message || 'Could not link reply.'); }
+                }} style={{ padding: '9px 13px', borderRadius: 7, border: '1px solid #4338ca', background: selectedThreadId ? '#4f46e5' : '#e2e8f0', color: selectedThreadId ? '#fff' : '#64748b', fontSize: 12.5, fontWeight: 700, cursor: selectedThreadId ? 'pointer' : 'not-allowed' }}>Link reviewed email</button>
+              </div>
+            </article>;})}
+          </div>
         </section>}
 
         {/* KPI Metrics Row */}

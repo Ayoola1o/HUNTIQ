@@ -543,7 +543,15 @@ export class GmailReplySyncService {
     const mime = String(part.mimeType || '').toLowerCase();
     const data = part.body?.data;
     if (data && mime === 'text/plain') return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
-    if (data && mime === 'text/html') return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8').replace(/<\/(p|div|br|li|tr)>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    if (data && mime === 'text/html') return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+      .replace(/<(style|script|head)[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<\/(p|div|br|li|tr|h[1-6])\s*>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;|&#160;/gi, ' ')
+      .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+      .replace(/&quot;|&#34;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+      .replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
     for (const child of part.parts || []) { const decoded = this.decodeBodyPart(child); if (decoded) return decoded; }
     return '';
   }

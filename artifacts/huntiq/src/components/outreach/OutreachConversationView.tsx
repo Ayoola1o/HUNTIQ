@@ -8,6 +8,7 @@ import {
   Calendar 
 } from 'lucide-react';
 import type { OutreachItem } from '../../types/outreach';
+import { emailBodyText } from './emailBodyText';
 
 interface OutreachConversationViewProps {
   conversations: OutreachItem[];
@@ -357,14 +358,14 @@ export const OutreachConversationView: React.FC<OutreachConversationViewProps> =
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: isMe ? 'flex-end' : 'flex-start',
-                    maxWidth: '85%',
+                    maxWidth: 'min(88%, 760px)',
                     alignSelf: isMe ? 'flex-end' : 'flex-start'
                   }}
                 >
                   <div style={{
-                    fontSize: '10.5px',
-                    color: '#94a3b8',
-                    marginBottom: '4px',
+                    fontSize: '11.5px',
+                    color: '#64748b',
+                    marginBottom: '6px',
                     fontWeight: 600
                   }}>
                     {msg.senderName} • {msg.timestamp}
@@ -373,13 +374,16 @@ export const OutreachConversationView: React.FC<OutreachConversationViewProps> =
                   <div style={{
                     backgroundColor: isMe ? '#4f46e5' : '#f1f5f9',
                     color: isMe ? '#ffffff' : '#0f172a',
-                    padding: '12px 16px',
-                    borderRadius: isMe ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                    fontSize: '12.5px',
-                    lineHeight: 1.5,
-                    boxShadow: isMe ? '0 2px 6px rgba(79, 70, 229, 0.2)' : '0 1px 3px rgba(0,0,0,0.03)'
+                    padding: '14px 17px',
+                    borderRadius: isMe ? '14px 14px 3px 14px' : '14px 14px 14px 3px',
+                    fontSize: '14px',
+                    lineHeight: 1.65,
+                    whiteSpace: 'pre-wrap',
+                    overflowWrap: 'anywhere',
+                    maxWidth: '100%',
+                    boxShadow: isMe ? '0 2px 6px rgba(79, 70, 229, 0.16)' : '0 1px 3px rgba(0,0,0,0.05)'
                   }}>
-                    {msg.content}
+                    {emailBodyText(msg.content)}
                   </div>
                 </div>
               );
