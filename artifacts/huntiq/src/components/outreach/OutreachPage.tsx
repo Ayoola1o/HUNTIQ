@@ -408,7 +408,7 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
               </div>
             </article>;})}
           </div>
-        </section>}
+        </details>}
 
         {/* KPI Metrics Row */}
         <div style={{ margin: '20px 0' }}>
