@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import { GoogleAuthService } from '../services/googleAuthService';
 import { GmailService } from '../services/gmailService';
-import { GmailReplySyncService } from '../services/gmailReplySyncService';
+import { GmailReplySyncService, linkUnmatchedInbound } from '../services/gmailReplySyncService';
 import { hasValidTld } from '../engine/scraper/emailExtractor';
 import { postgresPool, pool } from '../database/postgres';
 import { PubSubAuthService } from '../services/pubsubAuthService';
@@ -96,7 +96,9 @@ googleAuthRouter.get(['/auth/google/url', '/google/url'], async (req: Authentica
       success: false,
       error: {
         code,
-        message: 'Unable to initialize Google authentication consent. Please try again.'
+        message: code === 'INVALID_GOOGLE_REDIRECT_URI'
+          ? err.message
+          : 'Unable to initialize Google authentication consent. Please try again.'
       }
     });
   }
@@ -114,7 +116,7 @@ googleAuthRouter.get(['/auth/google/callback', '/google/callback'], async (req: 
     error?: string;
   };
 
-  const defaultReturnUrl = 'http://localhost:5173/?view=integrations';
+  const defaultReturnUrl = GoogleAuthService.callbackErrorReturnUrl;
 
   if (error) {
     console.warn('[GOOGLE_AUTH] Callback received error from Google');
@@ -292,6 +294,29 @@ googleAuthRouter.post(['/auth/google/sync', '/google/sync'], async (req: Authent
   }
 });
 
+googleAuthRouter.get('/auth/google/unmatched', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) return res.status(401).json({ success: false, error: { code: 'GOOGLE_AUTH_REQUIRED', message: 'Authentication required' } });
+  const activePool = postgresPool || pool;
+  if (!activePool) return res.status(503).json({ success: false, error: { code: 'DATABASE_UNAVAILABLE', message: 'Inbox storage is unavailable.' } });
+  const result = await activePool.query(`SELECT id, provider_message_id, provider_thread_id, sender_email, sender_name, subject, body_text, message_date
+    FROM inbound_email_events WHERE workspace_id=$1 AND correlation_status='unresolved' AND reviewed_at IS NULL ORDER BY received_at DESC LIMIT 200`, [workspaceId]);
+  return res.json({ success: true, data: result.rows });
+});
+
+googleAuthRouter.post('/auth/google/unmatched/:eventId/link', async (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) return res.status(401).json({ success: false, error: { code: 'GOOGLE_AUTH_REQUIRED', message: 'Authentication required' } });
+  const activePool = postgresPool || pool;
+  if (!activePool) return res.status(503).json({ success: false, error: { code: 'DATABASE_UNAVAILABLE', message: 'Inbox storage is unavailable.' } });
+  const threadId = typeof req.body?.threadId === 'string' ? req.body.threadId : '';
+  try {
+    const eventId = Array.isArray(req.params.eventId) ? req.params.eventId[0] : req.params.eventId;
+    await linkUnmatchedInbound(activePool, workspaceId, eventId, threadId);
+    return res.json({ success: true, data: { threadId } });
+  } catch (error: any) { return res.status(error.statusCode || 500).json({ success: false, error: { code: error.code || 'UNMATCHED_LINK_FAILED', message: error.statusCode ? error.message : 'Could not link the inbound message.' } }); }
+});
+
 /**
  * POST /api/v1/integrations/gmail/webhook
  * Google Cloud Pub/Sub Push Webhook for Gmail mailbox change notifications.
@@ -329,10 +354,9 @@ googleAuthRouter.post(['/integrations/gmail/webhook', '/gmail/webhook'], async (
     const activePool = postgresPool || pool;
     if (activePool) {
       const matchRes = await activePool.query(
-        `SELECT workspace_id, account_email, status, sync_status, is_active 
+        `SELECT workspace_id, account_email, status, sync_status, is_active, access_token IS NOT NULL AS has_access_token
          FROM workspace_integrations 
-         WHERE account_email = $1 AND provider = 'gmail' AND is_active = true 
-         LIMIT 1`,
+         WHERE lower(account_email) = lower($1) AND provider = 'gmail' AND is_active = true`,
         [emailAddress]
       );
 
@@ -340,9 +364,10 @@ googleAuthRouter.post(['/integrations/gmail/webhook', '/gmail/webhook'], async (
         // Return 200 so Google Pub/Sub does not endlessly retry notifications for disconnected accounts
         return res.status(200).json({ success: true, message: 'No active integration found for account' });
       }
+      if (matchRes.rows.length > 1) return res.status(409).json({ success: false, error: { code: 'AMBIGUOUS_GMAIL_WORKSPACE', message: 'This Gmail account is connected to multiple workspaces; inbox sync was stopped to prevent cross-workspace disclosure.' } });
 
       const row = matchRes.rows[0];
-      if (!row.is_active || row.status === 'revoked' || row.sync_status === 'disconnected' || !row.access_token) {
+      if (!row.is_active || row.status === 'revoked' || row.sync_status === 'disconnected' || !row.has_access_token) {
         return res.status(200).json({ success: true, message: 'Integration is disconnected, skipped sync' });
       }
 
@@ -353,7 +378,8 @@ googleAuthRouter.post(['/integrations/gmail/webhook', '/gmail/webhook'], async (
       const workspaceId = row.workspace_id;
 
       // 4. Trigger idempotent history synchronization
-      await GmailReplySyncService.syncMailbox(workspaceId, row.account_email, historyId);
+      const sync = await GmailReplySyncService.syncMailbox(workspaceId, row.account_email, historyId);
+      if (!sync.success) return res.status(500).json({ success: false, error: { code: 'GMAIL_SYNC_FAILED', message: 'Gmail history was not fully processed; Pub/Sub should retry.' } });
     }
 
     // Acknowledge receipt to Google Pub/Sub

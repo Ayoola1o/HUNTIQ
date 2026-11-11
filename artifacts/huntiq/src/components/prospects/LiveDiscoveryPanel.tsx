@@ -181,15 +181,15 @@ export function LiveDiscoveryPanel({ mode, onModeChange, onMapSearch, mapSelecti
         <button type="button" disabled={Boolean(busy) || !report.id || !observation.trim()} onClick={() => void saveLead()}>
           {busy === 'lead' ? 'Saving…' : 'Save as lead'}
         </button>}
-      <button type="button" disabled={!observation.trim() || Boolean(recipient && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.trim()))}
+      <button type="button" disabled={!observation.trim() || !report.leadId || Boolean(recipient && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.trim()))}
         onClick={() => startPitchForProspect({
           companyName: report.name,
+          leadId: report.leadId || undefined,
+          researchReportId: report.id || undefined,
           domain: report.domain,
           email: recipient.trim() || undefined,
-          suggestedSubject: `An idea for ${report.name}`,
-          suggestedBody: `Hi,\n\n${observation.trim()}${draftSource ? `\n\nSource: ${draftSource}` : ''}`,
           fromCopilot: true
-        })}>Open editable Outreach draft</button>
+        })}>{report.leadId ? 'Open editable Outreach draft' : 'Save this report as a lead to draft outreach'}</button>
     </article>}
   </section>;
 }

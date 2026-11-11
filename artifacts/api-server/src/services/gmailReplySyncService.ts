@@ -39,6 +39,106 @@ export interface SyncMailboxResult {
   error?: string;
 }
 
+export function isGmailWatchRenewalDue(expiration: string | Date | null | undefined, now = Date.now(), renewalWindowMs = 24 * 60 * 60 * 1000): boolean {
+  if (!expiration) return true;
+  const expirationTime = new Date(expiration).getTime();
+  return !Number.isFinite(expirationTime) || expirationTime <= now + renewalWindowMs;
+}
+
+export async function fetchGmailHistoryPages(accessToken: string, startHistoryId: string, fetcher: typeof fetch = fetch): Promise<{ history: any[]; historyId: string }> {
+  const history: any[] = [];
+  let pageToken: string | undefined;
+  let historyId = startHistoryId;
+  do {
+    const params = new URLSearchParams({ startHistoryId, historyTypes: 'messageAdded', maxResults: '500' });
+    if (pageToken) params.set('pageToken', pageToken);
+    const response = await fetcher(`https://gmail.googleapis.com/gmail/v1/users/me/history?${params}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!response.ok) throw Object.assign(new Error(`Gmail history API error HTTP ${response.status}; cursor was not advanced.`), { statusCode: response.status, code: response.status === 404 ? 'HISTORY_CURSOR_EXPIRED' : 'HISTORY_FETCH_FAILED' });
+    const data: any = await response.json();
+    historyId = String(data.historyId || historyId);
+    history.push(...(data.history || []));
+    pageToken = data.nextPageToken || undefined;
+  } while (pageToken);
+  const seen = new Set<string>();
+  const deduped = history.map(item => ({ ...item, messagesAdded: (item.messagesAdded || []).filter((entry: any) => {
+    const id = entry?.message?.id;
+    if (!id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id); return true;
+  }) })).filter(item => item.messagesAdded.length);
+  return { history: deduped, historyId };
+}
+
+export async function fetchGmailInboxBackfill(accessToken: string, afterTimestamp: Date, fetcher: typeof fetch = fetch): Promise<any[]> {
+  const items: any[] = [];
+  const seen = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const params = new URLSearchParams({ labelIds: 'INBOX', q: `after:${Math.floor(afterTimestamp.getTime() / 1000)}`, maxResults: '500' });
+    if (pageToken) params.set('pageToken', pageToken);
+    const response = await fetcher(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!response.ok) throw new Error(`Gmail inbox backfill failed HTTP ${response.status}; history cursor was not advanced.`);
+    const data: any = await response.json();
+    for (const message of data.messages || []) if (!seen.has(message.id)) { seen.add(message.id); items.push({ messagesAdded: [{ message }] }); }
+    pageToken = data.nextPageToken || undefined;
+  } while (pageToken);
+  return items;
+}
+
+export async function recoverOutboundAttempt(pool: any, workspaceId: string, input: {
+  requestId?: string; messageId: string; threadId: string; rfcMessageId?: string;
+  senderName: string; recipientEmail: string; subject: string; body: string; timestamp: string;
+}): Promise<boolean> {
+  if (!input.requestId) return false;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const attempt = await client.query(`SELECT outreach_thread_id FROM outbound_email_attempts WHERE workspace_id=$1 AND request_id=$2 FOR UPDATE`, [workspaceId, input.requestId]);
+    if (!attempt.rowCount) { await client.query('ROLLBACK'); return false; }
+    const thread = await client.query(`SELECT messages, lead_id, company_id FROM outreach_threads WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, [attempt.rows[0].outreach_thread_id, workspaceId]);
+    if (!thread.rowCount) { await client.query('ROLLBACK'); return false; }
+    const messages = Array.isArray(thread.rows[0].messages) ? thread.rows[0].messages : [];
+    const isNewMessage = !messages.some((message: any) => message.providerMessageId === input.messageId);
+    if (isNewMessage) messages.push({
+      id: `gmail-${input.messageId}`, sender: 'me', senderName: input.senderName || 'HUNTIQ',
+      content: input.body, timestamp: input.timestamp, channel: 'email', deliveryStatus: 'sent',
+      providerMessageId: input.messageId, providerThreadId: input.threadId,
+      providerRfcMessageId: input.rfcMessageId
+    });
+    messages.sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    await client.query(`UPDATE outreach_threads SET messages=$1, provider_thread_id=$2, provider_message_id=$3, provider_rfc_message_id=$4, status='contacted', metadata=metadata || jsonb_build_object('subject',$5,'lastMessageSnippet',$6), updated_at=now() WHERE id=$7 AND workspace_id=$8`, [JSON.stringify(messages), input.threadId, input.messageId, input.rfcMessageId || null, input.subject, input.body.slice(0, 160), attempt.rows[0].outreach_thread_id, workspaceId]);
+    await client.query(`UPDATE outbound_email_attempts SET state='sent', provider_message_id=$3, provider_thread_id=$4, provider_rfc_message_id=$5, error_code=NULL, updated_at=now() WHERE workspace_id=$1 AND request_id=$2`, [workspaceId, input.requestId, input.messageId, input.threadId, input.rfcMessageId || null]);
+    if (isNewMessage && thread.rows[0].lead_id) await client.query(`INSERT INTO activities (workspace_id, company_id, lead_id, type, title, description, metadata) VALUES ($1,$2,$3,'email_sent',$4,$5,$6::jsonb)`, [workspaceId, thread.rows[0].company_id, thread.rows[0].lead_id, `Email sent to ${input.recipientEmail}`, input.body.slice(0, 5000), JSON.stringify({ provider: 'gmail', providerMessageId: input.messageId, providerThreadId: input.threadId, subject: input.subject })]);
+    await client.query('COMMIT');
+    return true;
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+}
+
+export async function linkUnmatchedInbound(pool: any, workspaceId: string, eventId: string, threadId: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const event = await client.query(`SELECT * FROM inbound_email_events WHERE id=$1 AND workspace_id=$2 AND correlation_status='unresolved' AND reviewed_at IS NULL FOR UPDATE`, [eventId, workspaceId]);
+    const thread = await client.query(`SELECT * FROM outreach_threads WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, [threadId, workspaceId]);
+    if (!event.rowCount || !thread.rowCount) throw Object.assign(new Error('Unmatched email or conversation was not found in this workspace.'), { statusCode: 404, code: 'UNMATCHED_OR_THREAD_NOT_FOUND' });
+    const row = event.rows[0], target = thread.rows[0];
+    if ((target.email || '').toLowerCase() !== (row.sender_email || '').toLowerCase()) throw Object.assign(new Error('The sender address does not match this conversation.'), { statusCode: 400, code: 'SENDER_MISMATCH' });
+    const messages = Array.isArray(target.messages) ? target.messages : [];
+    if (!messages.some((message: any) => message.providerMessageId === row.provider_message_id)) messages.push({ id: `gmail-${row.provider_message_id}`, sender: 'prospect', senderName: row.sender_name || target.contact_name, content: row.body_text || row.snippet || '', timestamp: row.message_date || row.received_at, channel: 'email', providerThreadId: row.provider_thread_id, providerMessageId: row.provider_message_id });
+    messages.sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    await client.query(`UPDATE outreach_threads SET messages=$1, status='replied', provider_thread_id=COALESCE(provider_thread_id,$2), provider_message_id=$3, metadata=metadata || jsonb_build_object('lastMessageSnippet',$4,'unread',true), updated_at=now() WHERE id=$5 AND workspace_id=$6`, [JSON.stringify(messages), row.provider_thread_id, row.provider_message_id, (row.body_text || row.snippet || '').slice(0, 160), threadId, workspaceId]);
+    if (target.lead_id) await client.query(`INSERT INTO activities (workspace_id, company_id, lead_id, type, title, description, metadata) VALUES ($1,$2,$3,'email_reply',$4,$5,$6::jsonb)`, [workspaceId, target.company_id, target.lead_id, `Email reply from ${row.sender_email}`, (row.body_text || row.snippet || '').slice(0, 5000), JSON.stringify({ provider: 'gmail', providerMessageId: row.provider_message_id, providerThreadId: row.provider_thread_id, subject: row.subject })]);
+    await client.query(`UPDATE inbound_email_events SET correlation_status='matched', matched_thread_id=$1, reviewed_at=now(), processing_at=NULL WHERE id=$2 AND workspace_id=$3`, [threadId, eventId, workspaceId]);
+    await client.query('COMMIT');
+    if (target.campaign_id || target.prospect_id) {
+      const halt = await CampaignExecutionService.haltProspectSequence(workspaceId, { campaignId: target.campaign_id, prospectId: target.prospect_id, contactEmail: row.sender_email, userId: target.user_id, reason: `Prospect reply manually matched from Gmail thread ${row.provider_thread_id}` });
+      if (!halt.success) console.warn(`[GMAIL_UNMATCHED] Reply was linked but campaign stop failed: ${sanitizeDiagnosticError(halt.error || 'unknown error')}`);
+    }
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+}
+
 export class GmailReplySyncService {
   private static isProduction(): boolean {
     return config.nodeEnv === 'production' || process.env.VERCEL === '1';
@@ -54,7 +154,7 @@ export class GmailReplySyncService {
    * Sets up or refreshes a Gmail Watch subscription on the user's inbox using Google Cloud Pub/Sub.
    * If topic is not configured, fetches baseline historyId from user profile.
    */
-  public static async setupWatch(workspaceId: string): Promise<GmailWatchResult> {
+  public static async setupWatch(workspaceId: string, options?: { preserveHistory?: boolean }): Promise<GmailWatchResult> {
     const accessToken = await GoogleAuthService.getValidAccessToken(workspaceId);
     const activePool = postgresPool || pool;
 
@@ -86,14 +186,14 @@ export class GmailReplySyncService {
           const expDate = mockResult.expiration ? new Date(mockResult.expiration) : new Date(Date.now() + 7 * 86400000);
           await activePool.query(
             `UPDATE workspace_integrations 
-             SET watch_history_id = $1, 
+             SET watch_history_id = CASE WHEN $5 THEN watch_history_id ELSE $1 END,
                  watch_expiration = $2, 
                  watch_resource_id = $3, 
                  sync_status = 'active', 
                  last_sync_error = null, 
                  updated_at = now() 
              WHERE workspace_id = $4 AND provider = 'gmail'`,
-            [mockResult.historyId || '1000', expDate, mockResult.topicName || pubsubTopic, workspaceId]
+            [mockResult.historyId || '1000', expDate, mockResult.topicName || pubsubTopic, workspaceId, Boolean(options?.preserveHistory)]
           );
         } else if (!mockResult.success && activePool) {
           await activePool.query(
@@ -120,9 +220,9 @@ export class GmailReplySyncService {
           if (activePool && historyId) {
             await activePool.query(
               `UPDATE workspace_integrations 
-               SET watch_history_id = $1, sync_status = 'idle', updated_at = now() 
+               SET watch_history_id = CASE WHEN $3 THEN watch_history_id ELSE $1 END, sync_status = 'idle', updated_at = now()
                WHERE workspace_id = $2 AND provider = 'gmail'`,
-              [historyId, workspaceId]
+              [historyId, workspaceId, Boolean(options?.preserveHistory)]
             );
           }
 
@@ -185,14 +285,14 @@ export class GmailReplySyncService {
       if (activePool) {
         await activePool.query(
           `UPDATE workspace_integrations 
-           SET watch_history_id = $1, 
+           SET watch_history_id = CASE WHEN $5 THEN watch_history_id ELSE $1 END,
                watch_expiration = $2, 
                watch_resource_id = $3, 
                sync_status = 'active', 
                last_sync_error = null, 
                updated_at = now() 
            WHERE workspace_id = $4 AND provider = 'gmail'`,
-          [historyId, expirationDate, pubsubTopic, workspaceId]
+          [historyId, expirationDate, pubsubTopic, workspaceId, Boolean(options?.preserveHistory)]
         );
       }
 
@@ -221,6 +321,7 @@ export class GmailReplySyncService {
    */
   public static async renewWatch(workspaceId: string): Promise<GmailWatchResult> {
     const activePool = postgresPool || pool;
+    let accountEmail = '';
     if (activePool) {
       const integrationRes = await activePool.query(
         `SELECT is_active, sync_status, watch_expiration 
@@ -244,9 +345,20 @@ export class GmailReplySyncService {
           error: 'Google authorization expired or revoked; reauthentication required.'
         };
       }
+      // Drain the old cursor before Gmail's watch response replaces it. Otherwise
+      // messages between the old cursor and renewal can be silently skipped.
+      if (!this.testWatchHandler) {
+        const account = await activePool.query(`SELECT account_email FROM workspace_integrations WHERE workspace_id=$1 AND provider='gmail' LIMIT 1`, [workspaceId]);
+        accountEmail = account.rows[0]?.account_email || '';
+        const sync = await this.syncMailbox(workspaceId, accountEmail);
+        if (!sync.success) return { success: false, isConfigured: true, error: `Inbox sync failed before watch renewal: ${sync.error || 'unknown sync error'}` };
+      }
     }
-
-    return this.setupWatch(workspaceId);
+    const renewal = await this.setupWatch(workspaceId, { preserveHistory: Boolean(activePool && !this.testWatchHandler) });
+    if (!renewal.success || !activePool || this.testWatchHandler) return renewal;
+    const catchup = await this.syncMailbox(workspaceId, accountEmail);
+    if (!catchup.success) return { ...renewal, success: false, error: `Inbox sync failed after watch renewal: ${catchup.error || 'unknown sync error'}` };
+    return renewal;
   }
 
   /**
@@ -296,8 +408,7 @@ export class GmailReplySyncService {
           continue;
         }
 
-        const expTime = row.watch_expiration ? new Date(row.watch_expiration).getTime() : 0;
-        const isExpiringSoon = !expTime || expTime < now + renewalWindowMs;
+        const isExpiringSoon = isGmailWatchRenewalDue(row.watch_expiration, now, renewalWindowMs);
 
         if (!isExpiringSoon) {
           // Healthy watch outside renewal window: safe to skip (idempotency rule)
@@ -427,6 +538,16 @@ export class GmailReplySyncService {
     return { email: cleaned, name: '' };
   }
 
+  private static decodeBodyPart(part: any): string {
+    if (!part) return '';
+    const mime = String(part.mimeType || '').toLowerCase();
+    const data = part.body?.data;
+    if (data && mime === 'text/plain') return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    if (data && mime === 'text/html') return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8').replace(/<\/(p|div|br|li|tr)>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    for (const child of part.parts || []) { const decoded = this.decodeBodyPart(child); if (decoded) return decoded; }
+    return '';
+  }
+
   /**
    * Synchronizes the user's Gmail mailbox history since the last known watch_history_id.
    * Detects inbound replies, matches them to CRM outreach threads, halts campaign sequences if configured,
@@ -461,11 +582,12 @@ export class GmailReplySyncService {
 
     // Retrieve last synchronized historyId and settings
     let startHistoryId = targetHistoryId;
+    let lastSyncedAt: Date | undefined;
     let stopSequenceSetting = true;
 
     if (activePool) {
       const integRes = await activePool.query(
-        `SELECT watch_history_id, stop_sequence_on_reply 
+        `SELECT watch_history_id, stop_sequence_on_reply, last_synced_at
          FROM workspace_integrations 
          WHERE workspace_id = $1 AND provider = 'gmail' LIMIT 1`,
         [workspaceId]
@@ -474,6 +596,7 @@ export class GmailReplySyncService {
         if (integRes.rows[0].watch_history_id) {
           startHistoryId = integRes.rows[0].watch_history_id;
         }
+        if (integRes.rows[0].last_synced_at) lastSyncedAt = new Date(integRes.rows[0].last_synced_at);
         if (integRes.rows[0].stop_sequence_on_reply !== undefined) {
           stopSequenceSetting = Boolean(integRes.rows[0].stop_sequence_on_reply);
         }
@@ -503,31 +626,22 @@ export class GmailReplySyncService {
     let latestHistoryId = targetHistoryId || startHistoryId;
 
     try {
-      const historyUrl = `https://gmail.googleapis.com/gmail/v1/users/me/history?startHistoryId=${encodeURIComponent(startHistoryId)}&historyTypes=messageAdded`;
-      const historyRes = await fetch(historyUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-
-      if (!historyRes.ok) {
-        if (historyRes.status === 404 && targetHistoryId && activePool) {
-          await activePool.query(
-            `UPDATE workspace_integrations 
-             SET watch_history_id = $1, last_synced_at = now(), updated_at = now() 
-             WHERE workspace_id = $2 AND provider = 'gmail'`,
-            [targetHistoryId, workspaceId]
-          );
-        }
-        return {
-          success: false,
-          processedCount: 0,
-          repliesCount: 0,
-          error: `Gmail history API error HTTP ${historyRes.status}`
-        };
+      let historyItems: any[];
+      try {
+        const pageResult = await fetchGmailHistoryPages(accessToken, String(startHistoryId));
+        historyItems = pageResult.history;
+        latestHistoryId = pageResult.historyId;
+      } catch (error: any) {
+        if (error.code !== 'HISTORY_CURSOR_EXPIRED') throw error;
+        // Gmail may reject an old history cursor after prolonged outage. Reconcile
+        // the inbox since the last completed sync, then adopt the fresh profile ID.
+        const profile = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/profile`, { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(10000) });
+        if (!profile.ok) throw new Error(`Gmail profile API error HTTP ${profile.status}; history cursor was not advanced.`);
+        const profileData: any = await profile.json();
+        latestHistoryId = String(profileData.historyId || startHistoryId);
+        const after = new Date((lastSyncedAt?.getTime() || Date.now() - 30 * 86400000) - 5 * 60000);
+        historyItems = await fetchGmailInboxBackfill(accessToken, after);
       }
-
-      const historyData: any = await historyRes.json();
-      latestHistoryId = String(historyData.historyId || latestHistoryId);
-      const historyItems = historyData.history || [];
 
       for (const item of historyItems) {
         const addedMessages = item.messagesAdded || [];
@@ -539,26 +653,13 @@ export class GmailReplySyncService {
           const messageId = rawMessage.id;
           const threadId = rawMessage.threadId || messageId;
 
-          // 1. Composite Idempotency Check on (workspace_id, provider, provider_message_id)
-          if (activePool) {
-            const existing = await activePool.query(
-              `SELECT id FROM inbound_email_events 
-               WHERE workspace_id = $1 AND provider = 'gmail' AND provider_message_id = $2 
-               LIMIT 1`,
-              [workspaceId, messageId]
-            );
-            if (existing.rows.length > 0) {
-              continue;
-            }
-          }
-
           // 2. Fetch full message details from Gmail REST API
           const msgRes = await fetch(
             `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?format=full`,
             { headers: { Authorization: `Bearer ${accessToken}` } }
           );
 
-          if (!msgRes.ok) continue;
+          if (!msgRes.ok) throw new Error(`Gmail message API error HTTP ${msgRes.status}; cursor was not advanced.`);
 
           const msgData: any = await msgRes.json();
           const headers: Record<string, string> = {};
@@ -572,16 +673,41 @@ export class GmailReplySyncService {
           const toHeader = headers['to'] || '';
           const subject = headers['subject'] || '(No Subject)';
           const inReplyTo = headers['in-reply-to']?.replace(/[<>]/g, '').trim();
-          const references = headers['references']?.replace(/[<>]/g, '').trim();
+          const references = headers['references'] || '';
           const parsedSender = this.parseEmailAddress(fromHeader);
           const snippet = msgData.snippet || '';
+          const bodyText = this.decodeBodyPart(msgData.payload) || snippet;
 
           // 3. Ignore our own outbound messages!
           if (parsedSender.email === accountEmail.toLowerCase()) {
+            if (activePool) await recoverOutboundAttempt(activePool, workspaceId, {
+              requestId: headers['x-huntiq-send-id'], messageId, threadId,
+              rfcMessageId: headers['message-id'], senderName: parsedSender.name || accountEmail,
+              recipientEmail: this.parseEmailAddress(toHeader).email, subject, body: bodyText,
+              timestamp: msgData.internalDate ? new Date(Number(msgData.internalDate)).toISOString() : new Date().toISOString()
+            });
             continue;
           }
 
           processedCount++;
+          if (!activePool) throw new Error('Database unavailable; inbound email was not persisted.');
+          // Claim each Gmail message before applying it. A competing/out-of-order
+          // Pub/Sub delivery sees the unique row and cannot append the reply twice.
+          const claim = await activePool.query(`INSERT INTO inbound_email_events (
+            workspace_id, provider, provider_message_id, provider_thread_id, sender_email, sender_name,
+            recipient_email, subject, snippet, body_text, message_date, correlation_status, processing_at, received_at, created_at
+          ) VALUES ($1,'gmail',$2,$3,$4,$5,$6,$7,$8,$9,$10,'unresolved',now(),now(),now())
+          ON CONFLICT (workspace_id, provider, provider_message_id) DO UPDATE SET processing_at=now()
+            WHERE inbound_email_events.correlation_status <> 'matched' AND (inbound_email_events.processing_at IS NULL OR inbound_email_events.processing_at < now() - interval '5 minutes') RETURNING id`, [
+            workspaceId, messageId, threadId, parsedSender.email, parsedSender.name || null, accountEmail,
+            subject.slice(0, 255), snippet.slice(0, 500), bodyText,
+            msgData.internalDate ? new Date(Number(msgData.internalDate)) : new Date()
+          ]);
+          if (!claim.rowCount) {
+            const existingEvent = await activePool.query(`SELECT correlation_status FROM inbound_email_events WHERE workspace_id=$1 AND provider='gmail' AND provider_message_id=$2 LIMIT 1`, [workspaceId, messageId]);
+            if (existingEvent.rows[0]?.correlation_status === 'matched') continue;
+            throw new Error('Inbound message is currently being processed; Gmail history cursor was not advanced.');
+          }
 
           // 4. Strengthened Correlation Hierarchy
           // Priority 1: Gmail provider thread ID
@@ -596,7 +722,7 @@ export class GmailReplySyncService {
           if (activePool) {
             // Priority 1: Match by exact Gmail provider thread ID
             const threadMatchRes = await activePool.query(
-              `SELECT * FROM outreach_threads 
+              `SELECT * FROM outreach_threads
                WHERE workspace_id = $1 AND provider_thread_id = $2 
                LIMIT 1`,
               [workspaceId, threadId]
@@ -609,10 +735,10 @@ export class GmailReplySyncService {
             } else if (inReplyTo) {
               // Priority 2: Match by In-Reply-To header
               const inReplyMatch = await activePool.query(
-                `SELECT * FROM outreach_threads 
-                 WHERE workspace_id = $1 AND provider_message_id = $2 
+              `SELECT * FROM outreach_threads
+                 WHERE workspace_id = $1 AND (provider_rfc_message_id = $2 OR messages @> $3::jsonb)
                  LIMIT 1`,
-                [workspaceId, inReplyTo]
+              [workspaceId, `<${inReplyTo}>`, JSON.stringify([{ providerRfcMessageId: `<${inReplyTo}>` }])]
               );
               if (inReplyMatch.rows.length > 0) {
                 matchedThread = inReplyMatch.rows[0];
@@ -624,10 +750,11 @@ export class GmailReplySyncService {
             // Priority 3: Check references header if still unmatched
             if (!matchedThread && references) {
               const refMatch = await activePool.query(
-                `SELECT * FROM outreach_threads 
-                 WHERE workspace_id = $1 AND provider_message_id = $2 
-                 LIMIT 1`,
-                [workspaceId, references]
+                `SELECT * FROM outreach_threads
+                 WHERE workspace_id = $1 AND (provider_rfc_message_id = ANY($2::text[]) OR EXISTS (
+                   SELECT 1 FROM jsonb_array_elements(COALESCE(messages, '[]'::jsonb)) m WHERE m->>'providerRfcMessageId' = ANY($2::text[])
+                 )) LIMIT 1`,
+              [workspaceId, references.match(/<[^>]+>/g) || []]
               );
               if (refMatch.rows.length > 0) {
                 matchedThread = refMatch.rows[0];
@@ -666,28 +793,35 @@ export class GmailReplySyncService {
             const currentMessages = Array.isArray(matchedThread.messages) ? matchedThread.messages : [];
             const newReplyMessage = {
               id: `msg-inbound-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-              sender: 'contact',
+              sender: 'prospect',
               senderName: parsedSender.name || matchedThread.contact_name,
-              content: snippet,
-              timestamp: 'Just now',
+              content: bodyText,
+              timestamp: msgData.internalDate ? new Date(Number(msgData.internalDate)).toISOString() : new Date().toISOString(),
               channel: 'email',
               status: 'replied',
               provider: 'gmail',
               providerMessageId: messageId,
-              providerThreadId: threadId
+              providerThreadId: threadId,
+              providerRfcMessageId: headers['message-id']
             };
 
-            const updatedMessages = [...currentMessages, newReplyMessage];
+            const alreadyAttached = currentMessages.some((message: any) => message.providerMessageId === messageId);
+            const updatedMessages = (alreadyAttached ? currentMessages : [...currentMessages, newReplyMessage]).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
             await activePool.query(
               `UPDATE outreach_threads 
                SET status = 'replied',
                    provider_thread_id = COALESCE(provider_thread_id, $1),
+                   provider_message_id = $5,
+                   provider_rfc_message_id = $6,
                    messages = $2,
+                   metadata = metadata || jsonb_build_object('lastMessageSnippet', $7, 'unread', true),
                    updated_at = now()
                WHERE id = $3 AND workspace_id = $4`,
-              [threadId, JSON.stringify(updatedMessages), matchedThreadId, workspaceId]
+              [threadId, JSON.stringify(updatedMessages), matchedThreadId, workspaceId, messageId, headers['message-id'] || null, bodyText.slice(0, 160)]
             );
+            if (matchedThread.lead_id) await activePool.query(`INSERT INTO activities (workspace_id, company_id, lead_id, type, title, description, metadata)
+              VALUES ($1, $2, $3, 'email_reply', $4, $5, $6::jsonb)`, [workspaceId, matchedThread.company_id, matchedThread.lead_id, `Email reply from ${parsedSender.email}`, bodyText.slice(0, 5000), JSON.stringify({ provider: 'gmail', providerMessageId: messageId, providerThreadId: threadId, subject })]);
 
             repliesCount++;
 
@@ -721,33 +855,7 @@ export class GmailReplySyncService {
             }
           }
 
-          // 7. Record event in inbound_email_events table with composite uniqueness
-          if (activePool) {
-            try {
-              await activePool.query(
-                `INSERT INTO inbound_email_events (
-                  workspace_id, provider, provider_message_id, provider_thread_id,
-                  sender_email, recipient_email, subject, snippet, correlation_status,
-                  matched_thread_id, received_at, created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
-                ON CONFLICT (workspace_id, provider, provider_message_id) DO NOTHING`,
-                [
-                  workspaceId,
-                  'gmail',
-                  messageId,
-                  threadId,
-                  parsedSender.email,
-                  accountEmail,
-                  subject.slice(0, 255),
-                  snippet.slice(0, 500),
-                  correlationStatus,
-                  matchedThreadId
-                ]
-              );
-            } catch (err: any) {
-              console.warn('[GMAIL_SYNC] Composite event insert notice:', err.message);
-            }
-          }
+          await activePool.query(`UPDATE inbound_email_events SET correlation_status=$1, matched_thread_id=$2, processing_at=NULL WHERE workspace_id=$3 AND provider='gmail' AND provider_message_id=$4`, [correlationStatus, matchedThreadId, workspaceId, messageId]);
         }
       }
 
@@ -756,7 +864,7 @@ export class GmailReplySyncService {
         if (!syncHaltFailed) {
           await activePool.query(
             `UPDATE workspace_integrations 
-             SET watch_history_id = $1, 
+             SET watch_history_id = GREATEST(watch_history_id::numeric, $1::numeric)::text,
                  last_synced_at = now(), 
                  sync_status = 'idle', 
                  last_sync_error = null, 
@@ -767,7 +875,7 @@ export class GmailReplySyncService {
         } else {
           await activePool.query(
             `UPDATE workspace_integrations 
-             SET watch_history_id = $1, 
+             SET watch_history_id = GREATEST(watch_history_id::numeric, $1::numeric)::text,
                  last_synced_at = now(), 
                  updated_at = now() 
              WHERE workspace_id = $2 AND provider = 'gmail'`,

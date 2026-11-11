@@ -85,6 +85,14 @@ export class InMemoryOutreachRepository implements OutreachRepository {
       companyName: outreach.companyName || 'Target Company',
       domain: outreach.domain || '',
       email: outreach.email || null,
+      providerThreadId: outreach.providerThreadId,
+      providerMessageId: outreach.providerMessageId,
+      providerRfcMessageId: outreach.providerRfcMessageId,
+      leadId: outreach.leadId,
+      contactId: outreach.contactId,
+      researchReportId: outreach.researchReportId,
+      emailStatus: outreach.emailStatus || 'unverified',
+      evidenceSources: outreach.evidenceSources || [],
       phone: outreach.phone || null,
       avatarBg: outreach.avatarBg || '#6366f1',
       avatarColor: outreach.avatarColor || '#ffffff',
@@ -132,6 +140,9 @@ export class InMemoryOutreachRepository implements OutreachRepository {
     };
 
     item.thread.push(msg);
+    item.providerThreadId = message.providerThreadId ?? item.providerThreadId;
+    item.providerMessageId = message.providerMessageId ?? item.providerMessageId;
+    item.providerRfcMessageId = message.providerRfcMessageId ?? item.providerRfcMessageId;
     item.lastMessageSnippet = msg.content.substring(0, 80);
     item.lastMessageTime = 'Just now';
     return item;

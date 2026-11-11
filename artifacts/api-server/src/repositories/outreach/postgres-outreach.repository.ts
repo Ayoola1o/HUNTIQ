@@ -36,7 +36,10 @@ export class PostgresOutreachRepository implements OutreachRepository {
       }
 
       const query = `
-        SELECT * FROM outreach_threads
+        SELECT outreach_threads.*,
+          (SELECT state FROM outbound_email_attempts a WHERE a.workspace_id=outreach_threads.workspace_id AND a.outreach_thread_id=outreach_threads.id ORDER BY a.created_at DESC LIMIT 1) AS last_delivery_state,
+          (SELECT error_code FROM outbound_email_attempts a WHERE a.workspace_id=outreach_threads.workspace_id AND a.outreach_thread_id=outreach_threads.id ORDER BY a.created_at DESC LIMIT 1) AS last_delivery_error
+        FROM outreach_threads
         WHERE ${conditions.join(' AND ')}
         ORDER BY updated_at DESC
       `;
@@ -48,7 +51,7 @@ export class PostgresOutreachRepository implements OutreachRepository {
       return result.rows.map(r => ({
         id: r.id,
         contactName: r.contact_name,
-        contactRole: r.contact_role || 'Decision Maker',
+        contactRole: r.contact_role || '',
         companyName: r.company_name,
         domain: r.domain || '',
         email: r.email || null,
@@ -66,6 +69,14 @@ export class PostgresOutreachRepository implements OutreachRepository {
         provider: r.provider || 'gmail',
         providerThreadId: r.provider_thread_id || null,
         providerMessageId: r.provider_message_id || null,
+        providerRfcMessageId: r.provider_rfc_message_id || null,
+        leadId: r.lead_id || null,
+        contactId: r.contact_id || null,
+        researchReportId: r.metadata?.researchReportId || null,
+        emailStatus: r.metadata?.emailStatus || 'unverified',
+        deliveryStatus: r.last_delivery_state,
+        deliveryError: r.last_delivery_error || undefined,
+        evidenceSources: r.metadata?.evidenceSources || [],
         campaignId: r.campaign_id || null,
         prospectId: r.prospect_id || null,
         stopSequenceOnReply: r.stop_sequence_on_reply !== false,
@@ -85,7 +96,10 @@ export class PostgresOutreachRepository implements OutreachRepository {
   public async getById(id: string, workspaceId: string): Promise<OutreachItem | undefined> {
     try {
       const query = `
-        SELECT * FROM outreach_threads
+        SELECT outreach_threads.*,
+          (SELECT state FROM outbound_email_attempts a WHERE a.workspace_id=outreach_threads.workspace_id AND a.outreach_thread_id=outreach_threads.id ORDER BY a.created_at DESC LIMIT 1) AS last_delivery_state,
+          (SELECT error_code FROM outbound_email_attempts a WHERE a.workspace_id=outreach_threads.workspace_id AND a.outreach_thread_id=outreach_threads.id ORDER BY a.created_at DESC LIMIT 1) AS last_delivery_error
+        FROM outreach_threads
         WHERE id = $1 AND workspace_id = $2
         LIMIT 1
       `;
@@ -97,7 +111,7 @@ export class PostgresOutreachRepository implements OutreachRepository {
       return {
         id: r.id,
         contactName: r.contact_name,
-        contactRole: r.contact_role || 'Decision Maker',
+        contactRole: r.contact_role || '',
         companyName: r.company_name,
         domain: r.domain || '',
         email: r.email || null,
@@ -115,6 +129,14 @@ export class PostgresOutreachRepository implements OutreachRepository {
         provider: r.provider || 'gmail',
         providerThreadId: r.provider_thread_id || null,
         providerMessageId: r.provider_message_id || null,
+        providerRfcMessageId: r.provider_rfc_message_id || null,
+        leadId: r.lead_id || null,
+        contactId: r.contact_id || null,
+        researchReportId: r.metadata?.researchReportId || null,
+        emailStatus: r.metadata?.emailStatus || 'unverified',
+        deliveryStatus: r.last_delivery_state,
+        deliveryError: r.last_delivery_error || undefined,
+        evidenceSources: r.metadata?.evidenceSources || [],
         campaignId: r.campaign_id || null,
         prospectId: r.prospect_id || null,
         stopSequenceOnReply: r.stop_sequence_on_reply !== false,
@@ -137,9 +159,10 @@ export class PostgresOutreachRepository implements OutreachRepository {
         INSERT INTO outreach_threads (
           workspace_id, user_id, contact_name, contact_role, company_name, domain,
           email, phone, channel, status, opportunity_score, messages, metadata,
-          provider, provider_thread_id, provider_message_id, campaign_id, prospect_id
+          provider, provider_thread_id, provider_message_id, campaign_id, prospect_id,
+          provider_rfc_message_id, lead_id, contact_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
         RETURNING *
       `;
       const metadata = {
@@ -148,14 +171,17 @@ export class PostgresOutreachRepository implements OutreachRepository {
         subject: outreach.subject || 'Outreach Pitch',
         campaignName: outreach.campaignName,
         lastMessageSnippet: outreach.lastMessageSnippet || 'Pitch initiated',
-        unread: false
+        unread: false,
+        emailStatus: outreach.emailStatus || 'unverified',
+        evidenceSources: outreach.evidenceSources || [],
+        researchReportId: outreach.researchReportId || null
       };
 
       const result = await this.pool.query(query, [
         workspaceId,
         userId || null,
         outreach.contactName || 'Decision Maker',
-        outreach.contactRole || 'Owner',
+        outreach.contactRole || '',
         outreach.companyName || 'Target Company',
         outreach.domain || '',
         outreach.email || null,
@@ -169,7 +195,10 @@ export class PostgresOutreachRepository implements OutreachRepository {
         (outreach as any).providerThreadId || null,
         (outreach as any).providerMessageId || null,
         (outreach as any).campaignId || (outreach as any).campaign_id || null,
-        (outreach as any).prospectId || (outreach as any).prospect_id || null
+        (outreach as any).prospectId || (outreach as any).prospect_id || null,
+        (outreach as any).providerRfcMessageId || null,
+        (outreach as any).leadId || (outreach as any).lead_id || null,
+        (outreach as any).contactId || (outreach as any).contact_id || null
       ]);
 
       const r = result.rows[0];
@@ -194,6 +223,12 @@ export class PostgresOutreachRepository implements OutreachRepository {
         provider: r.provider || 'gmail',
         providerThreadId: r.provider_thread_id || null,
         providerMessageId: r.provider_message_id || null,
+        providerRfcMessageId: r.provider_rfc_message_id || null,
+        leadId: r.lead_id || null,
+        contactId: r.contact_id || null,
+        researchReportId: metadata.researchReportId || null,
+        emailStatus: metadata.emailStatus || 'unverified',
+        evidenceSources: metadata.evidenceSources || [],
         campaignId: r.campaign_id || null,
         prospectId: r.prospect_id || null,
         stopSequenceOnReply: r.stop_sequence_on_reply !== false,
@@ -259,7 +294,6 @@ export class PostgresOutreachRepository implements OutreachRepository {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
-      const updatedThread = [...existing.thread, newMsg];
       const metadata = {
         subject: existing.subject,
         lastMessageSnippet: newMsg.content.substring(0, 80),
@@ -268,15 +302,22 @@ export class PostgresOutreachRepository implements OutreachRepository {
 
       const query = `
         UPDATE outreach_threads
-        SET messages = $1, metadata = metadata || $2::jsonb, updated_at = now()
+        SET messages = COALESCE(messages, '[]'::jsonb) || $1::jsonb,
+            metadata = metadata || $2::jsonb, updated_at = now(),
+            provider_thread_id = COALESCE($5, provider_thread_id),
+            provider_message_id = COALESCE($6, provider_message_id),
+            provider_rfc_message_id = COALESCE($7, provider_rfc_message_id)
         WHERE id = $3 AND workspace_id = $4
         RETURNING *
       `;
       const result = await this.pool.query(query, [
-        JSON.stringify(updatedThread),
+        JSON.stringify([newMsg]),
         JSON.stringify(metadata),
         id,
-        workspaceId
+        workspaceId,
+        message.providerThreadId ?? null,
+        message.providerMessageId ?? null,
+        message.providerRfcMessageId ?? null
       ]);
       if (!result.rows[0]) {
         if (this.isProduction()) return undefined;
@@ -285,7 +326,10 @@ export class PostgresOutreachRepository implements OutreachRepository {
 
       return {
         ...existing,
-        thread: updatedThread,
+        thread: result.rows[0].messages,
+        providerThreadId: result.rows[0].provider_thread_id || existing.providerThreadId,
+        providerMessageId: result.rows[0].provider_message_id || existing.providerMessageId,
+        providerRfcMessageId: result.rows[0].provider_rfc_message_id || existing.providerRfcMessageId,
         lastMessageSnippet: newMsg.content.substring(0, 80),
         lastMessageTime: 'Just now'
       };

@@ -9,6 +9,12 @@ export interface GoogleAuthStatus {
   connectedAt?: string;
   scopes?: string[];
   clientId?: string;
+  status?: string;
+  syncStatus?: string;
+  lastSyncedAt?: string;
+  lastError?: string;
+  watchExpiration?: string;
+  watchHistoryId?: string;
 }
 
 export interface GoogleAuthUrlResponse {

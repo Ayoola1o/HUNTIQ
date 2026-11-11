@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Send,
@@ -20,6 +20,7 @@ import type { OutreachItem, ProspectPitchPayload, OutreachChannel } from '../../
 import { geminiService } from '../../services/geminiService';
 import { synthesizePitch } from '../../services/pitchSynthesisService';
 import { useHuntiq } from '../../context/HuntiqContext';
+import { generateLeadOutreachDraft, getLeadOutreachContext, type LeadOutreachContext } from '../../api/outreach';
 
 interface NewOutreachModalProps {
   isOpen: boolean;
@@ -48,6 +49,11 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isIntelExpanded, setIsIntelExpanded] = useState(true);
+  const [leadContext, setLeadContext] = useState<LeadOutreachContext | null>(null);
+  const [selectedContactId, setSelectedContactId] = useState('');
+  const [draftEvidence, setDraftEvidence] = useState<{ title: string; url: string }[]>([]);
+  const [draftError, setDraftError] = useState('');
+  const sendRequestId = useRef('');
 
   // Synthesized multi-channel templates cache
   const [channelTemplates, setChannelTemplates] = useState<{
@@ -63,6 +69,8 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
   // Hydrate from initialPayload when opened
   useEffect(() => {
     if (isOpen) {
+      sendRequestId.current = crypto.randomUUID();
+      setLeadContext(null); setSelectedContactId(''); setDraftEvidence([]); setDraftError('');
       if (initialPayload) {
         const cName = initialPayload.companyName || '';
         const ctName = initialPayload.contactName || (initialPayload.fromCopilot ? '' : 'Managing Director / Business Owner');
@@ -87,8 +95,17 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
         setChannelTemplates(templates);
 
         const activeChan = channel === 'email' ? 'email' : channel === 'linkedin' ? 'linkedin' : 'phone';
-        setSubject(templates[activeChan].subject);
-        setContent(templates[activeChan].body);
+        setSubject(initialPayload.leadId && channel === 'email' ? '' : templates[activeChan].subject);
+        setContent(initialPayload.leadId && channel === 'email' ? '' : templates[activeChan].body);
+        if (initialPayload.leadId) void getLeadOutreachContext(initialPayload.leadId).then(context => {
+          setLeadContext(context);
+          setCompanyName(context.lead.companyName);
+          setDomain(context.lead.domain || '');
+          if (context.contacts.length === 1) {
+            const contact = context.contacts[0]; setSelectedContactId(contact.id);
+            setContactName(contact.name); setContactRole(contact.role || ''); setEmail(contact.email);
+          }
+        }).catch((error: any) => setDraftError(error?.message || 'Saved lead research could not be loaded.'));
       } else {
         setCompanyName('');
         setContactName('');
@@ -104,6 +121,9 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
 
   const handleChannelSwitch = (newChannel: OutreachChannel) => {
     setChannel(newChannel);
+    if (newChannel === 'email' && initialPayload?.leadId) {
+      setSubject(''); setContent(''); setDraftEvidence([]); setDraftError(''); return;
+    }
     if (initialPayload) {
       const selected = channelTemplates[newChannel === 'email' ? 'email' : newChannel === 'linkedin' ? 'linkedin' : 'phone'];
       if (selected) {
@@ -114,6 +134,17 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
   };
 
   const handleAutoDraft = async () => {
+    if (channel === 'email') {
+      if (!initialPayload?.leadId || !leadContext?.report) { setDraftError('Email drafting requires saved, evidence-backed research on a lead.'); return; }
+      setIsDrafting(true); setDraftError('');
+      try {
+        const draft = await generateLeadOutreachDraft(initialPayload.leadId, selectedContactId || undefined);
+        setSubject(draft.subject); setContent(draft.body); setDraftEvidence(draft.evidenceSources);
+        if (draft.contact) { setSelectedContactId(draft.contact.id); setContactName(draft.contact.name); setContactRole(draft.contact.role || ''); setEmail(draft.contact.email); }
+      } catch (error: any) { setDraftError(error?.message || 'Could not draft from saved research.'); }
+      finally { setIsDrafting(false); }
+      return;
+    }
     if (!companyName.trim()) {
       alert('Please enter a company name first to generate contextual outreach.');
       return;
@@ -149,7 +180,7 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contactName.trim() || !companyName.trim() || !content.trim() || isSubmitting) return;
+    if (!contactName.trim() || !companyName.trim() || !content.trim() || isSubmitting || (channel === 'email' && (!selectedContactId || !leadContext?.report || !draftEvidence.length))) return;
 
     setIsSubmitting(true);
     try {
@@ -163,6 +194,12 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
         subject: subject.trim() || 'Commercial Opportunity & Search Growth Brief',
         lastMessageSnippet: content.trim(),
         channel,
+        leadId: initialPayload?.leadId,
+        contactId: selectedContactId || undefined,
+        researchReportId: leadContext?.report?.id,
+        emailStatus: selectedContactId ? 'verified' : 'unverified',
+        evidenceSources: draftEvidence,
+        requestId: sendRequestId.current,
         opportunityScore: initialPayload?.opportunityScore || 85,
         campaignName: initialPayload?.recommendedPackage || 'Turnkey SEO & Client Acquisition'
       });
@@ -479,6 +516,7 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
                 </span>
               </div>
             )}
+            {channel === 'email' && !initialPayload?.leadId && <p style={{ margin: '8px 0 0', color: '#b91c1c', fontSize: 12 }}>Open a saved lead with evidence-backed research to create and send email. HUNTIQ will not send to an unverified address.</p>}
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -493,6 +531,7 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
                     type="text"
                     required
                     value={companyName}
+                    readOnly={Boolean(initialPayload?.leadId)}
                     onChange={(e) => setCompanyName(e.target.value)}
                     placeholder="e.g. Apex Hospital"
                     style={{
@@ -515,6 +554,7 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
                     type="text"
                     required
                     value={contactName}
+                    readOnly={channel === 'email' && Boolean(selectedContactId)}
                     onChange={(e) => setContactName(e.target.value)}
                     placeholder="e.g. Managing Director"
                     style={{
@@ -539,6 +579,7 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
                   <input
                     type="text"
                     value={contactRole}
+                    readOnly={channel === 'email' && Boolean(selectedContactId)}
                     onChange={(e) => setContactRole(e.target.value)}
                     placeholder="e.g. Managing Director / Partner"
                     style={{
@@ -564,9 +605,15 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
                       </span>
                     )}
                   </div>
-                  <input
+                  {channel === 'email' && leadContext ? <select value={selectedContactId} onChange={e => {
+                    const selected = leadContext.contacts.find(contact => contact.id === e.target.value);
+                    setSelectedContactId(e.target.value); setContactName(selected?.name || ''); setContactRole(selected?.role || ''); setEmail(selected?.email || '');
+                  }} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px' }}>
+                    <option value="">Select verified contact</option>{leadContext.contacts.map(contact => <option key={contact.id} value={contact.id}>{contact.name}{contact.role ? ` · ${contact.role}` : ''} · {contact.email}</option>)}
+                  </select> : <input
                     type="text"
                     value={channel === 'phone' ? (phone || '') : (email || '')}
+                    readOnly={channel === 'email' && Boolean(initialPayload?.leadId)}
                     onChange={(e) => channel === 'phone' ? setPhone(e.target.value) : setEmail(e.target.value)}
                     placeholder={channel === 'phone' ? '+234 801 234 5678' : 'name@verified-domain.com (or use InMail/Call)'}
                     style={{
@@ -578,9 +625,12 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
                       outline: 'none',
                       boxSizing: 'border-box'
                     }}
-                  />
+                  />}
                 </div>
               </div>
+              {draftError && <p role="alert" style={{ color: '#b91c1c', fontSize: 12 }}>{draftError}</p>}
+              {channel === 'email' && initialPayload?.leadId && <p style={{ color: leadContext?.report && leadContext.contacts.length ? '#475569' : '#b91c1c', fontSize: 12, margin: 0 }}>{!leadContext?.report ? 'Saved evidence-backed research is required before email outreach.' : !leadContext.contacts.length ? 'This lead has no verified contact email. Verify a contact in Contacts before sending.' : `${leadContext.report.sources.length} saved evidence source(s). Select a verified contact before sending.`}</p>}
+              {draftEvidence.map(source => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" style={{ fontSize: 11 }}>{source.title || source.url}</a>)}
 
               {/* Subject Line (visible for email and linkedin) */}
               {channel !== 'phone' && (
@@ -731,7 +781,7 @@ export const NewOutreachModal: React.FC<NewOutreachModalProps> = ({
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   type="submit"
-                  disabled={!contactName.trim() || !companyName.trim() || !content.trim() || isSubmitting}
+                  disabled={!contactName.trim() || !companyName.trim() || !content.trim() || isSubmitting || (channel === 'email' && (!selectedContactId || !leadContext?.report || !draftEvidence.length))}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

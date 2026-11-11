@@ -9,7 +9,8 @@ import type { OutreachItem, OutreachKpiSummary } from '../../types/outreach';
 import { 
   fetchOutreachList, 
   sendOutreachMessage as apiSendOutreachMessage, 
-  createOutreach as apiCreateOutreach 
+  createOutreach as apiCreateOutreach,
+  syncGmailInbox, fetchUnmatchedEmails, linkUnmatchedEmail, type UnmatchedInboundEmail
 } from '../../api/outreach';
 import { 
   Send, 
@@ -80,6 +81,8 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [actionToast, setActionToast] = useState<string | null>(null);
+  const [unmatchedEmails, setUnmatchedEmails] = useState<UnmatchedInboundEmail[]>([]);
+  const [unmatchedTargets, setUnmatchedTargets] = useState<Record<string, string>>({});
 
   const loadOutreach = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setIsRefreshing(true);
@@ -108,16 +111,31 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
     loadOutreach();
   }, [loadOutreach]);
 
-  const handleSendMessage = async (conversationId: string, text: string) => {
+  const syncInbox = async () => {
+    setIsRefreshing(true); setErrorMessage(null);
     try {
-      const updated = await apiSendOutreachMessage(conversationId, text);
+      const result = await syncGmailInbox();
+      if (!result.success) throw new Error(result.error || 'Gmail inbox sync failed.');
+      await loadOutreach(true);
+      setUnmatchedEmails(await fetchUnmatchedEmails());
+      setActionToast(`Inbox synced: ${result.repliesCount} matched reply(ies), ${result.processedCount} new message(s).`);
+    } catch (error: any) { setErrorMessage(error?.message || 'Gmail inbox sync failed.'); }
+    finally { setIsRefreshing(false); }
+  };
+
+  useEffect(() => { void fetchUnmatchedEmails().then(setUnmatchedEmails).catch(() => undefined); }, []);
+
+  const handleSendMessage = async (conversationId: string, text: string, requestId: string) => {
+    try {
+      const updated = await apiSendOutreachMessage(conversationId, text, 'email', requestId);
       setConversations(prev => prev.map(c => c.id === conversationId ? updated : c));
-      setActionToast('Message dispatched successfully');
+      setActionToast(updated.channel === 'email' ? 'Gmail accepted the message.' : 'Message logged in Outreach.');
       setTimeout(() => setActionToast(null), 3000);
     } catch (err: any) {
       console.error('Failed to send outreach message:', err);
-      setActionToast('Failed to send message');
+      setActionToast(err?.message || 'Failed to send message');
       setTimeout(() => setActionToast(null), 3000);
+      throw err;
     }
   };
 
@@ -126,7 +144,7 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
       const created = await apiCreateOutreach(newItemPayload);
       setConversations(prev => [created, ...prev]);
       setActiveConversationId(created.id);
-      setActionToast(`Pitch dispatched to ${created.contactName}!`);
+      setActionToast(created.channel === 'email' ? `Gmail accepted the message for ${created.contactName}.` : 'Message logged in Outreach.');
       setTimeout(() => setActionToast(null), 3500);
 
       // Auto-push deal to pipeline if pitched from prospect intelligence
@@ -148,8 +166,9 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
       await loadOutreach(true);
     } catch (err: any) {
       console.error('Failed to start outreach:', err);
-      setActionToast('Failed to start outreach');
+      setActionToast(err?.message || 'Failed to start outreach');
       setTimeout(() => setActionToast(null), 3000);
+      throw err;
     }
   };
 
@@ -233,9 +252,9 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
 
             {/* Sync Button */}
             <button
-              onClick={() => loadOutreach(true)}
+              onClick={syncInbox}
               disabled={isRefreshing}
-              title="Sync outreach inbox with live backend"
+              title="Sync Gmail inbox and refresh Outreach conversations"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -353,6 +372,27 @@ export const OutreachPage: React.FC<OutreachPageProps> = ({
             </button>
           </div>
         )}
+
+        {unmatchedEmails.length > 0 && <section style={{ margin: '14px 32px 0', padding: 16, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10 }}>
+          <strong style={{ fontSize: 13 }}>Unmatched inbox · {unmatchedEmails.length}</strong>
+          <p style={{ fontSize: 12, color: '#7c2d12' }}>These replies could not be matched confidently. Review the full message and choose a conversation only when the sender matches.</p>
+          {unmatchedEmails.map(message => {
+            const senderMatches = conversations.filter(item => item.channel === 'email' && item.email?.toLowerCase() === message.sender_email?.toLowerCase());
+            const selectedThreadId = unmatchedTargets[message.id] || (senderMatches.length === 1 ? senderMatches[0].id : '');
+            return <article key={message.id} style={{ padding: 12, marginTop: 8, background: '#fff', borderRadius: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700 }}>{message.sender_name || message.sender_email} · {message.sender_email} · {message.subject}</div>
+            <pre style={{ whiteSpace: 'pre-wrap', font: 'inherit', fontSize: 12 }}>{message.body_text}</pre>
+            <select value={selectedThreadId} onChange={e => setUnmatchedTargets(current => ({ ...current, [message.id]: e.target.value }))} style={{ maxWidth: '100%', padding: 6, marginRight: 8 }}>
+              <option value="">{senderMatches.length ? 'Choose conversation to link' : 'No conversation for this sender'}</option>
+              {senderMatches.map(item => <option key={item.id} value={item.id}>{item.contactName} · {item.companyName}</option>)}
+              {senderMatches.length === 0 && conversations.filter(item => item.channel === 'email').map(item => <option key={item.id} value={item.id}>{item.contactName} · {item.email} · {item.companyName}</option>)}
+            </select>
+            <button disabled={!selectedThreadId} onClick={async () => {
+              try { await linkUnmatchedEmail(message.id, selectedThreadId); setUnmatchedEmails(await fetchUnmatchedEmails()); await loadOutreach(true); }
+              catch (error: any) { setErrorMessage(error?.message || 'Could not link reply.'); }
+            }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1', cursor: selectedThreadId ? 'pointer' : 'not-allowed' }}>Link reviewed message</button>
+          </article>;})}
+        </section>}
 
         {/* KPI Metrics Row */}
         <div style={{ margin: '20px 0' }}>

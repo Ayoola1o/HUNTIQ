@@ -61,10 +61,25 @@ export class GoogleAuthService {
   }
 
   public static get redirectUri(): string {
-    return (
-      process.env.GOOGLE_REDIRECT_URI?.trim() ||
-      'http://localhost:3001/api/v1/auth/google/callback'
-    );
+    const configured = process.env.GOOGLE_REDIRECT_URI?.trim();
+    if (!this.isProduction()) return configured || 'http://localhost:3001/api/v1/auth/google/callback';
+
+    const callback = configured && URL.canParse(configured) ? new URL(configured) : undefined;
+    const hostname = callback?.hostname.replace(/\.$/, '') || '';
+    if (!configured || !callback || callback.protocol !== 'https:' || !hostname.includes('.')
+        || hostname.endsWith('.localhost') || hostname.startsWith('127.')
+        || callback.pathname !== '/api/v1/auth/google/callback'
+        || callback.search || callback.hash || callback.username || callback.password) {
+      throw Object.assign(new Error('Set GOOGLE_REDIRECT_URI to the public HTTPS URL ending in /api/v1/auth/google/callback, and register that exact URL in Google Cloud.'), {
+        code: 'INVALID_GOOGLE_REDIRECT_URI',
+        statusCode: 503
+      });
+    }
+    return configured;
+  }
+
+  public static get callbackErrorReturnUrl(): string {
+    return this.isProduction() ? '/?view=integrations' : 'http://localhost:5173/?view=integrations';
   }
 
   public static isConfigured(): boolean {
@@ -145,6 +160,7 @@ export class GoogleAuthService {
       throw new Error('workspaceId is required to generate Google OAuth URL.');
     }
 
+    const redirectUri = this.redirectUri;
     const safeReturnPath = this.sanitizeReturnUrl(returnUrl);
     const stateToken = crypto.randomBytes(32).toString('hex');
 
@@ -167,7 +183,7 @@ export class GoogleAuthService {
 
     const params = new URLSearchParams({
       client_id: this.clientId,
-      redirect_uri: this.redirectUri,
+      redirect_uri: redirectUri,
       response_type: 'code',
       scope: scopes.join(' '),
       access_type: 'offline',
@@ -358,7 +374,7 @@ export class GoogleAuthService {
             scopes: Array.isArray(row.scopes) ? row.scopes : [],
             isActive: Boolean(row.is_active),
             status: row.status || (row.is_active ? 'active' : 'revoked'),
-            lastError: row.last_error || undefined,
+            lastError: row.last_sync_error || row.last_error || undefined,
             lastSyncedAt: row.last_synced_at ? new Date(row.last_synced_at).toISOString() : undefined,
             watchHistoryId: row.watch_history_id || undefined,
             watchExpiration: row.watch_expiration ? new Date(row.watch_expiration).toISOString() : undefined,

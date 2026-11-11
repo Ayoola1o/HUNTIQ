@@ -1,7 +1,11 @@
-export type OutreachStatus = 'replied' | 'due_today' | 'scheduled' | 'needs_attention' | 'opened';
+export type OutreachStatus = 'replied' | 'due_today' | 'scheduled' | 'needs_attention' | 'opened' | 'contacted' | 'draft';
 export type OutreachChannel = 'email' | 'linkedin' | 'phone' | 'whatsapp';
 
 export interface OutreachMessage {
+  providerThreadId?: string;
+  providerMessageId?: string;
+  providerRfcMessageId?: string;
+  deliveryStatus?: 'sending' | 'sent' | 'failed' | 'unknown';
   id: string;
   sender: 'me' | 'prospect';
   senderName: string;
@@ -11,6 +15,14 @@ export interface OutreachMessage {
 }
 
 export interface OutreachItem {
+  requestId?: string;
+  providerThreadId?: string | null;
+  providerMessageId?: string | null;
+  providerRfcMessageId?: string | null;
+  leadId?: string | null;
+  contactId?: string | null;
+  researchReportId?: string | null;
+  evidenceSources?: Array<{ title: string; url: string }>;
   id: string;
   contactName: string;
   contactRole: string;
@@ -18,6 +30,8 @@ export interface OutreachItem {
   domain?: string | null;
   email?: string | null;
   emailStatus?: 'verified' | 'unverified' | 'not_found';
+  deliveryStatus?: 'sending' | 'sent' | 'failed' | 'unknown';
+  deliveryError?: string;
   phone?: string | null;
   avatarBg: string;
   avatarColor: string;
@@ -42,6 +56,9 @@ export interface OutreachKpiSummary {
 
 export interface ProspectPitchPayload {
   companyName: string;
+  leadId?: string;
+  contactId?: string;
+  researchReportId?: string;
   fromCopilot?: boolean;
   domain?: string | null;
   phone?: string | null;

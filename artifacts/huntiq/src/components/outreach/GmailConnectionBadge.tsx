@@ -33,6 +33,7 @@ export const GmailConnectionBadge: React.FC<GmailConnectionBadgeProps> = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
+  const [connectError, setConnectError] = useState('');
   const [testEmail, setTestEmail] = useState('');
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -72,6 +73,7 @@ export const GmailConnectionBadge: React.FC<GmailConnectionBadgeProps> = ({
 
   const handleConnectClick = async () => {
     setIsConnecting(true);
+    setConnectError('');
     try {
       const res = await fetchGoogleAuthUrl();
       if (res.isConfigured && res.authUrl) {
@@ -81,6 +83,7 @@ export const GmailConnectionBadge: React.FC<GmailConnectionBadgeProps> = ({
       }
     } catch (err: any) {
       console.error('Failed to initiate Google OAuth:', err);
+      setConnectError(err?.message || 'Could not start the Gmail connection.');
       setIsSetupModalOpen(true);
     } finally {
       setIsConnecting(false);
@@ -316,7 +319,10 @@ export const GmailConnectionBadge: React.FC<GmailConnectionBadgeProps> = ({
             marginBottom: '14px',
             lineHeight: 1.4
           }}>
-            ⚡ <strong>Direct Gmail Delivery Active:</strong> Outbound outreach emails are sent through your official Gmail account via OAuth 2.0. Inbound reply tracking requires Google Cloud Pub/Sub configuration.
+            ⚡ <strong>Gmail sending: active.</strong> Reply sync: <strong>{status.syncStatus === 'reauth_required' ? 'reauthentication required' : status.watchExpiration && new Date(status.watchExpiration).getTime() > Date.now() ? 'watch active' : 'watch not active'}</strong>.
+            <br />Last inbox sync: {status.lastSyncedAt ? new Date(status.lastSyncedAt).toLocaleString() : 'never'}.
+            {status.watchExpiration && <><br />Watch expires: {new Date(status.watchExpiration).toLocaleString()}.</>}
+            {status.lastError && <div role="alert" style={{ color: '#b91c1c', marginTop: 5 }}>{status.lastError}</div>}
           </div>
 
           {/* Test Send Form */}
@@ -471,6 +477,7 @@ export const GmailConnectionBadge: React.FC<GmailConnectionBadgeProps> = ({
 
             {/* Modal Content */}
             <div style={{ padding: '24px', maxHeight: '75vh', overflowY: 'auto' }}>
+              {connectError && <p role="alert" style={{ color: '#b91c1c', fontSize: '13px' }}>{connectError}</p>}
               <div style={{
                 backgroundColor: '#eff6ff',
                 border: '1px solid #bfdbfe',

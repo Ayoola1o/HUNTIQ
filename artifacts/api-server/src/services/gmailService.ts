@@ -8,12 +8,16 @@ export interface GmailSendOptions {
   html?: string;
   text?: string;
   replyTo?: string;
+  threadId?: string;
+  replyToMessageId?: string;
+  requestId?: string;
 }
 
 export interface GmailSendResult {
   success: boolean;
   messageId: string;
   threadId?: string;
+  rfcMessageId?: string;
   fromEmail: string;
   to: string;
   deliveredAt: string;
@@ -21,6 +25,11 @@ export interface GmailSendResult {
 }
 
 export class GmailService {
+  private static fetchHandler: typeof fetch = (...args) => globalThis.fetch(...args);
+
+  public static setTestFetchHandler(handler: typeof fetch | null): void {
+    this.fetchHandler = handler || ((...args) => globalThis.fetch(...args));
+  }
   /**
    * Constructs an RFC 2822 compliant email and base64url encodes it for the Gmail API.
    */
@@ -31,8 +40,10 @@ export class GmailService {
     html: string;
     text: string;
     replyTo?: string;
+    inReplyTo?: string;
+    requestId?: string;
   }): string {
-    const { from, to, subject, html, text, replyTo } = options;
+    const { from, to, subject, html, text, replyTo, inReplyTo, requestId } = options;
 
     // UTF-8 encode the subject if it contains non-ASCII characters
     const encodedSubject = /[^\x00-\x7F]/.test(subject)
@@ -45,6 +56,8 @@ export class GmailService {
       `From: ${from}`,
       `To: ${to}`,
       ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
+      ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`, `References: ${inReplyTo}`] : []),
+      ...(requestId ? [`X-HUNTIQ-SEND-ID: ${requestId}`] : []),
       `Subject: ${encodedSubject}`,
       `Date: ${new Date().toUTCString()}`,
       `MIME-Version: 1.0`,
@@ -97,16 +110,28 @@ export class GmailService {
       );
     }
 
-    const senderName = integration.accountName || 'HUNTIQ Outreach';
+    const senderName = (integration.accountName || 'HUNTIQ Outreach').replace(/["\\\r\n]/g, '');
     const senderEmail = integration.accountEmail;
     const fromHeader = `"${senderName}" <${senderEmail}>`;
     const toHeader = toName ? `"${toName}" <${to}>` : to;
+
+    let inReplyTo: string | undefined;
+    if (options.threadId && options.replyToMessageId) {
+      const parent = await this.fetchHandler(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(options.replyToMessageId)}?format=metadata&metadataHeaders=Message-ID`,
+        { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(5000) }
+      );
+      if (!parent.ok) throw new Error('Gmail could not load the original message.');
+      const metadata = await parent.json() as { payload?: { headers?: Array<{ name: string; value: string }> } };
+      inReplyTo = metadata.payload?.headers?.find((header: { name: string }) => header.name.toLowerCase() === 'message-id')?.value;
+      if (!inReplyTo || /[\r\n]/.test(inReplyTo)) throw new Error('Gmail did not return a valid reply reference.');
+    }
 
     const emailHtml =
       html ||
       `<div style="font-family: sans-serif; font-size: 15px; color: #1e293b;">${(
         text || ''
-      ).replace(/\n/g, '<br/>')}</div>`;
+      ).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>')}</div>`;
     const emailText = text || html?.replace(/<[^>]+>/g, ' ').trim() || '';
 
     const rawBase64 = this.buildRawRfc2822Email({
@@ -115,20 +140,28 @@ export class GmailService {
       subject,
       html: emailHtml,
       text: emailText,
-      replyTo: replyTo || senderEmail
+      replyTo: replyTo || senderEmail,
+      inReplyTo,
+      requestId: options.requestId
     });
 
-    const response = await fetch(
-      'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ raw: rawBase64 })
-      }
-    );
+    let response: Response;
+    try {
+      response = await this.fetchHandler(
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ raw: rawBase64, threadId: inReplyTo ? options.threadId : undefined }),
+          signal: AbortSignal.timeout(15000)
+        }
+      );
+    } catch {
+      throw Object.assign(new Error('Gmail send outcome could not be confirmed. Check Gmail Sent before retrying.'), { code: 'GMAIL_DELIVERY_UNKNOWN', deliveryOutcomeUnknown: true });
+    }
 
     const data: any = await response.json();
 
@@ -147,10 +180,29 @@ export class GmailService {
       };
     }
 
+    let rfcMessageId: string | undefined;
+    const sentId = typeof data.id === 'string' ? data.id : undefined;
+    if (sentId) {
+      try {
+        const metadataResponse = await this.fetchHandler(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(sentId)}?format=metadata&metadataHeaders=Message-ID`,
+          { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(5000) }
+        );
+        if (metadataResponse.ok) {
+          const metadata = await metadataResponse.json() as { payload?: { headers?: Array<{ name: string; value: string }> } };
+          const value = metadata.payload?.headers?.find(header => header.name.toLowerCase() === 'message-id')?.value;
+          if (value && !/[\r\n]/.test(value)) rfcMessageId = value;
+        }
+      } catch {
+        // Gmail accepted the send; RFC header enrichment is optional because thread IDs remain authoritative.
+      }
+    }
+
     return {
       success: true,
       messageId: data.id || `gmail-${Date.now()}`,
       threadId: data.threadId,
+      rfcMessageId,
       fromEmail: senderEmail,
       to,
       deliveredAt: new Date().toISOString()

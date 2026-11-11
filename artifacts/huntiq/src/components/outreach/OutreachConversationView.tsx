@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Search, 
   Send, 
@@ -13,7 +13,7 @@ interface OutreachConversationViewProps {
   conversations: OutreachItem[];
   activeConversationId: string | null;
   onSelectConversation: (item: OutreachItem) => void;
-  onSendMessage: (conversationId: string, text: string) => void;
+  onSendMessage: (conversationId: string, text: string, requestId: string) => Promise<void>;
   onCreateDealFromOutreach: (item: OutreachItem) => void;
   onScheduleMeetingFromOutreach: (item: OutreachItem) => void;
   onNavigateToResearch: (companyName: string) => void;
@@ -31,6 +31,8 @@ export const OutreachConversationView: React.FC<OutreachConversationViewProps> =
   const [activeTab, setActiveTab] = useState<'inbox' | 'replies' | 'due_today' | 'scheduled'>('inbox');
   const [searchQuery, setSearchQuery] = useState('');
   const [replyText, setReplyText] = useState('');
+  const [sending, setSending] = useState(false);
+  const sendRequestId = useRef('');
 
   const filteredList = conversations.filter((c) => {
     if (activeTab === 'replies' && c.status !== 'replied') return false;
@@ -50,11 +52,20 @@ export const OutreachConversationView: React.FC<OutreachConversationViewProps> =
 
   const activeConversation = conversations.find(c => c.id === activeConversationId) || conversations[0] || null;
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyText.trim() || !activeConversation) return;
-    onSendMessage(activeConversation.id, replyText);
-    setReplyText('');
+    if (!replyText.trim() || !activeConversation || sending) return;
+    setSending(true);
+    if (!sendRequestId.current) sendRequestId.current = crypto.randomUUID();
+    try {
+      await onSendMessage(activeConversation.id, replyText, sendRequestId.current);
+      sendRequestId.current = '';
+      setReplyText(previous => previous === replyText ? '' : previous);
+    } catch {
+      // The page shows the API error. Keep the draft available.
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleApplyAiSuggestion = (suggestion: string) => {
@@ -212,7 +223,7 @@ export const OutreachConversationView: React.FC<OutreachConversationViewProps> =
                     backgroundColor: item.status === 'replied' ? '#ecfdf5' : item.status === 'due_today' ? '#fef2f2' : '#f8fafc',
                     color: item.status === 'replied' ? '#047857' : item.status === 'due_today' ? '#b91c1c' : '#64748b'
                   }}>
-                    {item.status === 'replied' ? 'Replied' : item.status === 'due_today' ? 'Due Today' : 'Scheduled'}
+                    {item.status === 'contacted' ? 'Sent' : item.status === 'replied' ? 'Replied' : item.status === 'due_today' ? 'Due Today' : 'Scheduled'}
                   </span>
 
                   <span style={{ fontSize: '10px', color: '#6366f1', fontWeight: 700 }}>
@@ -329,6 +340,10 @@ export const OutreachConversationView: React.FC<OutreachConversationViewProps> =
               </button>
             </div>
           </div>
+
+          {(activeConversation.deliveryStatus === 'failed' || activeConversation.deliveryStatus === 'unknown' || activeConversation.deliveryStatus === 'sending') && <div role="alert" style={{ padding: '8px 14px', background: activeConversation.deliveryStatus === 'failed' ? '#fef2f2' : '#fffbeb', color: activeConversation.deliveryStatus === 'failed' ? '#991b1b' : '#92400e', fontSize: 12, borderTop: '1px solid #e2e8f0' }}>
+            {activeConversation.deliveryStatus === 'failed' ? 'Gmail rejected the email. It remains a draft and was not marked sent.' : activeConversation.deliveryStatus === 'unknown' ? 'Gmail delivery is unconfirmed. Check Gmail Sent before retrying.' : 'Gmail is processing this send attempt.'}
+          </div>}
 
           {/* Messages Stream */}
           <div style={{ flex: 1, padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
