@@ -2,8 +2,8 @@ import { apiClient } from './client';
 import type { OutreachItem, OutreachKpiSummary, OutreachStatus, OutreachChannel } from '../types/outreach';
 
 export interface LeadOutreachContext {
-  lead: { id: string; companyName: string; domain?: string | null; reason?: string; summary?: string };
-  report: { id: string; text: string; sources: { title: string; url: string }[] } | null;
+  lead: { id: string; companyName: string; domain?: string | null; reason?: string; summary?: string; score?: number; status?: string };
+  report: { id: string; text: string; sources: { title: string; url: string }[]; checkedAt?: string } | null;
   contacts: { id: string; name: string; role: string | null; email: string; emailStatus: 'verified' }[];
 }
 
